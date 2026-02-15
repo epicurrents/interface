@@ -146,8 +146,6 @@ Notes about workers and Pyodide
 - To experiment quickly: run `npm run dev` and open the dev server URL.
 - To prepare a standalone artifact for deployment: `npm run build:app` and ensure `public/` contains any needed UMD or worker files (`npm run copy:umd` / `npm run copy:workers`).
 
-If you'd like, I can open `src/setups/standalone.ts` and add an annotated example showing how to add/remove a module and worker step-by-step.
-
 **8) Dependencies and TODOs**
 
 This interface module has a couple of dependencies that may limit its use or are in the process of being replaced:
