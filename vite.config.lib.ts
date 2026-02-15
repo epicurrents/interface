@@ -1,19 +1,25 @@
 import { defineConfig } from 'vite'
 import { dirname, resolve } from 'path'
 import { fileURLToPath, URL } from 'url'
+import { config as DotenvConfig } from 'dotenv'
 import tsconfigPaths from 'vite-tsconfig-paths'
 import vue from '@vitejs/plugin-vue'
 import { viteSingleFile } from 'vite-plugin-singlefile'
 
-const LAUNCHER_PATH = process.env.LAUNCHER
-                     ? 'launchers/' + process.env.LAUNCHER
-                     : 'main'
+// Load environment variables from .env file.
+DotenvConfig()
+
+process.env.SETUP_PATH = process.env.SETUP
+                       ? 'setups/' + process.env.SETUP
+                       : 'setups/default'
+process.env.ASSET_PATH = process.env.ASSET_PATH || '/static/'
 
 export default defineConfig({
+    base: process.env.ASSET_PATH,
     mode: 'production',
     build: {
         lib: {
-            entry: resolve(__dirname, './src/' + LAUNCHER_PATH + '.ts'),
+            entry: resolve(__dirname, './src/' + process.env.SETUP_PATH + '.ts'),
             name: 'Epicurrents',
             fileName: 'epicurrents-lib',
         },

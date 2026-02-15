@@ -1,12 +1,19 @@
 import { defineConfig } from 'vite'
 import { resolve } from 'path'
 import { fileURLToPath, URL } from 'url'
+import { config as DotenvConfig } from 'dotenv'
 import tsconfigPaths from 'vite-tsconfig-paths'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 import { viteSingleFile } from 'vite-plugin-singlefile'
 
+// Load environment variables from .env file.
+DotenvConfig()
+
+process.env.ASSET_PATH = process.env.ASSET_PATH || '/static/'
+
 export default defineConfig({
+    base: process.env.ASSET_PATH,
     mode: 'production',
     build: {
         lib: {

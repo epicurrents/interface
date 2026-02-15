@@ -12,7 +12,7 @@ DotenvConfig()
 
 process.env.SETUP_PATH = process.env.SETUP
                        ? 'setups/' + process.env.SETUP
-                       : 'setups/standalone'
+                       : 'setups/default'
 process.env.ASSET_PATH = process.env.ASSET_PATH || '/static/'
 // https://vitejs.dev/config/
 export default defineConfig({
