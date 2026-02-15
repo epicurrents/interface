@@ -115,10 +115,12 @@ const state: State = {
     SETTINGS: SETTINGS,
     WORKERS: new Map(),
     // Properties required by RuntimeState.
+    errorReason: '',
     id: '',
     isActive: false,
     modality: '',
     name: '',
+    state: 'added',
     addConnector (_name, _url, _username, _password, _mode?, _wdClient?) {},
     addDataset (_dataset, _setAsActive?) {},
     addEventListener (_pattern, _handler, _caller?) {},
