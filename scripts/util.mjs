@@ -143,13 +143,11 @@ export const packages = [
     // Resource modules.
     { name: 'doc-module', repository: '' },
     { name: 'eeg-module', repository: '' },
-    { name: 'emg-module', repository: '' },
     // Source type readers.
     { name: 'edf-reader', branch: 'encoder', repository: '' },
     { name: 'htm-reader', repository: '' },
     { name: 'pdf-reader', repository: '' },
     // Services.
-    { name: 'onnx-service', repository: '' },
     { name: 'pyodide-service', repository: '' },
 ]
 
