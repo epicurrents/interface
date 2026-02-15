@@ -789,27 +789,6 @@ export default defineComponent({
             if (this.browserValid) {
                 this.loading = false
             }
-            this.$store.dispatch(
-                'add-connector',
-                {
-                    name: 'Test',
-                    type: 'database',
-                    url: 'http://localhost:8000',
-                    username: 'admin',
-                    password: 'admin',
-                    nameMap: {
-                        studykey: 'datasetId',
-                        studyid: 'name',
-                    },
-                    overrideProperties: {
-                        api: {
-                            url: `http://localhost:8000/study/{datasetId}/`,
-                        },
-                        modality: 'tab',
-                    },
-                    paramMethod: 'inject',
-                }
-            )
         })
     },
 })
