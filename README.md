@@ -151,5 +151,5 @@ If you'd like, I can open `src/setups/standalone.ts` and add an annotated exampl
 **8) Dependencies and TODOs**
 
 This interface module has a couple of dependensies that may limit its use or are in the process of being replaced:
-- (WebAwesome)[https://webawesome.com] for custom web components and a pro subscription to (FontAwesome)[https://fontawesome.com] icons.
+- [WebAwesome](https://webawesome.com) for custom web components and a pro subscription to [FontAwesome](https://fontawesome.com) icons.
 - Vuex store for reactive state management in Vue components. This should be replaced with the newer Pinia store, however, the interface currently depends on events from Vuex actions. The goal is to replace these Vuex events with ones from the Epicurrents event bus (this work is underway) and finally switch from Vuex to Pinia for state management.
