@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link href="/ohif/epicurrents.bundle.css" rel="stylesheet">
+    <meta charset="UTF-8" />
+    <meta name="theme-color" content="#ffffff">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EpiCurrents</title>
+    <style data-epicurrents-styles>
+      html, body {
+          margin: 0;
+          padding: 0;
+          width: 100%;
+          height: 100%;
+      }
+      #epicurrents-placeholder {
+          padding: 5rem;
+          opacity: 0.5;
+          font-size: 4em;
+          text-align: center;
+          font-variant: small-caps;
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      }
+      #epicurrents-error {
+          display: block;
+          padding: 5rem;
+          font-size: 4em;
+          text-align: center;
+          font-variant: small-caps;
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      }
+      #noscript {
+        display: flex;
+        position: absolute;
+        inset: 0;
+        align-items: center;
+        justify-content: center;
+        line-height: 1.5em;
+        text-align: center;
+        font-size: min(2.5vw, 7.5vh);
+        color: darkred;
+      }
+    </style>
+  </head>
+  <body>
+    <input type="hidden" id="epicurrents-mode" value="%MODE%" />
+    <div id="epicurrents"></div>
+    <noscript id="noscript">
+        This application requires JavaScript.<br />
+        Please enable JavaScript in your browser settings.
+    </noscript>
+    <script>
+      window.PUBLIC_URL = '/ohif/'
+      const appMode = document.querySelector('#epicurrents-mode').value
+      console.log(`Epicurrents is running in ${appMode} mode.`)
+      const isProduction = appMode === 'production'
+      // Grab possible setup parameters from the address.
+      const searchPart = window.location.search
+      const urlParams = new URLSearchParams(searchPart)
+      // Initial setup for the application. These values can be overridden by URL parameters.
+      window.__EPICURRENTS__ = {
+        SETUP: {
+          /**
+           * List of modules to load on application start.
+           */
+          activeModules: urlParams.get('mods')?.split(',') || [],
+          /**
+           * Views to activate on application start.
+           */
+          activeViews: urlParams.get('views')?.split(',') || ['biosignal', 'media'],
+          /**
+           * Path to the assets folder.
+           */
+          assetPath: (new URL('assets/', window.location.href)).href,
+          /**
+           * Should the application be run in production mode.
+           */
+          isProduction,
+          /**
+           * Log priority required for message to be printed into the console.
+           * Possible values (from least to most important):
+           * DEBUG, INFO, WARN, ERROR
+           */
+          logThreshold: urlParams.get('log')?.toLocaleUpperCase() || (isProduction ? 'WARN' : 'DEBUG'),
+          /**
+           * Maximum size of the signal data cache in memory (in megabytes).
+           */
+          signalCacheMaxSize: parseFloat(urlParams.get('memory') || '1', 10)*1000,
+          /**
+           * Should the pyodide service be used.
+           */
+          usePyodide: urlParams.get('services')?.split(',').includes('pyodide') || urlParams.has('advanced') || false,
+        }
+      }
+    </script>
+    <script type="module" src="/src/standalone.ts"></script>
+  </body>
+</html>
