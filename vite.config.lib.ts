@@ -1,5 +1,5 @@
 import { defineConfig } from 'vite'
-import { dirname, resolve } from 'path'
+import { join, resolve } from 'path'
 import { fileURLToPath, URL } from 'url'
 import { config as DotenvConfig } from 'dotenv'
 import tsconfigPaths from 'vite-tsconfig-paths'
@@ -24,7 +24,7 @@ export default defineConfig({
             fileName: 'epicurrents-lib',
         },
         minify: 'esbuild',
-        outDir: 'build',
+        outDir: join('build', 'lib'),
         rollupOptions: {
             external: [],
             output: {
