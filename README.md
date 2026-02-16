@@ -39,7 +39,7 @@ npm run build:app
 npm run copy:umd
 ```
 
-Dependency helper scripts used by this package are available under the `dependencies/` helper scripts. See `package.json` for `deps:*` commands (prepare, build, install, update, etc.).
+Helper scripts for managing dependencies from git repositories (e.g. Epicurrents module feature branches) in a development environment are available under the `scripts/` folder. For more information, see the `README` in the scripts folder and `package.json` for the `setup` and `deps:*` commands (prepare, build, install, update, etc.).
 
 **1) Using the interface as a standalone application**
 
@@ -139,7 +139,7 @@ Notes about workers and Pyodide
 - Main entry script (standalone): `src/setups/standalone.ts`
 - Library entry and interface implementation: see `src/ViteInterface.ts`
 - Vite configs: `vite.config.app.ts` (standalone app) and `vite.config.lib.ts` (library)
-- Worker copying / dependency helpers: `dependencies/` scripts referenced in `package.json`
+- Worker copying / dependency helpers: `scripts/` scripts referenced in `package.json`
 
 **7) Next steps**
 
