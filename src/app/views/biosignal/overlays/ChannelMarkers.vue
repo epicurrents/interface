@@ -118,8 +118,7 @@ export default defineComponent({
                         // Don't draw out-of-sight markers
                         continue
                     }
-                    // TODO: Figure out the reason for the 0.33 offset.
-                    const sensitivity = (this.sensitivityUnits - 0.33)*(chan.sensitivity || this.RESOURCE.sensitivity)
+                    const sensitivity = this.sensitivityUnits*(marker.channel.sensitivity || this.RESOURCE.sensitivity)
                     const markerY = ((chan.offset?.baseline || 0) + (displayPol*marker.value/sensitivity))*100
                     const idx = i
                     // We need to be able to modify one index value
