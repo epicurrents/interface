@@ -40,7 +40,7 @@ export type ApplicationInterfaceConfig = ApplicationConfig & {
     /**
      * List of modules to load on application start.
      */
-    activeModules?: SupportedModule[]
+    activeModules?: string[]
     /**
      * Views to activate on application start.
      */

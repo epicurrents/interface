@@ -51,44 +51,28 @@ import AppIcon from "#app/AppIcon.vue"
 import { Log } from "scoped-event-log"
 import SETTINGS, { useActiveContext } from './config'
 import VueApp from "./app/App.vue"
-// Modules.
-import {
-    doc as docModule,
-    eeg as eegModule,
-    emg as emgModule,
-    ncs as ncsModule,
-    pdf as pdfModule,
-    tab as tabModule,
-} from './app/modules'
-export {
-    eegModule,
-}
-const interfaceModules = {
-    htm: docModule,
-    eeg: eegModule,
-    emg: emgModule,
-    ncs: ncsModule,
-    pdf: pdfModule,
-    tab: tabModule,
-}
 
 import type {
     BiosignalResource,
     DataResource,
     EpicurrentsApp,
     InterfaceModule,
-    InterfaceModuleConstructor,
     StateManager,
 } from "@epicurrents/core/types"
 import { AssetService } from "@epicurrents/core/types"
 import { MutationPayload } from "vuex"
 import type { PythonInterpreterService, RunCodeResult } from '@epicurrents/pyodide-service/types'
 import type { ApplicationInterfaceConfig, ModuleConfiguration } from './types/globals'
+import type { DefaultInterfaceModuleConstructor } from './types/interface'
 import EpicurrentsPlugin from './epicurrents/EpicurrentsPlugin'
 
 const SCOPE = 'interface'
 
-export const ViteInterface: InterfaceModuleConstructor = class EpicurrentsInterface implements InterfaceModule {
+export const DefaultInterface: DefaultInterfaceModuleConstructor = class EpicurrentsInterface implements InterfaceModule {
+
+    /** Available interface modules. */
+    static MODULES: Record<string, ResourceModuleContext> = {}
+
     app = null as null | App
     epic = null as null | EpicurrentsApp
     instance = null as null | ComponentPublicInstance
@@ -100,7 +84,6 @@ export const ViteInterface: InterfaceModuleConstructor = class EpicurrentsInterf
     constructor (
         epicApp: EpicurrentsApp,
         manager?: StateManager,
-        modules: string[] = [],
         config?: ApplicationInterfaceConfig,
     ) {
         // Use global config if a custom one is not provided.
@@ -278,17 +261,10 @@ export const ViteInterface: InterfaceModuleConstructor = class EpicurrentsInterf
             await allDefined()
             this.instance = this.app!.mount(root)
         })
-        // Add active modules to store.
-        if (modules.length) {
-            this.loadModules(modules, config).then((success) => {
-                this.isReady = success
-            })
-        } else {
-            this.isReady = true
-            for (const waiter of this.readyWaiters) {
-                waiter(true)
-            }
-        }
+        // Add active modules to store.´
+        this.loadModules(config.activeModules || [], config).then((success) => {
+            this.isReady = success
+        })
     }
 
     /**
@@ -333,26 +309,32 @@ export const ViteInterface: InterfaceModuleConstructor = class EpicurrentsInterf
 
     /**
      * Load interface `modules` as specified in the `config`uration.
-     * @param modules Array of module names to load.
+     * @param modules Array of resource modules to load.
      * @param config Optional application interface configuration.
      * @returns Promise<boolean> Resolves to true if all modules loaded successfully, false otherwise.
      */
     async loadModules (modules: string[], config: ApplicationInterfaceConfig) {
-        const results = await Promise.all(modules.map(async (name) => {
+        const results = await Promise.all((
+            modules.length ? modules : Object.keys(DefaultInterface.MODULES)
+        ).map(async (name) => {
+            const mod = DefaultInterface.MODULES[name]
+            if (!mod) {
+                Log.error(`Module ${name} not found among available interface modules.`, SCOPE)
+                return false
+            }
             try {
-                const mod = interfaceModules[name as keyof typeof interfaceModules]
-                let modConfig = config.modules?.[name as keyof typeof config.modules]
+                let modConfig = config.modules?.[mod.runtime.moduleName.code as keyof typeof config.modules]
                 if (typeof modConfig === 'string') {
                     const response = await fetch(new URL(modConfig, config.assetPath))
                     modConfig = await response.json() as ModuleConfiguration
                 }
                 mod.runtime.applyConfiguration(modConfig || {})
-                this.store?.addModule(name, mod)
-                Log.debug(`Loaded interface module ${name}.`, SCOPE)
+                this.store?.addModule(mod.runtime.moduleName.code, mod)
+                Log.debug(`Loaded interface module ${mod.runtime.moduleName.full}.`, SCOPE)
                 return true
             } catch (e) {
                 console.log(e)
-                Log.error(`Failed to load interface module ${name}.`, SCOPE, e as Error)
+                Log.error(`Failed to load interface module ${mod.runtime.moduleName.full}.`, SCOPE, e as Error)
                 return false
             }
         }))

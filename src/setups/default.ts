@@ -11,6 +11,15 @@ window.global ||= window
 import { safeObjectFrom } from '@epicurrents/core/dist/util'
 import type { ApplicationInterfaceConfig } from '#types/globals'
 import { Log } from 'scoped-event-log'
+// Modules.
+import {
+    doc as interfaceDocModule,
+    eeg as interfaceEegModule,
+    pdf as interfacePdfModule,
+} from '#app/modules'
+export {
+    interfaceEegModule,
+}
 // Make sure we have valid initial configuration.
 const SETUP: Required<ApplicationInterfaceConfig> = Object.assign(
     safeObjectFrom({
@@ -128,7 +137,7 @@ import { DicomImporter, DicomWorkerSubstitute } from '@epicurrents/dicom-reader'
 import { HtmImporter, MarkdownWorkerSubstitute } from '@epicurrents/htm-reader'
 import { PdfImporter } from '@epicurrents/pdf-reader'
 import { PyodideService } from '@epicurrents/pyodide-service'
-import { ViteInterface } from '#ViteInterface'
+import { DefaultInterface } from '#DefaultInterface'
 
 // Initial logging threshold.
 Log.setPrintThreshold(SETUP.logThreshold)
@@ -360,8 +369,14 @@ export const createEpicurrentsApp = async (config?: ApplicationInterfaceConfig) 
     }
     ----- Tab data reader setup */
 
+    // Add interface resource modules.
+    DefaultInterface.MODULES = {
+        htm: interfaceDocModule,
+        eeg: interfaceEegModule,
+        pdf: interfacePdfModule,
+    }
     // Register the interface and launch the app.
-    coreApp.registerInterface(ViteInterface)
+    coreApp.registerInterface(DefaultInterface)
     coreApp.launch(SETUP).then(() => {
         // Possible post-launch setup.
     })

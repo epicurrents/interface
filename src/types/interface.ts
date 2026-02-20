@@ -8,11 +8,13 @@
 import type {
     BiosignalChannel,
     ChannelPositionProperties,
+    InterfaceModuleConstructor,
     SafeObject,
     SettingsValue,
 } from '@epicurrents/core/types'
 import { TranslateResult } from 'vue-i18n'
 import { InterfaceSettingsCommon } from './config'
+import { ResourceModuleContext } from '../store'
 
 export type ContextMenuContext = {
     // This is currently only for biosignal resources.
@@ -71,6 +73,12 @@ export interface ControlElement {
     value?: string | number | boolean
     /** Control CSS width. */
     width?: string
+}
+/**
+ * Constructor for the default interface module.
+ */
+export interface DefaultInterfaceModuleConstructor extends InterfaceModuleConstructor {
+    MODULES: Record<string, ResourceModuleContext>
 }
 /**
  * A group of dropdown items.
