@@ -6,6 +6,7 @@
  * @license    Apache-2.0
  */
 
+import { safeObjectFrom } from '@epicurrents/core/util'
 import { SettingsValue, type SettingsColor } from '@epicurrents/core/types'
 import { type EmgInterfaceSettings } from './types'
 import type {
@@ -25,8 +26,7 @@ export type MenuValueMap = {
     }[]
 }
 
-export const schemas: InterfaceModuleSchema = {
-    __proto__: null,
+export const schemas: InterfaceModuleSchema = safeObjectFrom({
     module: 'emg',
     controls: [
         ////////////////      SENSITIVITY    //////////////////
@@ -233,10 +233,9 @@ export const schemas: InterfaceModuleSchema = {
     ) => getSettingForInput(
         field, input, schemas.settings.fields, settings
     ),
-}
+})
 
-export const settings: EmgInterfaceSettings = {
-    __proto__: null,
+export const settings: EmgInterfaceSettings = safeObjectFrom({
     _userDefinable: {
         'antialiasing': Boolean,
         'annotations.saveToDataset': Boolean,
@@ -516,4 +515,4 @@ export const settings: EmgInterfaceSettings = {
         mainAxis: 'x',
         verticalDivs: 5,
     },
-}
+})

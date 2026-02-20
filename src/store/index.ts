@@ -107,7 +107,6 @@ const stateServices = new Map<string, AssetService>()
  * application's tuntime state.
  */
 const state: State = {
-    __proto__: null,
     APP: APP_MODULE as AugmentedRuntimeAppModule,
     INTERFACE: INTERFACE_SETTINGS,
     MODULES: stateModules,

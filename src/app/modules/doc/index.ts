@@ -7,6 +7,7 @@
 
 import { type ActionContext } from "vuex"
 import { EpiCStore, type InterfaceResourceModule, type State } from "#store"
+import { safeObjectFrom } from '@epicurrents/core/util'
 import type { DocumentResource, Modify } from "@epicurrents/core/types"
 import type { DocumentModuleSettings, PaginatedDocumentResource } from "@epicurrents/doc-module/types"
 import { loadAsyncComponent } from "#util"
@@ -18,7 +19,6 @@ import { CommonInterfaceSettings } from '#root/src/types/config'
 const SCOPE = "vue-interface-doc-module"
 
 export const runtime = {
-    __proto__: null,
     moduleName: {
         code: 'htm',
         full: 'Pages',
@@ -181,11 +181,10 @@ export const mutations = {
     },
 }
 
-export const settings: CommonInterfaceSettings = {
-    __proto__: null,
+export const settings: CommonInterfaceSettings = safeObjectFrom({
     _userDefinable: {},
     compatibleView: 'media',
-}
+})
 
 /**
  * Get scoped component properties for the document scope.

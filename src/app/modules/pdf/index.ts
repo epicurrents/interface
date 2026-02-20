@@ -7,10 +7,11 @@
 
 import type { ActionContext } from "vuex"
 import type { InterfaceResourceModule, State } from "#store"
+import { safeObjectFrom } from '@epicurrents/core/util'
 import type { DocumentResource } from "@epicurrents/core/types"
 import type { PaginatedDocumentResource } from "@epicurrents/doc-module/types"
 import { loadAsyncComponent } from "#util"
-import Log from "scoped-event-log"
+import { Log } from "scoped-event-log"
 import { useDocumentContext } from '../doc'
 import type { ModuleConfiguration } from '#types/globals'
 import type { CommonInterfaceSettings } from '#types/config'
@@ -18,7 +19,6 @@ import type { CommonInterfaceSettings } from '#types/config'
 const SCOPE = "vue-interface-doc-module"
 
 export const runtime = {
-    __proto__: null,
     moduleName: {
         code: 'pdf',
         full: 'Documents',
@@ -176,11 +176,10 @@ export const mutations = {
     },
 }
 
-export const settings: CommonInterfaceSettings = {
-    __proto__: null,
+export const settings: CommonInterfaceSettings = safeObjectFrom({
     _userDefinable: {},
     compatibleView: 'media',
-}
+})
 
 // Export the document scope hook.
 export { useDocumentContext }

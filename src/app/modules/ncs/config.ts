@@ -6,6 +6,7 @@
  * @license    Apache-2.0
  */
 
+import { safeObjectFrom } from '@epicurrents/core/util'
 import { SettingsValue, type SettingsColor } from '@epicurrents/core/types'
 import { type NcsInterfaceSettings } from './types'
 import type {
@@ -25,8 +26,7 @@ export type MenuValueMap = {
     }[]
 }
 
-export const schemas: InterfaceModuleSchema = {
-    __proto__: null,
+export const schemas: InterfaceModuleSchema = safeObjectFrom({
     module: 'ncs',
     controls: [
         ////////////////      SENSITIVITY    //////////////////
@@ -233,10 +233,9 @@ export const schemas: InterfaceModuleSchema = {
     ) => getSettingForInput(
         field, input, schemas.settings.fields, settings
     ),
-}
+})
 
-export const settings: NcsInterfaceSettings = {
-    __proto__: null,
+export const settings: NcsInterfaceSettings = safeObjectFrom({
     _userDefinable: {
         'antialiasing': Boolean,
         'annotations.saveToDataset': Boolean,
@@ -552,4 +551,4 @@ export const settings: NcsInterfaceSettings = {
         mainAxis: 'y',
         verticalDivs: 10,
     },
-}
+})

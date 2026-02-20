@@ -6,6 +6,7 @@
  */
 
 import { type ActionContext } from "vuex"
+import { safeObjectFrom } from '@epicurrents/core/util'
 import type { Modify } from "@epicurrents/core/types"
 import { EpiCStore, type InterfaceResourceModule, type State } from "#store"
 import { loadAsyncComponent } from "#util"
@@ -18,7 +19,6 @@ import type { RadiologyModuleSettings, RadiologyResource } from './types'
 const SCOPE = "vue-interface-doc-module"
 
 export const runtime = {
-    __proto__: null,
     moduleName: {
         code: 'rad',
         full: 'Radiology',
@@ -65,11 +65,10 @@ export const actions = {
     },
 }
 
-export const settings: CommonInterfaceSettings = {
-    __proto__: null,
+export const settings: CommonInterfaceSettings = safeObjectFrom({
     _userDefinable: {},
     compatibleView: 'radiology',
-}
+})
 
 /**
  * Get scoped component properties for the radiology scope.

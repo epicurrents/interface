@@ -5,6 +5,7 @@
  * @license    Apache-2.0
  */
 
+import { safeObjectFrom } from '@epicurrents/core/util'
 import type { State } from "#store"
 import type { DataResource, SafeObject, SettingsValueConstructor } from "@epicurrents/core/types"
 import type { HotkeyProperties } from '#types/config'
@@ -66,8 +67,7 @@ export const getters = {
     },
 }
 
-export const settings = {
-    __proto__: null,
+export const settings = safeObjectFrom({
     _userDefinable: {
         disclaimerAccepted: Number,
         hotkeyAltOrOpt: Boolean,
@@ -97,4 +97,4 @@ export const settings = {
     screenPPI: 96,
     userName: '',
     useViews: [],
-} as AppModuleSettings
+}) as AppModuleSettings
