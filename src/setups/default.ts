@@ -12,11 +12,9 @@ import { safeObjectFrom } from '@epicurrents/core/dist/util'
 import type { ApplicationInterfaceConfig } from '#types/globals'
 import { Log } from 'scoped-event-log'
 // Modules.
-import {
-    doc as interfaceDocModule,
-    eeg as interfaceEegModule,
-    pdf as interfacePdfModule,
-} from '#app/modules'
+import * as interfaceDocModule from '#app/modules/doc'
+import * as interfaceEegModule from '#app/modules/eeg'
+import * as interfacePdfModule from '#app/modules/pdf'
 export {
     interfaceEegModule,
 }

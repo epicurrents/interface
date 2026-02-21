@@ -20,10 +20,10 @@ package-lock.json
 # Environment files
 .env
 
-# Project specific setup scripts
+# Project specific setup and configurations
 /src/setups/*
 !/src/setups/default.ts
-!/src/setups/standalone.ts
+tsconfig.*.json
 
 # Editor directories and files
 .vscode/*
