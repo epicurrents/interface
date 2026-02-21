@@ -129,7 +129,6 @@ import { Epicurrents } from '@epicurrents/core'
 import { inlineWorker } from '@epicurrents/core/dist/util'
 import * as docModule from '@epicurrents/doc-module'
 import * as eegModule from '@epicurrents/eeg-module'
-import * as ncsModule from '@epicurrents/ncs-module'
 import { EdfImporter, EdfWorkerSubstitute } from '@epicurrents/edf-reader'
 import { DicomImporter, DicomWorkerSubstitute } from '@epicurrents/dicom-reader'
 import { HtmImporter, MarkdownWorkerSubstitute } from '@epicurrents/htm-reader'
@@ -286,11 +285,6 @@ export const createEpicurrentsApp = async (config?: ApplicationInterfaceConfig) 
         coreApp.registerStudyImporter('doc/htm-url', 'Open markdown from URL',  'url', htmLoader)
     }
 
-    // NCS module setup.
-    if (!SETUP.activeModules.length || SETUP.activeModules.includes('ncs')) {
-        coreApp.registerModule('ncs', ncsModule)
-    }
-
     // PDF module setup.
     if (!SETUP.activeModules.length || SETUP.activeModules.includes('pdf')) {
         coreApp.registerModule('pdf', docModule)
@@ -329,6 +323,12 @@ export const createEpicurrentsApp = async (config?: ApplicationInterfaceConfig) 
         coreApp.registerStudyImporter('emg/wav-url', 'Open WAV from URL',  'url', wavLoader)
     }
     ----- EMG data reader setup */
+
+    /* An example NCS module setup. This module requires a dedicated API or file reader for the source data used.
+    if (!SETUP.activeModules.length || SETUP.activeModules.includes('ncs')) {
+        coreApp.registerModule('ncs', ncsModule)
+    }
+    ----- NCS module setup */
 
     /* An example tabular data module setup. Tabular data requires a dedicated API reader to fetch the data.
     if (!SETUP.activeModules.length || SETUP.activeModules.includes('tab')) {
