@@ -20,8 +20,11 @@ package-lock.json
 # Environment files
 .env
 
-# Project specific setup and configurations
+# Project specific setups and configurations
 /src/setups/*
+vite.config.*.ts
+!vite.config.app.ts
+!vite.config.lib.ts
 !/src/setups/default.ts
 tsconfig.*.json
 
