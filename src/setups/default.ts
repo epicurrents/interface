@@ -11,13 +11,6 @@ window.global ||= window
 import { safeObjectFrom } from '@epicurrents/core/dist/util'
 import type { ApplicationInterfaceConfig } from '#types/globals'
 import { Log } from 'scoped-event-log'
-// Modules.
-import * as interfaceDocModule from '#app/modules/doc'
-import * as interfaceEegModule from '#app/modules/eeg'
-import * as interfacePdfModule from '#app/modules/pdf'
-export {
-    interfaceEegModule,
-}
 // Make sure we have valid initial configuration.
 const SETUP: Required<ApplicationInterfaceConfig> = Object.assign(
     safeObjectFrom({
@@ -68,6 +61,9 @@ if (typeof window.__EPICURRENTS__ === 'undefined') {
     }
 }
 // Import rest of the modules after global property setup.
+import * as interfaceDocModule from '#app/modules/doc'
+import * as interfaceEegModule from '#app/modules/eeg'
+import * as interfacePdfModule from '#app/modules/pdf'
 /*
  * ANNOTATION: How this file registers modules, workers and importers
  * -----------------------------------------------------------------
