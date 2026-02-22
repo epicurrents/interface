@@ -110,9 +110,10 @@ export default defineConfig({
     ],
     define: {
         __INTLIFY_JIT_COMPILATION__: true,
-        'process.env.SETUP_PATH': JSON.stringify(process.env.SETUP_PATH),
         'process.env.ASSET_PATH': JSON.stringify(process.env.ASSET_PATH),
         'process.env.EXCLUDE_MODULES': JSON.stringify(process.env.EXCLUDE_MODULES),
+        'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV),
+        'process.env.SETUP_PATH': JSON.stringify(process.env.SETUP_PATH),
     },
     resolve: {
         alias: {
