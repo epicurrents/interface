@@ -37,12 +37,12 @@
                                 v-on:updated="handleEventsUpdated"
                             /> -->
                             <!-- Timebase -->
-                            <timescale-grid
+                            <timescale-grid v-if="viewReady"
                                 :pxPerSecond="pxPerSecond"
                                 :viewerSize="plotDimensions"
                             />
                             <!--<div ref="timebase" class="timebase"></div>-->
-                            <eeg-plot ref="plot" v-if="overlay"
+                            <eeg-plot ref="plot" v-if="overlay && viewReady"
                                 class="plot"
                                 :dimensions="plotDimensions"
                                 :overlay="overlay"
@@ -66,7 +66,7 @@
                                 v-on:touch-start="handlePlotTouchStart"
                             />
                             <!-- Annotations-->
-                            <annotation-labels v-if="overlay"
+                            <annotation-labels v-if="overlay && viewReady"
                                 :overlay="overlay"
                                 :secPerPage="viewRange"
                                 :SETTINGS="SETTINGS"
@@ -288,7 +288,7 @@ export default defineComponent({
         ViewerOverlay,
         WindowDialog,
     },
-    setup () {
+    setup (props) {
         const store = useStore()
         const activeCursorTool = ref(null as string | null)
         const activeSelection = ref(null as PlotSelection | null)
@@ -379,6 +379,7 @@ export default defineComponent({
         const sidebarOpen = ref(null as string | null)
         const sidebarTab = ref('events')
         const sidebarWidth = ref(350)
+        const viewReady = ref(props.viewerSize[0] > 0 && props.viewerSize[1] > 0)
         const yAxisWidth = ref(80)
         // Template refs
         const component = ref<HTMLDivElement>() as Ref<HTMLDivElement>
@@ -457,6 +458,7 @@ export default defineComponent({
             sidebarWidth,
             plotSelections,
             undoableActions,
+            viewReady,
             yAxisWidth,
             // Template refs
             component,
@@ -488,6 +490,9 @@ export default defineComponent({
     },
     watch: {
         viewerSize (value) {
+            if (!this.viewReady && value[0] > 0 && value[1] > 0) {
+                this.viewReady = true
+            }
             if (!value || !value[0] || !value[1]) {
                 return
             }
