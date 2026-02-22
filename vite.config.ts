@@ -13,7 +13,7 @@ DotenvConfig()
 process.env.SETUP_PATH = process.env.SETUP
                        ? 'setups/' + process.env.SETUP
                        : 'setups/default'
-process.env.ASSET_PATH = process.env.ASSET_PATH || '/static/'
+process.env.ASSET_PATH = process.env.ASSET_PATH || '/'
 const EXCLUDE_MODULES = (process.env.EXCLUDE_MODULES || '').split(',')
                                                            .map(name => name.trim())
                                                            .filter(name => name.length > 0)
