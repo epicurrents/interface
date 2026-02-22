@@ -17,194 +17,12 @@
             @keydown="stopPropagation"
             @keyup="stopPropagation"
         >
-            <wa-tab v-if="availableTabs.includes('labels')" panel="labels">
-                {{ $t('Labels') }}
-            </wa-tab>
             <wa-tab v-if="availableTabs.includes('events')" panel="events">
                 {{ $t('Events') }}
             </wa-tab>
             <wa-tab v-if="availableTabs.includes('create')" panel="create">
                 {{ $t('Create') }}
             </wa-tab>
-            <wa-tab-panel v-if="availableTabs.includes('labels')" name="labels">
-                <wa-scroller class="labels-wrapper" orientation="vertical">
-                    <div class="header">
-                        <div class="label">{{ $t('Right side') }}</div>
-                    </div>
-                    <wa-select
-                        :placeholder="$t('Confidence')"
-                        size="small"
-                        :title="$t('Confidence')"
-                        :value="labelsRight.confidence.toString()"
-                        @input="confidenceChanged('r', $event.target.value)"
-                        @wa-hide="stopPropagation"
-                        @wa-show="stopPropagation"
-                    >
-                        <wa-option v-for="option in availableConfidenceLevels" :key="`confidence-option-${option.value}`"
-                            :value="option.value.toString()"
-                        >{{ $t(option.label) }}</wa-option>
-                    </wa-select>
-                    <wa-select
-                        multiple
-                        :placeholder="$t('Select D-codes')"
-                        size="small"
-                        :title="$t('Select D-codes')"
-                        :value="labelsRight.dCodes"
-                        @input="labelChanged('dCodes', 'r', $event.target.value)"
-                        @wa-hide="stopPropagation"
-                        @wa-show="stopPropagation"
-                    >
-                        <template v-for="(option, idx) in availableDCodesLat" :key="`dcode-option-${idx}`"
-                            :value="option.code"
-                        >
-                            <wa-option v-if="option.code"
-                                size="small"
-                                :value="option.code"
-                            >{{ $t(option.label) }}</wa-option>
-                            <small v-else>{{ $t(option.label) }}</small>
-                        </template>
-                    </wa-select>
-                    <wa-select
-                        multiple
-                        :placeholder="$t('Select ICD-10 codes')"
-                        size="small"
-                        :title="$t('Select ICD-10 codes')"
-                        :value="labelsRight.icd10Codes"
-                        @input="labelChanged('icd10Codes', 'r', $event.target.value)"
-                        @wa-hide="stopPropagation"
-                        @wa-show="stopPropagation"
-                    >
-                        <wa-option v-for="(code, idx) in labelsRight.icd10Available" :key="`icd10-option-${idx}`"
-                            :value="code"
-                        >{{ code }}</wa-option>
-                    </wa-select>
-                    <wa-input
-                        :placeholder="$t('Extra ICD-10 codes')"
-                        size="small"
-                        :value="labelsRight.icd10Extra"
-                        @blur="labelChanged('icd10Extra', 'r', $event.target.value?.split?.(',') || [])"
-                    ></wa-input>
-                    <wa-divider></wa-divider>
-                    <div class="header">
-                        <div class="label">{{ $t('Left side') }}</div>
-                    </div>
-                    <wa-select
-                        :placeholder="$t('Confidence')"
-                        size="small"
-                        :title="$t('Confidence')"
-                        :value="labelsLeft.confidence.toString()"
-                        @input="confidenceChanged('l', $event.target.value)"
-                        @wa-hide="stopPropagation"
-                        @wa-show="stopPropagation"
-                    >
-                        <wa-option v-for="option in availableConfidenceLevels" :key="`confidence-option-${option.value}`"
-                            :value="option.value.toString()"
-                        >{{ $t(option.label) }}</wa-option>
-                    </wa-select>
-                    <wa-select
-                        multiple
-                        :placeholder="$t('Select D-codes')"
-                        size="small"
-                        :title="$t('Select D-codes')"
-                        :value="labelsLeft.dCodes"
-                        @input="labelChanged('dCodes', 'l', $event.target.value)"
-                        @wa-hide="stopPropagation"
-                        @wa-show="stopPropagation"
-                    >
-                        <template v-for="(option, idx) in availableDCodesLat" :key="`dcode-option-${idx}`"
-                            :value="option.code"
-                        >
-                            <wa-option v-if="option.code" size="small" :value="option.code">{{ $t(option.label) }}</wa-option>
-                            <small v-else>{{ $t(option.label) }}</small>
-                        </template>
-                    </wa-select>
-                    <wa-select
-                        multiple
-                        :placeholder="$t('Select ICD-10 codes')"
-                        size="small"
-                        :title="$t('Select ICD-10 codes')"
-                        :value="labelsLeft.icd10Codes"
-                        @input="labelChanged('icd10Codes', 'l', $event.target.value)"
-                        @wa-hide="stopPropagation"
-                        @wa-show="stopPropagation"
-                    >
-                        <wa-option v-for="(code, idx) in labelsLeft.icd10Available" :key="`icd10-option-${idx}`"
-                            :value="code"
-                        >{{ code }}</wa-option>
-                    </wa-select>
-                    <wa-input
-                        :placeholder="$t('Extra ICD-10 codes')"
-                        size="small"
-                        :value="labelsLeft.icd10Extra"
-                        @blur="labelChanged('icd10Extra', 'l', $event.target.value?.split?.(',') || [])"
-                    ></wa-input>
-                    <wa-divider></wa-divider>
-                    <div class="header">
-                        <div class="label">{{ $t('General') }}</div>
-                    </div>
-                    <wa-select
-                        :placeholder="$t('Confidence')"
-                        size="small"
-                        :title="$t('Confidence')"
-                        :value="labelsGeneral.confidence.toString()"
-                        @input="confidenceChanged('g', $event.target.value)"
-                        @wa-hide="stopPropagation"
-                        @wa-show="stopPropagation"
-                    >
-                        <wa-option v-for="option in availableConfidenceLevels" :key="`confidence-option-${option.value}`"
-                            :value="option.value.toString()"
-                        >{{ $t(option.label) }}</wa-option>
-                    </wa-select>
-                    <wa-select
-                        multiple
-                        :placeholder="$t('Select D-codes')"
-                        size="small"
-                        :title="$t('Select D-codes')"
-                        :value="labelsGeneral.dCodes"
-                        @input="labelChanged('dCodes', 'g', $event.target.value)"
-                        @wa-hide="stopPropagation"
-                        @wa-show="stopPropagation"
-                    >
-                        <template v-for="(option, idx) in availableDCodesGen" :key="`dcode-option-${idx}`"
-                            :value="option.code"
-                        >
-                            <wa-option v-if="option.code" size="small" :value="option.code">{{ $t(option.label) }}</wa-option>
-                            <small v-else>{{ $t(option.label) }}</small>
-                        </template>
-                    </wa-select>
-                    <wa-select
-                        multiple
-                        :placeholder="$t('Select ICD-10 codes')"
-                        size="small"
-                        :title="$t('Select ICD-10 codes')"
-                        :value="labelsGeneral.icd10Codes"
-                        @input="labelChanged('icd10Codes', 'g', $event.target.value)"
-                        @wa-hide="stopPropagation"
-                        @wa-show="stopPropagation"
-                    >
-                        <wa-option v-for="(code, idx) in labelsGeneral.icd10Available" :key="`icd10-option-${idx}`"
-                            :value="code"
-                        >{{ code }}</wa-option>
-                    </wa-select>
-                    <wa-input
-                        :placeholder="$t('Extra ICD-10 codes')"
-                        size="small"
-                        :value="labelsGeneral.icd10Extra"
-                        @blur="labelChanged('icd10Extra', 'g', $event.target.value?.split?.(',') || [])"
-                    ></wa-input>
-                    <wa-divider></wa-divider>
-                    <div class="header">
-                        <div class="label">{{ $t('Comments') }}</div>
-                    </div>
-                    <wa-textarea
-                        resize="auto"
-                        rows="4"
-                        size="small"
-                        :value="comments ? comments.join('\n') : ''"
-                        @blur="commentsChanged($event.target.value)"
-                    ></wa-textarea>
-                </wa-scroller>
-            </wa-tab-panel>
             <wa-tab-panel v-if="availableTabs.includes('events')" name="events">
                 <div class="header">
                     <div class="time">{{ $t('Time') }}</div>
@@ -339,8 +157,6 @@ import { PlotSelection } from '#app/views/biosignal/types'
 import { Log } from "scoped-event-log"
 
 type AnnotationExportFormat = 'epicurrents' | 'mne'
-type LabelSet = Record<"dCodes" | "icd10Available" | "icd10Codes" | "icd10Extra", string[]>
-type FindingConfidence = { confidence: number }
 
 export default defineComponent({
     name: 'BiosignalAnnotationSidebar',
@@ -381,48 +197,6 @@ export default defineComponent({
     setup (/*props, { attrs, slots, emit }*/) {
         // DOM
         const context = useBiosignalContext(useStore())
-        const availableConfidenceLevels = [
-            { value: 0, label: 'N/A' },
-            { value: 1, label: 'Low' },
-            { value: 2, label: 'High' },
-        ]
-        const availableDCodesLat = [
-            { label: 'Upper limb' },
-            { code: 'D4500', label: 'Normal', icd10: [] },
-            { code: 'D4505', label: 'Borderline', icd10: [] },
-            { code: 'D4510', label: 'CTS', icd10: ['G56.0'] },
-            { code: 'D4511', label: '- CTS standard NCS', icd10: [] },
-            { code: 'D4512', label: '- CTS extended NCS', icd10: [] },
-            { code: 'D4513', label: 'Clinical CTS', icd10: [] },
-            { code: 'D4514', label: 'Non-clinical CTS', icd10: [] },
-            { code: 'D4515', label: 'Median neuropathy: other', icd10: ['G56.1'] },
-            { code: 'D4520', label: 'Ulnar neuropathy: elbow', icd10: ['G56.2'] },
-            { code: 'D4525', label: 'Ulnar neuropathy: other', icd10: ['G56.2'] },
-            { code: 'D4540', label: 'Other plexopathy', icd10: ['G54.0', 'G54.1', 'G54.9'] },
-            { code: 'D4545', label: 'Radial neuropathy', icd10: ['G56.3'] },
-            { code: 'D4550', label: 'Plexus neuritis', icd10: ['G54.5'] },
-            { label: 'Lower limb' },
-            { code: 'D4530', label: 'Peroneal neuropathy', icd10: ['G57.3'] },
-            { label: 'Face ' },
-            { code: 'D4532', label: 'Facial neuropathy', icd10: ['G51.0', 'G51.9'] },
-        ]
-        const availableDCodesGen = [
-            { code: 'D4535', label: 'Other neuropathy', icd10: [
-                'G56.8', 'G56.9', 'G57.0', 'G57.1', 'G57.2', 'G57.4', 'G57.5', 'G57.6', 'G57.8', 'G57.9', 'G58.8'
-            ] },
-            { code: 'D4555', label: 'AIDP/Guillain-Barré', icd10: ['G61.0'] },
-            { code: 'D4560', label: 'Demyelinating: sensorimotor', icd10: ['G61.2', 'G61.9'] },
-            { code: 'D4565', label: 'Axonal: sensorimotor', icd10: ['G62.9'] },
-            { code: 'D4570', label: 'Mixed: sensorimotor', icd10: ['G62.9'] },
-            { code: 'D4575', label: 'Sensory polyneuropathy', icd10: ['G62.9'] },
-            { code: 'D4576', label: 'Motor polyneuropathy', icd10: ['G62.9'] },
-            { code: 'D4580', label: 'Multifocal/asymmetric pnp', icd10: ['G58.7'] },
-            { code: 'D4582', label: 'Critical illness pnp/myopathy', icd10: [] },
-            { code: 'D4585', label: 'Hereditary polyneuropathy', icd10: [] },
-            { code: 'D4595', label: 'Other abnormality', icd10: [] }, // Renamed from other findings
-            { code: 'D4596', label: 'Unconscious patient', icd10: [] },
-            { code: 'D4599', label: 'Technical failure', icd10: [] },
-        ]
         // Don't spam the error message if annotations cannot be saved, just show it once.
         const cannotWriteMessageDisplayed = ref(false)
         const comments = context.RESOURCE.labels.filter(l => l.name === 'comments')
@@ -440,62 +214,17 @@ export default defineComponent({
                   context.RESOURCE.totalDuration
               ).hour
             : false
-        const labelsGeneral = ref<LabelSet & FindingConfidence>({
-
-            confidence: context.RESOURCE.labels.filter(l => l.name === 'g:confidence')
-                                           .map(l => l.value as number)[0] || 0,
-            dCodes: context.RESOURCE.labels.filter(l => l.name === 'g:dCodes')
-                                           .map(l => l.value).flat() as string[],
-            icd10Available: context.RESOURCE.labels.filter(l => l.name === 'g:icd10Codes')
-                                                   .map(l => l.value).flat() as string[],
-            icd10Codes: context.RESOURCE.labels.filter(l => l.name === 'g:icd10Codes')
-                                               .map(l => l.value).flat() as string[],
-            icd10Extra: context.RESOURCE.labels.filter(l => l.name === 'g:icd10Extra')
-                                               .map(l => l.value).flat() as string[],
-        })
-        const labelsLeft = ref<LabelSet & FindingConfidence>({
-
-            confidence: context.RESOURCE.labels.filter(l => l.name === 'l:confidence')
-                                           .map(l => l.value as number)[0] || 0,
-            dCodes: context.RESOURCE.labels.filter(l => l.name === 'l:dCodes')
-                                           .map(l => l.value).flat() as string[],
-            icd10Available: context.RESOURCE.labels.filter(l => l.name === 'l:icd10Codes')
-                                                   .map(l => l.value).flat() as string[],
-            icd10Codes: context.RESOURCE.labels.filter(l => l.name === 'l:icd10Codes')
-                                               .map(l => l.value).flat() as string[],
-            icd10Extra: context.RESOURCE.labels.filter(l => l.name === 'l:icd10Extra')
-                                               .map(l => l.value).flat() as string[],
-        })
-        const labelsRight = ref<LabelSet & FindingConfidence>({
-
-            confidence: context.RESOURCE.labels.filter(l => l.name === 'r:confidence')
-                                           .map(l => l.value as number)[0] || 0,
-            dCodes: context.RESOURCE.labels.filter(l => l.name === 'r:dCodes')
-                                           .map(l => l.value).flat() as string[],
-            icd10Available: context.RESOURCE.labels.filter(l => l.name === 'r:icd10Codes')
-                                                   .map(l => l.value).flat() as string[],
-            icd10Codes: context.RESOURCE.labels.filter(l => l.name === 'r:icd10Codes')
-                                               .map(l => l.value).flat() as string[],
-            icd10Extra: context.RESOURCE.labels.filter(l => l.name === 'r:icd10Extra')
-                                               .map(l => l.value).flat() as string[],
-        })
         const tabs = ref<WaTabGroup>() as Ref<WaTabGroup>
         const newText = ref<WaTextarea>() as Ref<WaTextarea>
         const newClass = ref(context.SETTINGS.annotations.classes?.default.quickCode ?? -1)
         const unsubscribe = ref<(() => void) | null>(null)
         return {
-            availableConfidenceLevels,
-            availableDCodesLat,
-            availableDCodesGen,
             cannotWriteMessageDisplayed,
             comments,
             drawer,
             exportFormat,
             isOverADay,
             isOverAnHour,
-            labelsGeneral,
-            labelsLeft,
-            labelsRight,
             // DOM refs
             tabs,
             newText,
@@ -590,22 +319,6 @@ export default defineComponent({
         close () {
             this.$emit('close')
         },
-        commentsChanged (value: string) {
-            this.comments = value.split('\n')
-            this.$emit('labels-changed', [{ context: '', field: 'comments', value: this.comments }])
-        },
-        confidenceChanged (lat: string, value: string) {
-            const valueNum = parseInt(value)
-            if (isNaN(valueNum)) {
-                return
-            }
-            const labels = lat === 'g'
-                         ? this.labelsGeneral
-                         : lat === 'l' ? this.labelsLeft
-                                       : this.labelsRight
-            labels.confidence = valueNum
-            this.$emit('labels-changed', [{ context: lat, field: 'confidence', value: valueNum }])
-        },
         createEvents () {
             const props = {
                 code: this.newClass || 0,
@@ -672,45 +385,6 @@ export default defineComponent({
             const annoRange = this.viewStep < this.visibleRange ? time - this.visibleRange/2 : time
             const viewStart = Math.max(0, annoRange - annoRange%this.viewStep)
             this.RESOURCE.viewStart = viewStart
-        },
-        labelChanged (field: keyof LabelSet, lat: string, value: string[]) {
-            const changed = [] as { context: string; field: string; value: boolean | number | string | string[] }[]
-            const labels = lat === 'g'
-                            ? this.labelsGeneral
-                            : lat === 'l' ? this.labelsLeft
-                                        : this.labelsRight
-            labels[field] = value
-            if (field === 'dCodes') {
-                let icd10s: string[] = []
-                const codeSet = lat === 'g' ? this.availableDCodesGen : this.availableDCodesLat
-                // Gather ICD-10 codes for selected D codes.
-                for (const dCode of value) {
-                    const found = codeSet.find(dc => dc.code === dCode)
-                    if (found && found.icd10) {
-                        icd10s = icd10s.concat(found.icd10)
-                    }
-                }
-                // Remove duplicates.
-                labels.icd10Available = Array.from(new Set(icd10s))
-                if (labels.icd10Available.length === 1) {
-                    labels.icd10Codes = [labels.icd10Available[0]]
-                    changed.push({ context: lat, field: 'icd10Codes', value: labels.icd10Codes })
-                } else {
-                    const nIcs10Prev = labels.icd10Codes.length
-                    labels.icd10Codes = labels.icd10Codes.filter(code => labels.icd10Available.includes(code))
-                    if (nIcs10Prev !== labels.icd10Codes.length) {
-                        changed.push({ context: lat, field: 'icd10Codes', value: labels.icd10Codes })
-                    }
-                }
-            } else if (field === 'icd10Codes') {
-                // TODO (if needed): Validate selected ICD-10 codes?
-            } else if (field === 'icd10Extra') {
-                // Clean up extra ICD-10 codes.
-                value = value.map(v => v.trim()).filter(v => v.length > 0)
-                labels.icd10Extra = value
-            }
-            changed.push({ context: lat, field, value })
-            this.$emit('labels-changed', changed)
         },
         removeEvent (event: MouseEvent, id: string) {
             // Prevent click from activating navigation (row click action) to removed event.
@@ -779,15 +453,6 @@ export default defineComponent({
         requestAnimationFrame(() => {
             if (this.drawer) {
                 this.drawer.style.width = `${this.width}px`
-            }
-            if (this.labelsGeneral.dCodes.length) {
-                this.labelChanged('dCodes', 'g', this.labelsGeneral.dCodes)
-            }
-            if (this.labelsLeft.dCodes.length) {
-                this.labelChanged('dCodes', 'l', this.labelsLeft.dCodes)
-            }
-            if (this.labelsRight.dCodes.length) {
-                this.labelChanged('dCodes', 'r', this.labelsRight.dCodes)
             }
             this.checkTab()
         })
