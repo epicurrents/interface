@@ -33,10 +33,12 @@
                 </wa-select>
                 <div v-else class="credentials">
                     <wa-input
+                        :disabled="isLoggedIn || undefined"
                         :placeholder="$t('welcome.username')"
                         v-property="'userName'"
                     ></wa-input>
                     <wa-input v-if="$config.user.authenticationBackend"
+                        :disabled="isLoggedIn || undefined"
                         :placeholder="$t('welcome.password')"
                         type="password"
                         v-property="'password'"
@@ -164,6 +166,7 @@ export default defineComponent({
                     if (response.ok) {
                         this.$store.dispatch('set-settings-value', { field: 'app.userName', value: this.userName })
                         this.isLoggedIn = true
+                        this.password = ''
                         Log.info(`User '${this.userName}' logged in successfully.`, this.$options.name!)
                         return true
                     } else {
@@ -214,6 +217,10 @@ export default defineComponent({
         )
     },
     mounted () {
+        if (this.$store.state.INTERFACE.app.userName) {
+            this.userName = this.$store.state.INTERFACE.app.userName
+            this.isLoggedIn = true
+        }
     },
     beforeUnmount () {
     },

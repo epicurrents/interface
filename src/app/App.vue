@@ -764,6 +764,10 @@ export default defineComponent({
                 Log.debug(`Store commit event ${mutation.type}.`, this.$options.name!)
             }
         })
+        // Check if we need to store user credentials.
+        if (this.$config && typeof this.$config.user === 'string') {
+            this.$store.dispatch('set-settings-value', { field: 'app.userName', value: this.$config.user })
+        }
     },
     mounted () {
         // Add event listeners
