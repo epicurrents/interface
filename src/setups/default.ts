@@ -34,7 +34,8 @@ const SETUP: Required<ApplicationInterfaceConfig> = Object.assign(
         user: {},
         useSAB: true,
     } as Required<ApplicationInterfaceConfig>),
-    safeObjectFrom(__EPICURRENTS__?.SETUP)
+    __EPICURRENTS__?.SETUP,
+    window.__EPICURRENTS__?.SETUP
 )
 // Create the global Epicurrents object if not available.
 if (typeof window.__EPICURRENTS__ === 'undefined') {
