@@ -31,7 +31,7 @@ const SETUP: Required<ApplicationInterfaceConfig> = Object.assign(
         scope: 'local' as 'local' | 'workspace',
         signalCacheMaxSize: 1000,
         usePyodide: false,
-        user: 'Test',
+        user: null,
         useSAB: true,
     } as Required<ApplicationInterfaceConfig>),
     __EPICURRENTS__?.SETUP,

@@ -95,14 +95,27 @@ export type ApplicationInterfaceConfig = ApplicationConfig & {
      * Should the pyodide service be used.
      */
     usePyodide?: boolean
-    /** User properties if user authentication is in use. */
+    /**
+     * User authentication configuration. Following options are allowed:
+     * - `string`: This name is used as the user name for this application instance.
+     * - `object`: An object containing the following optional fields.
+     *      - `authenticationBackend`: Optional URL of the user authentication backend service.
+     *      - `nameOptions`: Optional preset user names for login selection.
+     *  - `null`: No user authentication is used, and no user information is stored.
+     */
     user?: {
         /**
-         * URL of the user authentication backend service.
-         * If not set, users may select whichever name they want.
+         * URL of the user authentication backend service for use without preset name options.
+         * The API must accept POST requests with JSON body containing `username` and `password` fields, and return a
+         * JSON response with a `success` boolean field indicating the authentication result.
+         * If not set, the name the user enters is accepted as-is without further authentication.
          */
         authenticationBackend?: string
-        /** Available user names for login selection. If not set, an input field is shown. */
+        /**
+         * Available user names for login selection.
+         * The option that the user selects will be accepted as-is without further authentication.
+         * If not set, a text input field is shown.
+         */
         nameOptions?: { label?: string, name: string }[]
     } | null
 }
