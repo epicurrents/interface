@@ -89,7 +89,7 @@ export default defineComponent({
                     id: `dataset-${dataset.id}`,
                     active: dataset.isActive,
                     enabled: true,
-                    label: this.$t(dataset.name, this.$options.name),
+                    label: this.$t(dataset.name),
                     onclick: ['set-active-dataset', dataset],
                 })
             }
