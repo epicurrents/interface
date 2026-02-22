@@ -11,9 +11,10 @@ import { viteSingleFile } from 'vite-plugin-singlefile'
 DotenvConfig()
 
 process.env.ASSET_PATH = process.env.ASSET_PATH || '/static/'
-const EXCLUDE_MODULES = (process.env.EXCLUDE_MODULES || '').split(',')
-                                                           .map(name => name.trim())
-                                                           .filter(name => name.length > 0)
+const EXCLUDE_MODULES = (process.env.EXCLUDE_MODULES || '')
+                        .split(',')
+                        .map(name => name.trim())
+                        .filter(name => name.length > 0)
 // Only display each excluded module once in the console, even if it is imported multiple times.
 const excludedModules = new Set<string>()
 
@@ -111,9 +112,7 @@ export default defineConfig({
     define: {
         __INTLIFY_JIT_COMPILATION__: true,
         'process.env.ASSET_PATH': JSON.stringify(process.env.ASSET_PATH),
-        'process.env.EXCLUDE_MODULES': JSON.stringify(process.env.EXCLUDE_MODULES),
         'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV),
-        'process.env.SETUP_PATH': JSON.stringify(process.env.SETUP_PATH),
     },
     resolve: {
         alias: {
