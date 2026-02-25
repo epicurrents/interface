@@ -65,7 +65,10 @@
                 </wa-button>
                 <wa-divider></wa-divider>
                 <div class="header">{{ $t('System stats') }}</div>
-                <wa-progress-bar
+                <div v-if="totalMem === -1">
+                    {{ $t('System information not available') }}
+                </div>
+                <wa-progress-bar v-else
                     class="bar"
                     :style="[
                         '--track-height: 0.5rem',
@@ -272,6 +275,9 @@ export default defineComponent({
                     Log.warn(`JavaScript heap size is ${heapPercent.toFixed(1)} % of total available memory.`, 'SystemFooter')
                     this.lastHeapWarning = heapPerdec
                 }
+            } else {
+                this.totalMem = -1
+                window.clearInterval(this.updateIntv)
             }
         }, 5000)
     },
