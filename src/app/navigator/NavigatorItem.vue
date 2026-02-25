@@ -31,7 +31,7 @@
             :id="`close-button-${resource.id}`"
             @click.stop="closeResource"
         >
-            <wa-icon :name="closeButtonIcon"></wa-icon>
+            <app-icon :name="closeButtonIcon"></app-icon>
         </wa-button>
         <wa-tooltip
             :for="`close-button-${resource.id}`"

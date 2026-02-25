@@ -34,12 +34,12 @@
                 </div>
                 <div v-if="errorCount || warningCount" class="logs">
                     <span v-if="errorCount" class="error">
-                        <app-icon class="inline" name="x-octagon"></app-icon>
+                        <app-icon class="inline" name="octagon-exclamation"></app-icon>
                         {{ $t('{n} errors', { n: errorCount }) }}
                     </span>
                     <span v-if="errorCount && warningCount" class="separator">|</span>
                     <span v-if="warningCount" class="warning">
-                        <app-icon class="inline" name="exclamation-triangle"></app-icon>
+                        <app-icon class="inline" name="triangle-exclamation"></app-icon>
                         {{ $t('{n} warnings', { n: warningCount }) }}
                     </span>
                 </div>
@@ -87,7 +87,7 @@
             variant="danger"
             @click="togglePopup"
         >
-            <app-icon name="x-octagon" variant="solid"></app-icon>
+            <app-icon name="octagon-exclamation" variant="solid"></app-icon>
         </wa-button>
         <wa-button v-else-if="warningCount"
             appearance="epicv"
@@ -96,7 +96,7 @@
             variant="warning"
             @click="togglePopup"
         >
-            <app-icon name="exclamation-triangle" variant="solid"></app-icon>
+            <app-icon name="triangle-exclamation" variant="solid"></app-icon>
         </wa-button>
         <div :class="{
                 'info': true,
