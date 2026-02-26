@@ -134,7 +134,7 @@ export default class SchemaManager {
 
     async parseSchemas (url?: string | URL) {
         if (!url) {
-            url = new URL('/report/setup.yaml', __EPICURRENTS__.SETUP.assetPath)
+            url = new URL('/report/setup.yaml', window.__EPICURRENTS__.SETUP.assetPath)
         }
         const schemas = await fetch(url)
         if (!schemas.ok) {
