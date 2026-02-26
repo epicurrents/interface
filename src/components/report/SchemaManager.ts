@@ -133,8 +133,9 @@ export default class SchemaManager {
     }
 
     async parseSchemas (url?: string | URL) {
+        const assetPath = window.__EPICURRENTS__.SETUP.assetPath?.replace(/\/$/, '')
         if (!url) {
-            url = `${window.__EPICURRENTS__.SETUP.assetPath?.replace(/\/$/, '')}/report/setup.yaml`
+            url = `${assetPath}/report/setup.yaml`
         }
         const schemas = await fetch(url)
         if (!schemas.ok) {
@@ -143,11 +144,11 @@ export default class SchemaManager {
         }
         const schemaText = await schemas.text()
         const setup = parseDocument(schemaText).contents?.toJSON()
-        const rootUrl = setup.rootUrl
-        if (!rootUrl) {
+        if (!setup.rootUrl) {
             Log.error('Schema setup is missing root URL.', SCOPE)
             return false
         }
+        const rootUrl = setup.rootUrl.startsWith('/') ? setup.rootUrl : assetPath + '/' + setup.rootUrl
         // First try to load modules
         if (setup.modules) {
             for (const mod of setup.modules.items) {
