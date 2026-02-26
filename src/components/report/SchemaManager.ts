@@ -132,7 +132,10 @@ export default class SchemaManager {
         }
     }
 
-    async parseSchemas (url = '/report/setup.yaml' as string | URL) {
+    async parseSchemas (url?: string | URL) {
+        if (!url) {
+            url = new URL('/report/setup.yaml', __EPICURRENTS__.SETUP.assetPath)
+        }
         const schemas = await fetch(url)
         if (!schemas.ok) {
             Log.error(`Loading schema setup failed: ${schemas.statusText} (${schemas.status}).`, SCOPE)
