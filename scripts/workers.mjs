@@ -7,11 +7,10 @@ import path from 'path'
 import { rootDir } from './util.mjs'
 
 const workerPaths = [
-    //['node_modules', '@epicurrents', 'dicom-reader', 'umd'],
+    ['node_modules', '@epicurrents', 'dicom-reader', 'umd'],
     ['node_modules', '@epicurrents', 'edf-reader', 'umd'],
     ['node_modules', '@epicurrents', 'htm-reader', 'umd'],
     ['node_modules', '@epicurrents', 'pdf-reader', 'umd'],
-    ['node_modules', '@epicurrents', 'wav-reader', 'umd'],
     ['node_modules', '@epicurrents', 'pyodide-service', 'umd'],
     // Handle core last to overwrite workers copied from other packages.
     ['node_modules', '@epicurrents', 'core', 'umd'],

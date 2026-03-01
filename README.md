@@ -7,7 +7,15 @@ This package contains the Vue/Vite-based interface for the Epicurrents library. 
 
 **This README** documents how to build and run both workflows and how to customize the modules and workers used by the interface by editing the entry script at `src/setups/standalone.ts`.
 
+**NOTE**: This repository and the scripts herein are not meant for building production applications. They are just for quick tests and demonstrations. Please refer to a separate workspace/monorepo repository for a more sophisticated set of development and build tools.
+
 **Quick commands**
+
+- Local development setup ():
+
+```bash
+npm run setup
+```
 
 - Development server (local dev with HMR):
 
@@ -15,7 +23,7 @@ This package contains the Vue/Vite-based interface for the Epicurrents library. 
 npm run dev
 ```
 
-- Start (copies worker assets then runs dev server):
+- Start (reloads compiled modules and copies worker assets, then runs dev server):
 
 ```bash
 npm run start
@@ -27,7 +35,7 @@ npm run start
 npm run build
 ```
 
-- Build the standalone application (app bundle for public/):
+- Build the standalone application (app bundle as an HTML file):
 
 ```bash
 npm run build:app

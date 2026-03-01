@@ -6,7 +6,7 @@ import path from 'path'
 import { execSync } from 'child_process'
 
 export const sep = path.sep
-export const rootDir = import.meta.dirname.replace(/[\\\/]dependencies$/, '')
+export const rootDir = import.meta.dirname.replace(/[\\\/]scripts$/, '')
 const EPIC_MODULE_ROOT = [rootDir, 'node_modules', '@epicurrents'].join(sep)
 
 /**
@@ -144,6 +144,7 @@ export const packages = [
     { name: 'doc-module', repository: '' },
     { name: 'eeg-module', repository: '' },
     // Source type readers.
+    { name: 'dicom-reader', repository: '' },
     { name: 'edf-reader', branch: 'encoder', repository: '' },
     { name: 'htm-reader', repository: '' },
     { name: 'pdf-reader', repository: '' },
