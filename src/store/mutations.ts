@@ -7,10 +7,7 @@
 
 import { MutationTree } from "vuex"
 import { type State } from "#store"
-import {
-    type DataResource,
-    type FileSystemItem,
-} from "@epicurrents/core/types"
+import type { DataResource, FileSystemItem } from "@epicurrents/core/types"
 import Log from "scoped-event-log"
 import type { ConnectorProperties, ScopedResource } from "./actions"
 import { MixedMediaDataset } from "@epicurrents/core"
@@ -131,8 +128,10 @@ export const mutations: MutationTree<State> & Mutations = {
     [MutationTypes.REMOVE_CONNECTOR] (state: State, payload: string) {
         state.removeConnector(payload)
     },
-    [MutationTypes.SET_ACTIVE_RESOURCE] (state: State, payload: DataResource) {
-        state.setActiveResource(payload)
+    [MutationTypes.SET_ACTIVE_RESOURCE] (state: State, payload: DataResource | null) {
+        if (!payload?.isActive) {
+            state.setActiveResource(payload)
+        }
         if (!payload) {
             state.APP.activeModality = ''
         } else {

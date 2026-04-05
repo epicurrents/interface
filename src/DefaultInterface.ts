@@ -229,6 +229,7 @@ export const DefaultInterface: DefaultInterfaceModuleConstructor = class Epicurr
                 })
             }
         }, 'ViteInterface')
+        // Store subscriptions.
         this.store.instance?.subscribe((mutation: MutationPayload) => {
             if (mutation.type === 'load-dataset-folder') {
                 Log.error(`Load dataset feature has not been implemented yet.`, SCOPE)
@@ -352,6 +353,14 @@ export const DefaultInterface: DefaultInterfaceModuleConstructor = class Epicurr
             waiter(true)
         }
         return true
+    }
+
+    /**
+     * Open a resource in the interface. This will set the resource as active and display its data if applicable.
+     * @param resource - The resource to open.
+     */
+    openResource (resource: DataResource) {
+        this.store?.instance?.dispatch('set-active-resource', resource)
     }
 
     /**
