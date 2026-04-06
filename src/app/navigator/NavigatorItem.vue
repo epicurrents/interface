@@ -21,7 +21,7 @@
                     :name="props.icon"
                 ></app-icon>
                 <wa-tooltip v-if="props.icon" :for="`nav-item-${idx}-icon`">
-                    {{ props.title || '' }}
+                    {{ props.tooltip || '' }}
                 </wa-tooltip>
                 {{ props.text }}
             </template>
@@ -53,8 +53,9 @@
  */
 import { defineComponent, PropType, ref } from "vue"
 import { T } from "#i18n"
-import { DataResource } from "@epicurrents/core/types"
+import type { DataResource } from "@epicurrents/core/types"
 import { useStore } from "vuex"
+import { secondsToTimeString, timePartsToShortString } from "@epicurrents/core/util"
 
 // Child components
 
@@ -108,29 +109,32 @@ export default defineComponent({
         },
         resourceUpdated () {
             const props = [] as { [key: string]: string }[]
-            for (const [text, params] of this.resource.getMainProperties()) {
-                if (params !== null) {
+            for (const [name, value] of this.resource.getMainProperties()) {
+                if (value !== null) {
                     const strParams = {} as { [key: string]: string }
-                    for (const [key, value] of Object.entries(params)) {
-                        strParams[key] = value.toString()
-                    }
-                    if (strParams.title) {
-                        strParams.title = this.$t(strParams.title, params)
-                    }
-                    // Replace icon names with appropriate icons.
-                    if (strParams.icon === 'wave') {
-                        strParams.icon = 'wave-pulse'
-                    } else if (strParams.icon === 'time') {
+                    if (name === 'duration') {
+                        const timeParts = secondsToTimeString(value, true) as number[]
+                        const timeShort = timePartsToShortString(timeParts)
                         strParams.icon = 'clock'
-                    }
-                    if (!params.text) {
-                        props.push(Object.assign(strParams, { text: this.$t(text, params) }))
-                    } else {
-                        strParams.text = this.$t(strParams.text, params)
+                        strParams.text = timeShort
+                        strParams.tooltip = this.$t('Duration: {t}', { t: secondsToTimeString(value) })
                         props.push(strParams)
+                    } else if (name === 'pages') {
+                        if (value === 1) {
+                            strParams.text = this.$t('Single page')
+                        } else {
+                            strParams.text = this.$t('{n} pages', { n: value })
+                            strParams.tooltip = this.$t('Document has a total of {n} pages', { n: value })
+                        }
+                        props.push(strParams)
+                    } else if (name === 'signals') {
+                        strParams.icon = 'wave-pulse'
+                        strParams.text = value.toString()
+                        strParams.tooltip = this.$t('{n} signals', { n: value })
+                        props.unshift(strParams) // Show signals count first.
                     }
-                } else {
-                    props.push({ text: this.$t(text) })
+                } else if (name === 'pages') {
+                    props.push({ text: this.$t('Not loaded yet') })
                 }
             }
             this.isReady = this.resource.isReady
@@ -227,6 +231,8 @@ export default defineComponent({
     }
         .properties wa-icon {
             opacity: 0.75;
+            position: relative;
+            top: 1px;
         }
         .properties .separator {
             position: relative;
