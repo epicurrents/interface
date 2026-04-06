@@ -41,11 +41,11 @@ import '@awesome.me/webawesome/dist/components/tab-panel/tab-panel.js'
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js'
 import '@awesome.me/webawesome/dist/components/tree/tree.js'
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js'
-import { allDefined, setBasePath, setKitCode } from '@awesome.me/webawesome/dist/webawesome.js'
+import { allDefined, setBasePath } from '@awesome.me/webawesome/dist/webawesome.js'
 setBasePath('@awesome.me/webawesome/dist')
-setKitCode('45463b747e')
 // Use app-icon component for icons.
 import AppIcon from "#app/AppIcon.vue"
+import { registerIcons } from "#app/icons"
 
 // Application.
 import { Log } from "scoped-event-log"
@@ -161,7 +161,8 @@ export const DefaultInterface: DefaultInterfaceModuleConstructor = class Epicurr
         root.style.height = "100%"
         this.epic = epicApp
         this.app = createApp(VueApp)
-        // Register app-icon component.
+        // Register the icon library and the app-icon component.
+        registerIcons()
         this.app.component('app-icon', AppIcon)
         // Provide easy access to the Epicurrents app and runtime.
         this.app.use(new EpicurrentsPlugin(epicApp), this)

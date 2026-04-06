@@ -1,9 +1,9 @@
 <template>
     <wa-icon data-component="app-icon"
         :class="appearance ? `wa-${appearance}` : undefined"
-        :name="iconName"
-        :family="family"
         :label="label"
+        library="epicurrents"
+        :name="name"
         :style="{
             transform: rotate ? `rotate(${rotate})` : undefined,
             opacity: empty ? '0' : '1',
@@ -13,19 +13,17 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref } from "vue"
-import { useStore } from "vuex"
-import { registerIconLibrary } from '@awesome.me/webawesome'
-
-import { useActiveContext } from "#config"
+import { defineComponent } from "vue"
 
 /**
- * Dynamic icon loader that returns an icon appropriate for the available libraries.
+ * Icon component backed by Material Design Icons, served via the WebAwesome icon slot.
+ * Accepts both FA kebab-case names (translated automatically) and Material snake_case names.
+ * The `variant` prop maps to the Material icon style: "solid" → filled, all others → outlined.
  */
 export default defineComponent({
     name: 'AppIcon',
     props: {
-        /** Appearance style of the icon. */
+        /** Appearance style of the icon (maps to wa-${appearance} CSS class). */
         appearance: {
             type: String,
         },
@@ -34,16 +32,11 @@ export default defineComponent({
             type: Boolean,
             default: false,
         },
-        /** Icon family to use. */
-        family: {
-            type: String,
-            default: 'classic',
-        },
         /** Accessible label for the icon. */
         label: {
             type: String,
         },
-        /** Name of the icon to display. */
+        /** Name of the icon to display. Accepts both FA kebab-case and Material snake_case names. */
         name: {
             type: String,
             required: true,
@@ -53,76 +46,17 @@ export default defineComponent({
             type: String,
             default: null,
         },
-        /** Variant of the icon to use. */
+        /** Icon style variant. "solid" maps to the Material filled set; all others use outlined. */
         variant: {
             type: String,
             default: 'regular',
         },
     },
-    setup (props) {
-        const store = useStore()
-        const iconMap = {
-            // This is just an example; the WA framework uses FontAwesome icons by default so this feature isn't
-            // really used at the moment.
-            fa: {
-                //alert: new URL(`/vendor/fontawesome/svgs/regular/circle-exclamation.svg`, import.meta.url).toString(),
-                //list: new URL(`/vendor/fontawesome/svgs/regular/list.svg`, import.meta.url).toString(),
-            },
-            default: {
-                // Simply return whatever name was given.
-                [props.name]: props.name,
-            },
-        }
-        const iconName = ref(props.name)
-        const libMap = {
-            fa: {
-                name: 'fa',
-                resolver: (name: string) => {
-                    return iconMap.fa[name as keyof typeof iconMap['fa']]
-                },
-                mutator: (svg: SVGElement) => svg.setAttribute('fill', 'currentColor')
-            }
-        }
-        const lib = ref(store.state.INTERFACE.app.iconLib)
-        return {
-            iconMap,
-            iconName,
-            lib,
-            libMap,
-            ...useActiveContext(useStore()),
-        }
-    },
-    watch: {
-        lib () {
-            this.useIcon()
-        },
-        name () {
-            this.useIcon()
-        },
-    },
-    methods: {
-        useIcon () {
-            const lib = this.libMap[this.lib as keyof typeof this.libMap]
-            if (lib && lib.resolver(this.name)) {
-                registerIconLibrary(this.lib, {
-                    resolver: lib.resolver,
-                    mutator: lib.mutator,
-                })
-                this.iconName = this.name
-            } else {
-                this.lib = 'default'
-                // Map to the given icon name.
-                this.iconMap['default'][this.name as keyof typeof this.iconMap['default']] = this.name
-                this.iconName = this.iconMap.default[this.name as keyof typeof this.iconMap['default']]
-                                || 'square-question'
-            }
-        }
-    },
-    beforeMount () {
-        this.useIcon()
-    }
 })
 </script>
 
 <style scoped>
+[data-component="app-icon"] {
+    font-size: 1.2em;
+}
 </style>

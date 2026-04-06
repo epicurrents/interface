@@ -51,10 +51,7 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@awesome.me/webawesome": "^3.0.0",
-    "@fortawesome/fontawesome-svg-core": "^6.5.1",
-    "@fortawesome/free-regular-svg-icons": "^6.5.1",
-    "@fortawesome/free-solid-svg-icons": "^6.5.1",
-    "@fortawesome/vue-fontawesome": "^3.0.5",
+    "@material-symbols/svg-400": "^0.44.0",
     "dompurify": "^3.2.3",
     "lodash": "^4.17.23",
     "scoped-event-bus": "^0.2.4",

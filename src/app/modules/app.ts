@@ -28,8 +28,6 @@ export type AppModuleSettings = SafeObject & {
     hotkeyAltOrOpt: boolean
     /** Available hotkeys. */
     hotkeys: { [key: string]: HotkeyProperties }
-    /** Name of the icons library. */
-    iconLib: string
     /** Should the right-click context menu be disabled in the application (in production mode). */
     isContextMenuDisabled: boolean
     /** Is the viewer component expanded beyond its containing element. */
@@ -88,7 +86,6 @@ export const settings = safeObjectFrom({
             shift: false,
         },
     },
-    iconLib: 'fa',
     isContextMenuDisabled: true,
     isExpanded: false,
     isMainComponent: true,

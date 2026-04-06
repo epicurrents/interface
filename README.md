@@ -154,8 +154,59 @@ Notes about workers and Pyodide
 - To experiment quickly: run `npm run dev` and open the dev server URL.
 - To prepare a standalone artifact for deployment: `npm run build:app` and ensure `public/` contains any needed UMD or worker files (`npm run copy:umd` / `npm run copy:workers`).
 
-**8) Dependencies and TODOs**
+**8) Development notes**
+
+**Icons**
+
+Icons are served via the `epicurrents` WebAwesome icon library registered in `src/app/AppIcon.vue`. The icon set is [Material Symbols](https://github.com/google/material-design-icons/tree/master/symbols) (`@material-symbols/svg-400`), copyright Google LLC, licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0). Each icon SVG must be explicitly imported as a raw string in `src/app/icons.ts` so that Vite can inline it into the bundle at build time. This is required for both the UMD/singlefile build (where `import.meta.url`-based asset URLs are not available) and for PWA offline support (icons are bundled directly rather than fetched from a separate URL).
+
+When you need to use a new icon in any component:
+
+1. Identify the Material Symbols icon name (snake\_case, e.g. `lock_open`).
+2. Add a `?raw` import for each style variant you need (`outlined` is the default; `filled` is used for `variant="solid"`). The filled variant lives in the same `outlined/` directory with a `-fill` suffix:
+
+```ts
+import lock_open from '@material-symbols/svg-400/outlined/lock_open.svg?raw'
+// If you also need a filled variant:
+import lock_open_filled from '@material-symbols/svg-400/outlined/lock_open-fill.svg?raw'
+```
+
+3. Add an entry to the `ICON_SVGS` table in the same file:
+
+```ts
+lock_open: { outlined: lock_open, filled: lock_open_filled },
+```
+
+4. If the icon is referenced in a component by a Font Awesome kebab-case name (e.g. `lock-open`), add a mapping entry to the `FA_TO_MATERIAL` object in `src/app/AppIcon.vue`:
+
+```ts
+'lock-open': 'lock_open',
+```
+
+If you use the Material snake\_case name directly in the component (i.e. `name="lock_open"`), step 4 is not needed — the resolver falls back to the name as-is when no FA mapping exists.
+
+**WebAwesome `registerIconLibrary` when used as a library**
+
+When this package is embedded as a library inside a host application that also uses WebAwesome, both bundles will contain their own copy of `registerIconLibrary`. Calling the copy bundled with the interface registers the icon library in the interface's own WA instance, but the host's WA instance — which owns the `<wa-icon>` elements rendered in the DOM — is unaware of it, so icons remain blank.
+
+The fix is to expose the host application's `registerIconLibrary` on `window.__EPICURRENTS__` before the interface initialises:
+
+```ts
+import { registerIconLibrary } from '@awesome.me/webawesome'
+
+window.__EPICURRENTS__ = window.__EPICURRENTS__ || {}
+window.__EPICURRENTS__.registerIconLibrary = registerIconLibrary
+```
+
+`src/app/icons.ts` checks for this global first and falls back to its own bundled copy only when running standalone (i.e. when the interface owns the WA instance):
+
+```ts
+const register = window.__EPICURRENTS__?.registerIconLibrary ?? registerIconLibrary
+```
+
+If the host application does not use WebAwesome at all, no action is required — the bundled fallback is used automatically.
+
+**9) Dependencies and TODOs**
 
 This interface module has a couple of dependencies that may limit its use or are in the process of being replaced:
-- [WebAwesome](https://webawesome.com) for custom web components and a pro subscription to [FontAwesome](https://fontawesome.com) icons.
 - Vuex store for reactive state management in Vue components. This should be replaced with the newer Pinia store, however, the interface currently depends on events from Vuex. The goal is to replace these Vuex events with ones from the Epicurrents event bus (this work is underway) and finally switch from Vuex to Pinia for state management.
