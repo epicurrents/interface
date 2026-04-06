@@ -972,12 +972,14 @@ WebAwesome style overrides
 
 ***********************/
 
+/* Combinations */
 .epicv-app wa-button[appearance="epicv"]::part(base),
 .epicv-app wa-select::part(combobox),
 .epicv-app wa-select::part(listbox) {
     background-color: var(--epicv-background);
     color: var(--epicv-text-main);
 }
+/* WA-BUTTON */
 .epicv-app wa-button wa-spinner {
     position: relative;
     top: 0.1em;
@@ -1000,6 +1002,7 @@ WebAwesome style overrides
     .epicv-app wa-button[appearance="epicv"].confirm:hover::part(base) {
         color: var(--epicv-button-confirm-border);
     }
+/* WA-CALLOUT */
 .epicv-app wa-callout {
     padding: 0;
 }
@@ -1013,6 +1016,7 @@ WebAwesome style overrides
     .epicv-app wa-callout p {
         margin: 0.5rem;
     }
+/* WA-DIALOG */
 .epicv-app wa-dialog {
     position: absolute;
 }
@@ -1056,14 +1060,23 @@ WebAwesome style overrides
         overflow: hidden;
         padding: 1rem 0;
     }
+/* WA-ICON */
+.epicv-app wa-icon[slot='start'] {
+    margin-inline-end: 0.5rem;
+}
 .epicv-app wa-icon.inline {
     /* Align inline icons a bit better with the adjacent text. */
     position: relative;
     top: -0.05em;
 }
+.epicv-app wa-icon.suffix {
+    margin-inline-start: 0.5rem;
+}
+/* WA-SCROLLER */
 .epicv-app wa-scroller::part(content) {
     padding-right: 0.25rem;
 }
+/* WA-SELECT */
 .epicv-app wa-select::part(expand-icon) {
     margin-inline-start: 0.5em;
 }
@@ -1071,6 +1084,7 @@ WebAwesome style overrides
         overflow: clip !important;
         white-space: nowrap !important;
     }
+/* WA-SWITCH */
 .epicv-app wa-switch {
     padding: 0.55em 0 0 0.15em;
     --height: 1.5em;

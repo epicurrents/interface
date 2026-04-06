@@ -35,35 +35,70 @@
         >
             <div class="toggle">
                 <app-icon
+                    id="epicv-eeg-navigation-toggle"
                     name="ellipsis-vertical"
                     variant="regular"
                     @click="toggleControls"
                 ></app-icon>
+                <wa-tooltip
+                    for="epicv-eeg-navigation-toggle"
+                    placement="bottom"
+                >
+                    {{ isControlsOpen ? $t('Hide controls') : $t('Show controls') }}
+                </wa-tooltip>
             </div>
             <wa-button
                 appearance="epicv"
+                id="epicv-eeg-navigation-backward"
                 @click="$emit('backward', 0)"
             >
                 <app-icon name="chevrons-left" variant="regular"></app-icon>
             </wa-button>
+            <wa-tooltip
+                for="epicv-eeg-navigation-backward"
+                placement="bottom"
+            >
+                {{ $t('Page backward') }}
+            </wa-tooltip>
             <wa-button
                 appearance="plain"
+                id="epicv-eeg-navigation-backward-step"
                 @click="$emit('backward', 1)"
             >
                 <app-icon name="chevron-left" variant="light"></app-icon>
             </wa-button>
+            <wa-tooltip
+                for="epicv-eeg-navigation-backward-step"
+                placement="bottom"
+            >
+                {{ $t('Step backward') }}
+            </wa-tooltip>
             <wa-button
                 appearance="plain"
+                id="epicv-eeg-navigation-forward-step"
                 @click="$emit('forward', 1)"
             >
                 <app-icon name="chevron-right" variant="light"></app-icon>
             </wa-button>
+            <wa-tooltip
+                for="epicv-eeg-navigation-forward-step"
+                placement="bottom"
+            >
+                {{ $t('Step forward') }}
+            </wa-tooltip>
             <wa-button
                 appearance="epicv"
+                id="epicv-eeg-navigation-forward"
                 @click="$emit('forward', 0)"
             >
                 <app-icon name="chevrons-right" variant="regular"></app-icon>
             </wa-button>
+            <wa-tooltip
+                for="epicv-eeg-navigation-forward"
+                placement="bottom"
+            >
+                {{ $t('Page forward') }}
+            </wa-tooltip>
         </div>
     </div>
 </template>
@@ -544,6 +579,7 @@ export default defineComponent({
     }
     .controls.open {
         flex: 0 0 200px;
+        overflow: visible;
     }
     .controls > .toggle {
         flex: 0 0 20px;
@@ -552,19 +588,21 @@ export default defineComponent({
         line-height: 48px;
         padding: 0 0.75rem 0 0;
         position: relative;
-        left: -8px;
+        left: -10px;
         text-align: center;
         cursor: pointer;
         overflow: hidden;
     }
     .controls > wa-button {
         flex: 0 0 calc(25% - 5px);
-        min-width: calc(25% - 5px);
-        padding: 0;
-        margin-right: 5px;
         font-size: 1.25rem;
         height: 45px;
         line-height: 45px;
+        margin-right: 5px;
+        min-width: calc(25% - 5px);
+        padding: 0;
+        position: relative;
+        top: -2px;
     }
         .controls > wa-button::part(base) {
             height: 42px;
