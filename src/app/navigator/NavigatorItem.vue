@@ -113,11 +113,11 @@ export default defineComponent({
                 if (value !== null) {
                     const strParams = {} as { [key: string]: string }
                     if (name === 'duration') {
-                        const timeParts = secondsToTimeString(value, true) as number[]
+                        const timeParts = secondsToTimeString(value as number, true) as number[]
                         const timeShort = timePartsToShortString(timeParts)
                         strParams.icon = 'clock'
                         strParams.text = timeShort
-                        strParams.tooltip = this.$t('Duration: {t}', { t: secondsToTimeString(value) })
+                        strParams.tooltip = this.$t('Duration: {t}', { t: secondsToTimeString(value as number) })
                         props.push(strParams)
                     } else if (name === 'pages') {
                         if (value === 1) {
