@@ -2131,7 +2131,6 @@ export default defineComponent({
                 Log.error(`Could not load report schemas: ${err.message}`, this.$options.name as string)
             })
         }
-        console.log(this.RESOURCE)
     },
     beforeUnmount () {
         // Clear possible undo and redo state.

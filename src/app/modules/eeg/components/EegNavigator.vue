@@ -308,6 +308,8 @@ export default defineComponent({
             // Pixel map: x-pixel → row → color.  row = -1 means full-height instant event.
             // Deduplicates events that collapse to the same canvas pixel.
             const pixelMap = new Map<number, Map<number, string>>()
+            // Height of a single event row in pixels.
+            const rowHeight = 3
             // Row end-time tracker for O(n×r) overlap assignment instead of O(n²).
             const rowEnds = [] as number[]
             for (const event of this.RESOURCE.events) {
@@ -319,19 +321,25 @@ export default defineComponent({
                 if (!event.duration) {
                     // Instant event: full-height marker, no row stacking.
                     const col = pixelMap.get(xPos) ?? new Map<number, string>()
-                    if (!col.has(-1)) col.set(-1, evtColor)
+                    if (!col.has(-1)) {
+                        col.set(-1, evtColor)
+                    }
                     pixelMap.set(xPos, col)
                     continue
                 }
                 // Find first row whose last event has already ended.
                 let row = 0
-                while (row < rowEnds.length && rowEnds[row] > event.start) row++
+                while (row < rowEnds.length && rowEnds[row] > event.start) {
+                    row++
+                }
                 rowEnds[row] = event.start + event.duration
                 // Claim pixels for this event; first claimant per (x, row) wins.
                 const xEnd = xPos + (xWidth || 1)
                 for (let x = xPos; x < xEnd; x++) {
                     const col = pixelMap.get(x) ?? new Map<number, string>()
-                    if (!col.has(row)) col.set(row, evtColor)
+                    if (!col.has(row)) {
+                        col.set(row, evtColor)
+                    }
                     pixelMap.set(x, col)
                 }
             }
@@ -342,7 +350,7 @@ export default defineComponent({
                     if (row === -1) {
                         context.fillRect(x, 0, 1, this.canvasHeight)
                     } else {
-                        context.fillRect(x, row*5, 1, 5)
+                        context.fillRect(x, row*rowHeight, 1, rowHeight)
                     }
                 }
             }
