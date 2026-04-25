@@ -657,7 +657,7 @@ export default defineComponent({
             const visibleAnnoIds = [] as string[]
             for (const event of this.RESOURCE.events) {
                 // Channel annotations are always visible in raw signal view, but may not be in every montage.
-                if (event.channels.length && this.RESOURCE.activeMontage) {
+                if (event.channels?.length && this.RESOURCE.activeMontage) {
                     // Check that at least one of the annotation channels is visible
                     let anyChanVisible = false
                     for (const chan of event.channels) {
