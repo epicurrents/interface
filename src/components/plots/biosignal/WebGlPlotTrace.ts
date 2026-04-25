@@ -20,6 +20,7 @@ export default class WebGlPlotTrace implements WebGlTrace {
     protected _coordinates = 0
     protected _downsampleFactor = 0
     protected _offset: number
+    protected _opacity: number | undefined = undefined
     protected _parent: BiosignalPlot
     protected _polarity: 1 | -1
     protected _render = true
@@ -56,6 +57,12 @@ export default class WebGlPlotTrace implements WebGlTrace {
     }
     get offset () {
         return this._offset
+    }
+    get opacity () {
+        return this._opacity
+    }
+    set opacity (value: number | undefined) {
+        this._opacity = value
     }
     get polarity () {
         return this._polarity

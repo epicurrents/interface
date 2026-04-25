@@ -348,6 +348,7 @@ export default defineComponent({
         const lastCacheEnd = ref(0)
         const lastVideoTime = ref(0)
         const menuChannel = ref(null as MontageChannel | null)
+        const modKey = ref(null as KeyboardEvent['key'] | null)
         const montageSetupDone = ref(false)
         const pointerDownPoint = reactive({ x: NUMERIC_ERROR_VALUE, y: NUMERIC_ERROR_VALUE })
         const navigatorHeight = ref(75)
@@ -436,6 +437,7 @@ export default defineComponent({
             lastCacheEnd,
             lastVideoTime,
             menuChannel,
+            modKey,
             pointerDownPoint,
             navigatorHeight,
             nextAnimationFrame,
@@ -729,23 +731,24 @@ export default defineComponent({
             channels?: string[],
             codes?: Record<string, number | string>,
             duration?: number,
+            name?: string,
             skipEditor?: boolean,
             start?: number,
             text?: string,
         }) {
             if (!this.RESOURCE.activeMontage) {
-                Log.warn(`Cannot create annotations for raw input signals.`, this.$options.name!)
+                Log.debug(`Cannot create annotations for raw input signals.`, this.$options.name!)
                 return
             }
             const eventClass = !props?.codes
                                ? this.SETTINGS.annotations.classes.default
-                               // The annotation codes must match the event codes.
+                               // The annotation name must match the event name.
                                : Object.entries(this.SETTINGS.annotations.classes)
-                                       .filter(
-                                        ([k, t]) => k === 'event-code' &&
-                                                    Object.keys(t.codes)
-                                                          .every((c) => Object.keys(props.codes || {}).includes(c))
-                                       )[0][1]
+                                       .filter(([k, t]) => k !== 'default' && t.name === props?.name)?.[0]?.[1]
+            if (!eventClass) {
+                Log.warn(`No annotation class matches the provided name.`, this.$options.name!)
+                return
+            }
             const undoEvents = [] as BiosignalAnnotationEvent[]
             if (this.plotSelections.length) {
                 for (const selection of this.plotSelections) {
@@ -1113,6 +1116,8 @@ export default defineComponent({
                 }
                 this.dragAction = null
                 this.selectionBound = null
+            } else if (this.$store.state.INTERFACE.app.reservedKeys.includes(event.key)) {
+                return
             } else if ((this.$store.state.INTERFACE.app.hotkeyAltOrOpt && event.altKey) || !event.altKey) {
                 for (const key in this.hotkeyEvents) {
                     if (Object.keys(this.SETTINGS.hotkeys).includes(key)) {
@@ -1140,8 +1145,11 @@ export default defineComponent({
                         if (event.altKey) {
                             event.preventDefault()
                         }
+                        return
                     }
                 }
+                // Handle this as a modifier key.
+                this.modKey = event.key
             }
         },
         /**
@@ -1168,46 +1176,43 @@ export default defineComponent({
                             }
                         }
                     // If no modifying hotkey is active, treat this as a default montage selection.
-                    } else if (this.hotkeyEvents.montage1 && event.code === this.SETTINGS.hotkeys.montage1.code) {
+                    } else if (this.isHotkeyMatch('montage1', event)) {
                         this.$store.dispatch('eeg.set-active-montage', this.RESOURCE.montages[0].name)
                         this.hotkeyEvents.montage1 = false
-                    } else if (this.hotkeyEvents.montage2 && event.code === this.SETTINGS.hotkeys.montage2.code) {
+                    } else if (this.isHotkeyMatch('montage2', event)) {
                         this.$store.dispatch('eeg.set-active-montage', this.RESOURCE.montages[1].name)
                         this.hotkeyEvents.montage2 = false
-                    } else if (this.hotkeyEvents.montage3 && event.code === this.SETTINGS.hotkeys.montage3.code) {
+                    } else if (this.isHotkeyMatch('montage3', event)) {
                         this.$store.dispatch('eeg.set-active-montage', this.RESOURCE.montages[2].name)
                         this.hotkeyEvents.montage3 = false
-                    } else if (this.hotkeyEvents.montage4 && event.code === this.SETTINGS.hotkeys.montage4.code) {
+                    } else if (this.isHotkeyMatch('montage4', event)) {
                         this.$store.dispatch('eeg.set-active-montage', this.RESOURCE.montages[3].name)
                         this.hotkeyEvents.montage4 = false
                     }
-                } else if (this.hotkeyEvents.report && event.code === this.SETTINGS.hotkeys.report.code) {
+                } else if (this.isHotkeyMatch('report', event)) {
                     this.toggleReport()
                     this.hotkeyEvents.annotation = false
-                } else if (this.hotkeyEvents.annotation && event.code === this.SETTINGS.hotkeys.annotation.code) {
+                } else if (this.isHotkeyMatch('annotation', event)) {
                     this.toggleSidebar('annotations')
                     this.hotkeyEvents.annotation = false
-                } else if (this.hotkeyEvents.examine && event.code === this.SETTINGS.hotkeys.examine.code) {
+                } else if (this.isHotkeyMatch('examine', event)) {
                     this.analysisWindow.nr++
                     this.analysisWindow.tab = 'examine'
                     if (!this.analysisWindow.open) {
                         await this.openAnalysisWindow()
                     }
                     this.hotkeyEvents.examine = false
-                } else if (this.hotkeyEvents.fft && event.code === this.SETTINGS.hotkeys.fft.code) {
+                } else if (this.isHotkeyMatch('fft', event)) {
                     this.analysisWindow.nr++
                     this.analysisWindow.tab = 'fft'
                     if (!this.analysisWindow.open) {
                         await this.openAnalysisWindow()
                     }
                     this.hotkeyEvents.fft = false
-                } else if (this.hotkeyEvents.inspect && event.code === this.SETTINGS.hotkeys.inspect.code) {
+                } else if (this.isHotkeyMatch('inspect', event)) {
                     this.toggleCursorTool('inspect')
                     this.hotkeyEvents.inspect = false
-                } else if (
-                    this.hotkeyEvents.notch && event.code === this.SETTINGS.hotkeys.notch.code &&
-                    this.SETTINGS.notchDefaultFrequency
-                ) {
+                } else if (this.isHotkeyMatch('notch', event) && this.SETTINGS.notchDefaultFrequency) {
                     if (this.RESOURCE.filters.notch) {
                         // If notch filter is active, disable.
                         this.$store.dispatch('eeg.set-notch-filter', 0)
@@ -1216,7 +1221,7 @@ export default defineComponent({
                         this.$store.dispatch('eeg.set-notch-filter', this.SETTINGS.notchDefaultFrequency)
                     }
                     this.hotkeyEvents.notch = false
-                } else if (this.hotkeyEvents.topogram && event.code === this.SETTINGS.hotkeys.topogram.code) {
+                } else if (this.isHotkeyMatch('topogram', event)) {
                     if (!this.$store.state.SERVICES.get('pyodide')) {
                         return
                     }
@@ -1231,6 +1236,9 @@ export default defineComponent({
                     }
                     this.hotkeyEvents.topogram = false
                 }
+            }
+            if (this.modKey === event.key) {
+                this.modKey = null
             }
         },
         handleNavigatorResize (value: { start: number, end: number }) {
@@ -1522,6 +1530,39 @@ export default defineComponent({
         },
         hideSideDrawer () {
             this.$store.dispatch('eeg.set-open-sidebar', null)
+        },
+        /**
+         * Does the keyboard event match the specified hotkey settings.
+         * @param hotkey - Name of the hotkey settings.
+         * @param event - Keyboard event to check.
+         */
+        isHotkeyMatch (hotkey: string, event: KeyboardEvent) {
+            const hotkeySettings = this.SETTINGS.hotkeys[hotkey as keyof typeof this.SETTINGS.hotkeys]
+            if (!hotkeySettings) {
+                return false
+            }
+            if (!this.hotkeyEvents[hotkey as keyof typeof this.hotkeyEvents]) {
+                return false
+            }
+            if (this.$store.state.INTERFACE.app.reservedKeys.includes(event.code)) {
+                return false
+            }
+            if (hotkeySettings.control && !event.ctrlKey) {
+                return false
+            }
+            if (hotkeySettings.shift && !event.shiftKey) {
+                return false
+            }
+            if (
+                (hotkeySettings.modKey === false && this.modKey) ||
+                (hotkeySettings.modKey && hotkeySettings.modKey !== this.modKey)
+            ) {
+                return false
+            }
+            if (hotkeySettings.code !== event.code) {
+                return false
+            }
+            return true
         },
         isVideoPlaying () {
             return this.video && !this.video.paused && !this.video.ended
@@ -2090,6 +2131,7 @@ export default defineComponent({
                 Log.error(`Could not load report schemas: ${err.message}`, this.$options.name as string)
             })
         }
+        console.log(this.RESOURCE)
     },
     beforeUnmount () {
         // Clear possible undo and redo state.

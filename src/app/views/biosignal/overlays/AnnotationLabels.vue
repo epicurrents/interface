@@ -683,7 +683,7 @@ export default defineComponent({
                 if (startPos > 1) {
                     // Future annotations from now on, we're done here.
                     break
-                } else if (event.start + event.duration < this.RESOURCE.viewStart) {
+                } else if (event.start + event.duration <= this.RESOURCE.viewStart) {
                     // Annotation does not extend to view.
                     continue
                 }

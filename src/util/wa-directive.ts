@@ -8,16 +8,20 @@
 import type { Directive } from 'vue'
 
 const decimalSep = 1.1.toLocaleString().substring(1, 2)
-const elMap = new WeakMap()
-const setValue = (el: HTMLInputElement, value: any) => {
-    if (el.tagName === 'WA-SWITCH' || el.tagName == 'WA-CHECKBOX') {
-        el.checked = (value ?? false) || undefined
+
+type ElEntry = { handler: EventListener; eventName: string }
+const elMap = new WeakMap<HTMLInputElement, ElEntry>()
+
+const setValue = (el: HTMLInputElement, value: unknown) => {
+    if (el.tagName === 'WA-SWITCH' || el.tagName === 'WA-CHECKBOX') {
+        el.checked = Boolean(value ?? false)
     } else if (el.tagName === 'WA-INPUT' && typeof value === 'number') {
         el.value = (value ?? '').toLocaleString()
     } else {
-        el.value = (value ?? '')
+        el.value = (value ?? '') as string
     }
 }
+
 const waDirective: Directive = {
     beforeMount (el, binding) {
         const instance = binding.instance
@@ -36,16 +40,16 @@ const waDirective: Directive = {
                     instance[property as keyof typeof instance] = target.value.includes(decimalSep)
                                                                 ? parseFloat(target.value)
                                                                 : parseInt(target.value)
-                } else if (el.tagName === 'WA-SWITCH' || el.tagName == 'WA-CHECKBOX') {
+                } else if (el.tagName === 'WA-SWITCH' || el.tagName === 'WA-CHECKBOX') {
                     instance[property as keyof typeof instance] = target.checked
                 } else {
                     instance[property as keyof typeof instance] = target.value
                 }
             }
         }
-        elMap.set(el, inputHandler)
+        elMap.set(el, { handler: inputHandler as EventListener, eventName })
         setValue(el, instance[property as keyof typeof instance] ?? '')
-        el.addEventListener(eventName, inputHandler)
+        el.addEventListener(eventName, inputHandler as EventListener)
     },
     updated (el, binding) {
         const instance = binding.instance
@@ -59,9 +63,11 @@ const waDirective: Directive = {
         })
     },
     beforeUnmount (el) {
-        const inputHandler = elMap.get(el)
-        el.removeEventListener(el, inputHandler)
-        elMap.delete(el)
+        const entry = elMap.get(el)
+        if (entry) {
+            el.removeEventListener(entry.eventName, entry.handler)
+            elMap.delete(el)
+        }
     },
 }
 export default waDirective

@@ -38,6 +38,8 @@ export type AppModuleSettings = SafeObject & {
     mainsFrequency: 50 | 60 | 0
     /** Do not use workers for data processing. */
     noWorkers: boolean
+    /** Array of reserved keys that cannot be used for hotkeys or modifier keys. */
+    reservedKeys: string[]
     /** Screen pixels per inch used for calibrating biosignal dimensions. */
     screenPPI: number
     /** Name of the currently logged in user. */
@@ -81,16 +83,18 @@ export const settings = safeObjectFrom({
     hotkeys: {
         dataset: {
             code: 'KeyD',
-            control: false,
             key: 'd',
-            shift: false,
         },
     },
-    isContextMenuDisabled: true,
+    isContextMenuDisabled: false,
     isExpanded: false,
     isMainComponent: true,
     mainsFrequency: 50, // Default to 50Hz, can be set to 60Hz for US/Canada.
     noWorkers: false,
+    reservedKeys: [
+        'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowUp',
+        'Alt', 'Control', 'Escape', 'Meta', 'Shift'
+    ],
     screenPPI: 96,
     userName: '',
     useViews: [],

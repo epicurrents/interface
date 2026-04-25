@@ -283,14 +283,20 @@ export type CommonInterfaceSettings = SafeObject & {
 }
 /** Properties for hotkey actions. */
 export type HotkeyProperties = {
-    /** Key code corresponding to KeyboarEvent.code. */
+    /** Key code corresponding to KeyboardEvent.code. */
     code: KeyboardEvent['code']
-    /** Require control to be pressed. */
-    control: boolean
-    /** Key name corresponding to KeyboardEevent.key (lower case for letters). */
+    /** Key name corresponding to KeyboardEvent.key (lower case for letters). */
     key: KeyboardEvent['key']
-    /** Require shift to be pressed. */
-    shift: boolean
+    /** Require control to be pressed (optional). */
+    control?: boolean
+    /**
+     * Modifier key that must be pressed to activate the hotkey (optional).
+     * This can be any key.
+     * `False` can be used to indicate that no other key may be pressed at the same time for the hotkey to activate.
+     */
+    modKey?: KeyboardEvent['key'] | false
+    /** Require shift to be pressed (optional). */
+    shift?: boolean
 }
 /**
  * Names of components that can be shown or hidden in the interface.

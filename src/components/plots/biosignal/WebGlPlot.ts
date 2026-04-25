@@ -166,10 +166,12 @@ export default class WebGlPlot implements BiosignalPlot {
             return
         }
         this._updateViewport()
-        for (const line of this._traces) {
-            if (!line.render) {
-                continue
-            }
+        // Draw background traces (opacity < 1) before foreground traces so they appear behind.
+        const sorted = [
+            ...this._traces.filter(t => t.render && (t.opacity ?? 1) < 1),
+            ...this._traces.filter(t => t.render && (t.opacity ?? 1) >= 1),
+        ]
+        for (const line of sorted) {
             // Set up matrix.
             const uScale = this._context.getUniformLocation(this._program, 'uScale')
             const scale = 10**line.scale
@@ -187,12 +189,18 @@ export default class WebGlPlot implements BiosignalPlot {
                 // TODO: X-offset could be used to create different colored line segments?
                 new Float32Array([0, line.offset*2 - 1])
             )
-            // Set up color
+            // Set up color and blend mode.
+            // Background traces use standard alpha blending so opacity is honoured;
+            // foreground traces use multiplicative blending (existing behaviour).
             const uColor = this._context.getUniformLocation(this._program, "uColor")
-            this._context.uniform4fv(uColor, line.color.array)
-            // Clear the background.
-            //this._context.clear(this._context.COLOR_BUFFER_BIT)
-            //this._context.clearColor(...this._background.array)
+            const opacity = line.opacity ?? 1
+            if (opacity < 1) {
+                this._context.blendFunc(this._context.SRC_ALPHA, this._context.ONE_MINUS_SRC_ALPHA)
+                this._context.uniform4fv(uColor, [line.color.r, line.color.g, line.color.b, opacity])
+            } else {
+                this._context.blendFunc(this._context.SRC_COLOR, this._context.DST_COLOR)
+                this._context.uniform4fv(uColor, line.color.array)
+            }
             // Create the buffer and draw traces.
             this._context.bufferData(this._context.ARRAY_BUFFER, line.xy, this._context.STREAM_DRAW)
             this._context.drawArrays(this._context.LINE_STRIP, 0, line.length)

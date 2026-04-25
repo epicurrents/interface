@@ -105,6 +105,11 @@ export type BiosignalTrace = {
     length: number
     /** Offset from the bottom of the trace (zero line). */
     offset: number
+    /**
+     * Opacity multiplier for this trace (range 0–1, default 1).
+     * Traces with opacity < 1 are drawn first so they appear behind fully opaque traces.
+     */
+    opacity?: number
     /** Display polarity of this channel. */
     polarity: -1 | 1
     /** Should this line be rendered. */

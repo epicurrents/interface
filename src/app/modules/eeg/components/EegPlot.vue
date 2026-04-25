@@ -233,9 +233,10 @@ export default defineComponent({
             const channels = this.RESOURCE.activeMontage?.channels || this.RESOURCE.channels
             const useRaw = !this.RESOURCE.activeMontage
             if (useRaw) {
-                // Raw montage needs the number of visible channels as a reference for offset calculation
+                // Raw montage needs the number of visible channels as a reference for offset calculation.
+                // _orig overlay channels share a row with their primary and must not be counted.
                 for (const chan of channels) {
-                    if (shouldDisplayChannel(chan, useRaw, this.SETTINGS)) {
+                    if (shouldDisplayChannel(chan, useRaw, this.SETTINGS) && !chan.isOriginal) {
                         this.visibleChannels++
                     }
                 }
@@ -272,6 +273,9 @@ export default defineComponent({
                     scale,
                     chan.offset?.baseline || 0
                 )
+                if (chan.isOriginal) {
+                    line.opacity = 0.5
+                }
                 this.wglPlot.addChannel(line)
             }
             this.updateTraces()

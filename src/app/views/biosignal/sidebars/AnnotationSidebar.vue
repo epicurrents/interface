@@ -6,12 +6,22 @@
     >
         <div class="title">{{ $t('Annotations') }}</div>
         <div class="export">
-            <wa-switch
+            <wa-switch v-if="hasAnnotationConnector"
                 :checked="SETTINGS.annotations.saveToDataset"
                 @change="saveAnnotationsChanged($event.target.checked)"
             >
                 {{ $t('Save annotations to dataset') }}
             </wa-switch>
+            <template v-else>
+                <wa-button
+                    appearance="filled-outlined"
+                    :disabled="isAnnotationsSubmitted"
+                    size="small"
+                    variant="brand"
+                    @click="submitAnnotations"
+                >{{ $t('Submit') }}</wa-button>
+                {{ $t('Save annotations to database') }}
+            </template>
         </div>
         <wa-tab-group ref="tabs"
             @keydown="stopPropagation"
@@ -155,6 +165,7 @@ import {
 } from "@epicurrents/core/util"
 import { PlotSelection } from '#app/views/biosignal/types'
 import { Log } from "scoped-event-log"
+import { ResourceLabel } from '#workspace/epicurrents/core/dist'
 
 type AnnotationExportFormat = 'epicurrents' | 'mne'
 
@@ -203,6 +214,7 @@ export default defineComponent({
                                                 .map(l => l.value as string).flat() as string[]
         const drawer = ref<HTMLDivElement>() as Ref<HTMLDivElement>
         const exportFormat = ref('epicurrents' as AnnotationExportFormat)
+        const isAnnotationsSubmitted = ref(context.RESOURCE.labels.some(l => l.name === 'submit' && l.value === true))
         const isOverADay = typeof context.RESOURCE.getAbsoluteTimeAt !== 'undefined'
             ? context.RESOURCE.getAbsoluteTimeAt(0).day !== context.RESOURCE.getAbsoluteTimeAt(
                     context.RESOURCE.totalDuration
@@ -223,6 +235,7 @@ export default defineComponent({
             comments,
             drawer,
             exportFormat,
+            isAnnotationsSubmitted,
             isOverADay,
             isOverAnHour,
             // DOM refs
@@ -245,6 +258,10 @@ export default defineComponent({
             const borderWidth = this.SETTINGS.border.bottom.width
             const borderColor = settingsColorToRgba(this.SETTINGS.border.bottom.color)
             return `${borderStyle} ${borderWidth}px ${borderColor}`
+        },
+        hasAnnotationConnector (): boolean {
+            const dataset = this.$store.state.APP.activeDataset
+            return !!dataset?.hasOutputSource
         },
         timeWidth (): string {
             if (!this.isOverADay && !this.isOverAnHour) {
@@ -403,6 +420,24 @@ export default defineComponent({
             // Must stop event propagation from affecting parent components.
             event.stopPropagation()
         },
+        submitAnnotations () {
+            const submitLabel = this.RESOURCE.labels.find(l => l.name === 'submit')
+            if (!submitLabel) {
+                const newLabel = new ResourceLabel(
+                    'submit',
+                    true,
+                    {
+                        annotator: this.$store.state.INTERFACE.app.userName || 'unknown',
+                        class: 'label',
+                        priority: 200,
+                    }
+                )
+                this.RESOURCE.addLabels(newLabel)
+            } else if (!submitLabel.value) {
+                submitLabel.value = true
+            }
+            this.isAnnotationsSubmitted = true
+        },
         timeLabel (time: number) {
             const timeParts = this.RESOURCE.getAbsoluteTimeAt(time)
             if (!this.isOverADay) {
@@ -515,7 +550,7 @@ export default defineComponent({
     font-size: 1.25rem;
     height: 2rem;
     line-height: 2rem;
-    padding: 0 0.25rem;
+    margin-bottom: 1rem;
 }
 .labels-wrapper wa-input,
 .labels-wrapper wa-select,

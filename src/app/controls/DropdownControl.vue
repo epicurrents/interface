@@ -42,6 +42,7 @@
             <span v-if="prefix" slot="start">{{ prefix }}</span>
             <wa-option v-for="(option, idx) in options" :key="`${ID}-option-${idx}`"
                 :class="{ 'has-suffix': !!option.suffix }"
+                :data-selected="value === option.id || undefined"
                 :value="option.id"
             >
                 <app-icon v-if="option.icon" :name="option.icon" slot="start"></app-icon>
@@ -54,6 +55,7 @@
                 <wa-option v-for="(option, oIdx) in group.items" :key="`${ID}-group-${gIdx}-option-${oIdx}`"
                     :class="{ 'has-suffix': !!option.suffix }"
                     :disabled="option.enabled === false ? true : false"
+                    :data-selected="value === option.id || undefined"
                     :value="option.id"
                 >
                     <app-icon v-if="option.icon" :name="option.icon" slot="start"></app-icon>

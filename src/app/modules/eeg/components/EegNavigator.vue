@@ -297,57 +297,54 @@ export default defineComponent({
                 }
             }
             // Draw events
-            const eventRows = new Map<number, number>()
-            for (let i=0; i<this.RESOURCE.events.length; i++) {
-                const event = this.RESOURCE.events[i]
-                let evtColor = settingsColorToRgba(this.SETTINGS.navigator.annotationColor)
-                for (const evtClass of Object.values(this.SETTINGS.annotations.classes)) {
-                    if (event.class === evtClass.name) {
-                        evtColor = settingsColorToRgba(evtClass.color as SettingsColor)
-                        break
-                    }
-                }
-                for (const [id, color] of Object.entries(this.SETTINGS.annotations.typeColors)) {
-                    if (event.id?.startsWith(id)) {
-                        evtColor = settingsColorToRgba(color as SettingsColor)
-                        break
-                    }
-                }
-                context.fillStyle = evtColor
+            // Pre-compute color lookups to avoid O(classes × events) inner-loop cost.
+            const colorByClass = new Map<string, string>()
+            for (const evtClass of Object.values(this.SETTINGS.annotations.classes)) {
+                colorByClass.set(evtClass.name, settingsColorToRgba(evtClass.color as SettingsColor))
+            }
+            const colorByIdPrefix = Object.entries(this.SETTINGS.annotations.typeColors)
+                .map(([id, color]) => [id, settingsColorToRgba(color as SettingsColor)] as const)
+            const defaultEvtColor = settingsColorToRgba(this.SETTINGS.navigator.annotationColor)
+            // Pixel map: x-pixel → row → color.  row = -1 means full-height instant event.
+            // Deduplicates events that collapse to the same canvas pixel.
+            const pixelMap = new Map<number, Map<number, string>>()
+            // Row end-time tracker for O(n×r) overlap assignment instead of O(n²).
+            const rowEnds = [] as number[]
+            for (const event of this.RESOURCE.events) {
+                const evtColor = colorByClass.get(event.class)
+                    ?? colorByIdPrefix.find(([id]) => event.id?.startsWith(id))?.[1]
+                    ?? defaultEvtColor
                 const xPos = Math.floor(event.start*durWidth)
-                const xEnd = Math.floor(event.duration*durWidth)
-                // Determine next available row to avoid overlap
-                const overlapRows = [] as number[]
-                for (let j=0; j<i; j++) {
-                    const otherEvt = this.RESOURCE.events[j]
-                    if (!otherEvt.duration) {
-                        continue
-                    }
-                    if (otherEvt.start + otherEvt.duration <= event.start) {
-                        continue
-                    }
-                    overlapRows.push(eventRows.get(j) || 0)
+                const xWidth = Math.floor(event.duration*durWidth)
+                if (!event.duration) {
+                    // Instant event: full-height marker, no row stacking.
+                    const col = pixelMap.get(xPos) ?? new Map<number, string>()
+                    if (!col.has(-1)) col.set(-1, evtColor)
+                    pixelMap.set(xPos, col)
+                    continue
                 }
-                overlapRows.sort((a, b) => a - b)
-                let nextRow = 0
-                while (overlapRows.length) {
-                    const nextTaken = overlapRows.shift()
-                    if (nextTaken === undefined) {
-                        break
-                    }
-                    if (nextTaken > nextRow) {
-                        break
+                // Find first row whose last event has already ended.
+                let row = 0
+                while (row < rowEnds.length && rowEnds[row] > event.start) row++
+                rowEnds[row] = event.start + event.duration
+                // Claim pixels for this event; first claimant per (x, row) wins.
+                const xEnd = xPos + (xWidth || 1)
+                for (let x = xPos; x < xEnd; x++) {
+                    const col = pixelMap.get(x) ?? new Map<number, string>()
+                    if (!col.has(row)) col.set(row, evtColor)
+                    pixelMap.set(x, col)
+                }
+            }
+            // Single drawing pass over the pixel map.
+            for (const [x, rows] of pixelMap) {
+                for (const [row, color] of rows) {
+                    context.fillStyle = color
+                    if (row === -1) {
+                        context.fillRect(x, 0, 1, this.canvasHeight)
                     } else {
-                        nextRow = nextTaken + 1
+                        context.fillRect(x, row*5, 1, 5)
                     }
                 }
-                eventRows.set(i, nextRow)
-                context.fillRect(
-                    xPos,
-                    nextRow*5,
-                    xEnd || 1,
-                    xEnd ? 5 : this.canvasHeight
-                )
             }
             // Draw possible selection bound marker.
             if (this.selectionBound) {

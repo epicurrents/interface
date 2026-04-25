@@ -287,6 +287,7 @@ export default defineComponent({
         const fileContext = { protocol: '', types: []} as StudyContext
         const hotkeyEvents = reactive({} as Record<string, boolean>)
         const loading = ref(true)
+        const modKey = ref(null as KeyboardEvent['key'] | null)
         const overrideBrowserHref = overrideBrowser ? ''
                                     : window.location.href.includes('?')
                                       ? window.location.href + '&override'
@@ -303,6 +304,7 @@ export default defineComponent({
             fileContext,
             hotkeyEvents,
             loading,
+            modKey,
             overrideBrowserHref,
             styles,
             // DOM
@@ -510,11 +512,13 @@ export default defineComponent({
             this.resetContext()
         },
         /**
-         * Handle keyup events with the viewer visible.
+         * Handle keydown events with the viewer visible.
          */
         handleKeydown (event: KeyboardEvent) {
             if (event.key === 'Escape') {
                 this.cancelHotkeyEvents()
+            } else if (this.SETTINGS.reservedKeys.includes(event.key)) {
+                return
             } else if ((this.SETTINGS.hotkeyAltOrOpt && event.altKey) || !event.altKey) {
                 for (const key in this.hotkeyEvents) {
                     if (Object.keys(this.SETTINGS.hotkeys).includes(key)) {
@@ -542,8 +546,11 @@ export default defineComponent({
                         if (event.altKey) {
                             event.preventDefault()
                         }
+                        return
                     }
                 }
+                // No hotkey matched, Treat this as a modifier key until it is released.
+                this.modKey = event.key
             }
         },
         /**
@@ -552,6 +559,8 @@ export default defineComponent({
         async handleKeyup (event: KeyboardEvent) {
             if (event.key === 'Escape') {
                 // These are handled on key down.
+            } else if (event.key === this.modKey) {
+                this.modKey = null
             }
         },
         /**

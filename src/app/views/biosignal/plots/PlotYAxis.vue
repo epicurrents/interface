@@ -38,7 +38,7 @@ export default defineComponent({
         const context = useBiosignalContext(store, 'PlotYAxis')
         // Visible channels in resource is a computed property and isn't automatically reactive. We need to save a
         // reactive reference to it.
-        const visibleChannels = ref(context.RESOURCE.visibleChannels)
+        const visibleChannels = ref(context.RESOURCE.visibleChannels.filter(c => !c.isOriginal))
         const labels = ref<HTMLDivElement>() as Ref<HTMLDivElement>
         return {
             visibleChannels,
@@ -85,7 +85,7 @@ export default defineComponent({
         },
         resizeElements (initial = false) {
             let i = 0
-            for (const chan of this.RESOURCE.visibleChannels) {
+            for (const chan of this.RESOURCE.visibleChannels.filter(c => !c.isOriginal)) {
                 const label = this.labels.children[i] as HTMLDivElement
                 if (label) {
                     const defaultOffset = ((i + 1)/(this.visibleChannels.length + 1))
@@ -112,7 +112,7 @@ export default defineComponent({
     mounted () {
         // Listen to montage changes
         this.RESOURCE.onPropertyChange('activeMontage', () => {
-            this.visibleChannels = this.RESOURCE.visibleChannels
+            this.visibleChannels = this.RESOURCE.visibleChannels.filter(c => !c.isOriginal)
             requestAnimationFrame(() =>
                 this.resizeElements()
             )},
