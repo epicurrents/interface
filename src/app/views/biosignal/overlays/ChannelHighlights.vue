@@ -29,7 +29,7 @@ import { SettingsColor } from "@epicurrents/core/types"
 import { useStore } from "vuex"
 import { useBiosignalContext } from "#config"
 import type { PointerEventOverlay } from "#app/overlays/PointerEventOverlay.vue"
-import { SignalHighlight } from "#types/plot"
+import { HighlightContext, SignalHighlight } from "#types/plot"
 
 export default defineComponent({
     name: 'AnnotationLabels',
@@ -129,7 +129,7 @@ export default defineComponent({
         montageChanged () {
             // Recording clears all update handlers from the previous montage,
             // we just need to add them to the new one.
-            //this.RESOURCE.activeMontage?.onPropertyChange('highlights', this.updateHighlights, this.ID)
+            this.RESOURCE.activeMontage?.onPropertyChange('highlights', this.updateHighlights, this.ID)
             this.updateAnnotations()
             this.updateHighlights()
         },
@@ -190,57 +190,30 @@ export default defineComponent({
             if (!montage) {
                 return
             }
-            /* Check which highlights are in range and only display those
-            for (const [_source, context] of Object.entries(montage.highlights)) {
-                if (!context.visible) {
+            const viewStart = this.RESOURCE.viewStart
+            const viewEnd = this.RESOURCE.viewStart + this.viewRange
+            for (const [_source, ctx] of Object.entries(montage.highlights) as [string, HighlightContext][]) {
+                if (!ctx.visible || !ctx.plotDisplay) {
                     continue
                 }
-                for (const highlight of context.highlights) {
-                    if (!highlight.visible || !context.plotDisplay) {
+                for (const highlight of ctx.highlights) {
+                    if (!highlight.visible) {
                         continue
                     }
-                    const viewStart = this.RESOURCE.viewStart
-                    const viewEnd = this.RESOURCE.viewStart + this.viewRange
-                    if (highlight.start >= viewEnd || highlight.end <= viewStart) {
+                    // Highlights are sorted by start — anything past viewEnd means
+                    // all subsequent entries are also out of range.
+                    if (highlight.start >= viewEnd) {
+                        break
+                    }
+                    if (highlight.end <= viewStart) {
                         continue
                     }
                     if (!highlight.color) {
-                        highlight.color = [...context.plotDisplay.color]
-                    }
-                    if (highlight.hasPrevious === false && highlight.collarLength) {
-                        this.highlights.push({
-                            background: true,
-                            channels: highlight.channels,
-                            color: highlight.color,
-                            end: highlight.start,
-                            label: 'Leading collar',
-                            opacity: highlight.color
-                                     ? [0, Array.isArray(highlight.opacity) ? highlight.opacity[0] : highlight.opacity || 0]
-                                     : undefined,
-                            start: Math.max(0, highlight.start - highlight.collarLength),
-                            type: 'collar',
-                            visible: true,
-                        })
+                        highlight.color = [...ctx.plotDisplay.color] as SettingsColor
                     }
                     this.highlights.push(highlight)
-                    if (highlight.hasNext === false && highlight.collarLength) {
-                        this.highlights.push({
-                            background: true,
-                            channels: highlight.channels,
-                            color: highlight.color,
-                            end: Math.min(this.RESOURCE.totalDuration, highlight.end + highlight.collarLength),
-                            label: 'Following collar',
-                            opacity: highlight.color
-                                     ? [Array.isArray(highlight.opacity) ? highlight.opacity[1] : highlight.opacity || 0, 0]
-                                     : undefined,
-                            start: highlight.end,
-                            type: 'collar',
-                            visible: true,
-                        })
-                    }
                 }
             }
-                */
         },
         viewStartChanged () {
             this.updateAnnotations()
@@ -257,12 +230,8 @@ export default defineComponent({
     mounted () {
         // Add property update handlers
         this.RESOURCE.onPropertyChange('activeMontage', this.montageChanged, this.ID)
-        //this.RESOURCE.onPropertyChange('annotations', this.updateAnnotations, this.ID)
         this.RESOURCE.onPropertyChange('displayViewStart', this.viewStartChanged, this.ID)
-        //this.RESOURCE.onPropertyChange('pageLength', this.updateAnnotations, this.ID)
-        //this.RESOURCE.activeMontage?.onPropertyChange('highlights', this.updateHighlights, this.ID)
-        // ONNX watchers
-        //this.$store.state.SERVICES.get('ONNX')?.onPropertyChange('results', this.updateHighlights, this.ID)
+        this.RESOURCE.activeMontage?.onPropertyChange('highlights', this.updateHighlights, this.ID)
         this.$nextTick(() => {
             this.updateAnnotations()
             this.updateHighlights()

@@ -28,14 +28,13 @@
                             v-on:toggle-channel="toggleChannelActive"
                         />
                         <div ref="wrapper" class="main">
-                            <!-- Highlights
+                            <!-- Highlights -->
                             <channel-highlights v-if="overlay"
                                 :overlay="overlay"
                                 :secPerPage="viewRange"
                                 :SETTINGS="SETTINGS"
                                 :viewRange="viewRange"
-                                v-on:updated="handleEventsUpdated"
-                            /> -->
+                            />
                             <!-- Timebase -->
                             <timescale-grid v-if="viewReady"
                                 :pxPerSecond="pxPerSecond"
@@ -1593,8 +1592,17 @@ export default defineComponent({
         },
         async montagesChanged () {
             if (!this.montageSetupDone) {
-                const totalMontages = this.SETTINGS.defaultMontages?.['default:10-20'].length || 0
-                if (this.RESOURCE.montages.length < totalMontages) {
+                // Get number of montages in setups that are included in defaultSetups to load.
+                const nDefaultMontages = Object.entries(this.SETTINGS.defaultMontages || {})
+                                               .filter(([key, _value]) => this.SETTINGS.defaultSetups?.includes(key))
+                                               .map(([_key, value]) => value)
+                                               .flat().length || 0
+                // Extra montages are loaded once the default montages are set up.
+                const nExtraMontages = Object.values(this.SETTINGS.extraMontages || {}).flat().length || 0
+                const totalMontages = this.SETTINGS.skipDefaultSetups
+                                    ? nExtraMontages
+                                    : nDefaultMontages + nExtraMontages
+                if (!this.SETTINGS.skipDefaultSetups && this.RESOURCE.montages.length < nDefaultMontages) {
                     this.setupMessage = this.$t('Setting up montage {current} of {total}', {
                         current: this.RESOURCE.montages.length + 1,
                         total: totalMontages,

@@ -159,6 +159,7 @@ export type EegModuleConfiguration = ModuleConfiguration & {
     }
     extraSetups?: (ConfigBiosignalSetup | string)[]
     hotkeys?: Partial<EegInterfaceSettings['hotkeys']>
+    skipDefaultSetups?: boolean
     navigator?: Partial<EegInterfaceSettings['navigator']>
     tools?: Partial<EegInterfaceSettings['tools']>
     trace?: RecursivePartial<EegInterfaceSettings['trace']>

@@ -113,6 +113,7 @@ import { padTime, secondsToTimeString, settingsColorToRgba } from "@epicurrents/
 import { useEegContext } from "#app/modules/eeg"
 import { useStore } from "vuex"
 import { SettingsColor } from "@epicurrents/core/types"
+import { HighlightContext } from "#types/plot"
 import { SignalSelectionLimit } from "#types/interface"
 
 // Child components
@@ -216,7 +217,9 @@ export default defineComponent({
         },
         width () {
             this.$nextTick(() => {
-                this.drawNavigator()
+                // updateHighlights resamples the rejection curve to the new canvas
+                // width, then calls drawNavigator internally.
+                this.updateHighlights()
             })
         },
     },
@@ -299,8 +302,8 @@ export default defineComponent({
             // Draw events
             // Pre-compute color lookups to avoid O(classes × events) inner-loop cost.
             const colorByClass = new Map<string, string>()
-            for (const evtClass of Object.values(this.SETTINGS.annotations.classes)) {
-                colorByClass.set(evtClass.name, settingsColorToRgba(evtClass.color as SettingsColor))
+            for (const [name, evtClass] of Object.entries(this.SETTINGS.annotations.classes)) {
+                colorByClass.set(name, settingsColorToRgba(evtClass.color as SettingsColor))
             }
             const colorByIdPrefix = Object.entries(this.SETTINGS.annotations.typeColors)
                 .map(([id, color]) => [id, settingsColorToRgba(color as SettingsColor)] as const)
@@ -412,7 +415,7 @@ export default defineComponent({
             this.$emit('navigation', recPos)
         },
         montageChanged () {
-            //this.RESOURCE.activeMontage?.onPropertyChange('highlights', this.updateHighlights, this.ID)
+            this.RESOURCE.activeMontage?.onPropertyChange('highlights', this.updateHighlights, this.ID)
             this.updateHighlights()
         },
         parseCursorTime (relative = false) {
@@ -447,51 +450,63 @@ export default defineComponent({
             })
         },
         updateHighlights () {
-            /* Signal highlights are a concept under re-evaluation.
             this.highlights.splice(0)
             const montage = this.RESOURCE.activeMontage
             if (!montage) {
+                this.drawNavigator()
                 return
             }
-            const curHl = [NUMERIC_ERROR_VALUE, 0] as [number, number]
-            // Check which highlights are in range and only display those
-            for (const [_source, context] of Object.entries(montage.highlights)) {
-                if (!context.visible || !context.naviDisplay) {
+            const totalChannels = montage.channels.length
+            const totalDuration = this.RESOURCE.totalDuration
+            if (!totalChannels || !totalDuration) {
+                this.drawNavigator()
+                return
+            }
+            // Adaptive sample interval: target ~3 samples per navigator pixel so the
+            // curve is smooth at any recording length.  Minimum 5 s to avoid spikes
+            // from individual short rejected epochs dominating the display.
+            const SAMPLE_INTERVAL = Math.max(5, Math.round(totalDuration / this.canvasWidth * 3))
+            const nSamples = Math.ceil(totalDuration / SAMPLE_INTERVAL)
+            for (const [_source, ctx] of Object.entries(montage.highlights) as [string, HighlightContext][]) {
+                if (!ctx.visible || !ctx.plotDisplay || !ctx.highlights.length) {
                     continue
                 }
-                const hlCtx = [] as [number, number][]
-                let i = 0
-                for (const highlight of context.highlights) {
-                    if (!highlight.visible) {
+                // Weighted rejection fraction per sample: each highlight contributes
+                // (channels in highlight) × (overlap with sample / sample length) / totalChannels.
+                // Weighting by overlap fraction smooths short bursts naturally.
+                const weightMap = new Float32Array(nSamples)
+                for (const hl of ctx.highlights) {
+                    if (!hl.visible) {
                         continue
                     }
-                    const thisVal = 0.5*(highlight.value || 0)/(context.naviDisplay.ref || 1)
-                    const interval = typeof context.naviDisplay.interval === 'function'
-                                     ? context.naviDisplay.interval(i)
-                                     : context.naviDisplay.interval || 0
-                    if (curHl[0] === NUMERIC_ERROR_VALUE) {
-                        curHl[0] = highlight.start
-                        curHl[1] = thisVal
-                    } else if (highlight.start - curHl[0] >= interval) {
-                        hlCtx.push([curHl[0], curHl[1]])
-                        curHl[0] = highlight.start
-                        curHl[1] = 0
-                    } else if (thisVal > curHl[1]) {
-                        curHl[1] = thisVal
+                    const nChan = hl.channels.length
+                    const startIdx = Math.floor(hl.start / SAMPLE_INTERVAL)
+                    const endIdx = Math.min(Math.ceil(hl.end / SAMPLE_INTERVAL), nSamples)
+                    for (let i = startIdx; i < endIdx; i++) {
+                        const sampleStart = i * SAMPLE_INTERVAL
+                        const sampleEnd = sampleStart + SAMPLE_INTERVAL
+                        const overlap = Math.min(hl.end, sampleEnd) - Math.max(hl.start, sampleStart)
+                        if (overlap > 0) {
+                            weightMap[i] += nChan * (overlap / SAMPLE_INTERVAL) / totalChannels
+                        }
                     }
-                    i++
                 }
-                hlCtx.push(curHl)
-                this.highlights.push({
-                    color: context.naviDisplay.color,
-                    highlights: hlCtx,
-                    interval: typeof context.naviDisplay.interval === 'number'
-                              ? context.naviDisplay.interval
-                              : 1
-                })
+                // Convert to [time_offset, fraction] pairs, skipping zero samples.
+                const series: [number, number][] = []
+                for (let i = 0; i < nSamples; i++) {
+                    if (weightMap[i] > 0) {
+                        series.push([i * SAMPLE_INTERVAL, Math.min(weightMap[i], 1)])
+                    }
+                }
+                if (series.length > 0) {
+                    this.highlights.push({
+                        color: ctx.plotDisplay.color,
+                        highlights: series,
+                        interval: SAMPLE_INTERVAL,
+                    })
+                }
             }
             this.drawNavigator()
-            */
         },
     },
     beforeMount () {
@@ -508,9 +523,7 @@ export default defineComponent({
         this.RESOURCE.onPropertyChange('interruptions', this.drawNavigator, this.ID)
         this.RESOURCE.onPropertyChange('displayViewStart', this.drawNavigator, this.ID)
         this.RESOURCE.onPropertyChange('signalCacheStatus', this.drawNavigator, this.ID)
-        //this.RESOURCE.activeMontage?.onPropertyChange('highlights', this.updateHighlights, this.ID)
-        // ONNX watchers
-        //this.$store.state.SERVICES.get('ONNX')?.onPropertyChange('results', this.drawNavigator, this.ID)
+        this.RESOURCE.activeMontage?.onPropertyChange('highlights', this.updateHighlights, this.ID)
         // Trigger element resize in parent component once this component is done loading
         this.$emit('loaded')
         // Trigger first navigator draw

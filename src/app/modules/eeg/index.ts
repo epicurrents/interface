@@ -116,6 +116,10 @@ export const runtime = {
                 }
             }
         }
+        // Skip default setups flag.
+        if (config.skipDefaultSetups !== undefined) {
+            settings.skipDefaultSetups = config.skipDefaultSetups
+        }
         // Additional setups.
         if (config.extraSetups) {
             for (let setup of config.extraSetups) {

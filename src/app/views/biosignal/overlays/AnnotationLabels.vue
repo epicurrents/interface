@@ -30,7 +30,7 @@
                         @focusin="activateAnnotation(context.event)"
                         @focusout="deactivateAnnotation(context.event)"
                     >
-                        {{ context.event.label }}
+                        {{ context.event.label || context.label || $t('Event') }}
                     </button>
                     <div v-if="context.event.duration && !context.extendsRight"
                         id="end"
@@ -74,6 +74,7 @@ type AnnotationContext = {
     el: null | HTMLDivElement
     extendsLeft: boolean
     extendsRight: boolean
+    label?: string
     opacity: number
     row: number
     style: string
@@ -286,7 +287,13 @@ export default defineComponent({
                 extendsRight: false,
                 styles: [] as string[],
                 width: 0,
-            }
+            } as {
+                color: SettingsColor
+                extendsLeft: boolean
+                extendsRight: boolean
+                styles: string[]
+                width: number
+            } & Partial<typeof this.SETTINGS.annotations.classes[string]>
             const contW = this.overlay.getOffsetWidth()
             const evtPos = this.getPagePosition(event.start)
             properties.styles = [
@@ -471,6 +478,7 @@ export default defineComponent({
                 if (this.draggingAnnotation.overThreshold) {
                     // Deactivate the annotation and update to reflect new duration.
                     this.deactivateAnnotation(context.event)
+                    this.RESOURCE.dispatchPropertyChangeEvent('events')
                 }
             }
             this.overlay.trackPointer(
@@ -566,6 +574,7 @@ export default defineComponent({
                 if (this.draggingAnnotation.overThreshold) {
                     // Deactivate the annotation and update to reflect new start and duration.
                     this.deactivateAnnotation(context.event)
+                    this.RESOURCE.dispatchPropertyChangeEvent('events')
                 }
             }
             this.overlay.trackPointer(
@@ -691,7 +700,7 @@ export default defineComponent({
                 const properties = this.getAnnotationProperties(event)
                 for (const [annoClass, props] of Object.entries(this.SETTINGS.annotations.classes)) {
                     if (event.class === annoClass) {
-                        properties.color = (props as any).color as SettingsColor
+                        Object.assign(properties, props)
                         break
                     }
                 }
@@ -718,6 +727,7 @@ export default defineComponent({
                         dragging: false,
                         extendsLeft: properties.extendsLeft,
                         extendsRight: properties.extendsRight,
+                        label: properties.label,
                         opacity: event.opacity || 1,
                         row: NUMERIC_ERROR_VALUE,
                         style: properties.styles.join(';'),
