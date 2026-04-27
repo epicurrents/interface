@@ -193,7 +193,7 @@ export default defineComponent({
             const viewStart = this.RESOURCE.viewStart
             const viewEnd = this.RESOURCE.viewStart + this.viewRange
             for (const [_source, ctx] of Object.entries(montage.highlights) as [string, HighlightContext][]) {
-                if (!ctx.visible || !ctx.plotDisplay) {
+                if (!ctx.visible) {
                     continue
                 }
                 for (const highlight of ctx.highlights) {
@@ -208,7 +208,13 @@ export default defineComponent({
                     if (highlight.end <= viewStart) {
                         continue
                     }
+                    // Use the highlight's own color; fall back to plotDisplay color.
+                    // Skip entirely if no color is available (no plotDisplay and no
+                    // per-highlight color means this context has no visual definition).
                     if (!highlight.color) {
+                        if (!ctx.plotDisplay) {
+                            continue
+                        }
                         highlight.color = [...ctx.plotDisplay.color] as SettingsColor
                     }
                     this.highlights.push(highlight)
