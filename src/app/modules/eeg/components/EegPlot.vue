@@ -274,7 +274,15 @@ export default defineComponent({
                     chan.offset?.baseline || 0
                 )
                 if (chan.isOriginal) {
-                    line.opacity = 0.5
+                    // Use reduced opacity only when the primary (corrected) channel is also
+                    // visible — if only the original signal is shown, use full opacity.
+                    const primaryName = chan.name?.replace(/_orig$/, '')
+                    const primaryVisible = primaryName && (channels as BiosignalChannel[]).some(
+                        c => !c.isOriginal && c.name === primaryName && shouldDisplayChannel(c, useRaw, this.SETTINGS)
+                    )
+                    if (primaryVisible) {
+                        line.opacity = 0.5
+                    }
                 }
                 this.wglPlot.addChannel(line)
             }
