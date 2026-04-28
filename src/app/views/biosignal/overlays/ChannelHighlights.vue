@@ -208,16 +208,24 @@ export default defineComponent({
                     if (highlight.end <= viewStart) {
                         continue
                     }
-                    // Use the highlight's own color; fall back to plotDisplay color.
-                    // Skip entirely if no color is available (no plotDisplay and no
-                    // per-highlight color means this context has no visual definition).
-                    if (!highlight.color) {
+                    // Resolve display colour without mutating the source highlight.
+                    // Priority: classColors lookup → own color → plotDisplay fallback.
+                    // The mode (uniform vs by-class) is encoded in which classColors map is
+                    // stored on the context, so no separate colorMode check is needed.
+                    let color: SettingsColor | undefined = highlight.color
+                    if (!color && highlight.class) {
+                        const classColor = ctx.classColors?.[highlight.class]
+                        if (classColor) {
+                            color = classColor
+                        }
+                    }
+                    if (!color) {
                         if (!ctx.plotDisplay) {
                             continue
                         }
-                        highlight.color = [...ctx.plotDisplay.color] as SettingsColor
+                        color = ctx.plotDisplay.color
                     }
-                    this.highlights.push(highlight)
+                    this.highlights.push({ ...highlight, color })
                 }
             }
         },

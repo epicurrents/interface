@@ -147,6 +147,19 @@ export type BiosignalTrace = {
 export type HighlightContext = {
     /** Actual highlights in this context. */
     highlights: SignalHighlight[]
+    /**
+     * Optional per-class colour overrides.  When ``colorMode`` is ``'by-class'``,
+     * the display colour for each highlight is resolved from
+     * ``classColors[highlight.class]`` instead of ``highlight.color``.
+     */
+    classColors?: Record<string, SettingsColor>
+    /**
+     * ``'uniform'`` (default) — use ``highlight.color`` or ``plotDisplay.color`` for all
+     * highlights in this context.
+     * ``'by-class'`` — use ``classColors[highlight.class]`` when available, falling back to
+     * ``plotDisplay.color``.
+     */
+    colorMode?: 'uniform' | 'by-class'
     /** Highlight properties for the navigation bar. */
     naviDisplay: {
         /**
@@ -232,6 +245,12 @@ export type PlotTraceSelection = {
 export type SignalHighlight = {
     /** List of channels that this highlight applies to (empty list means general highlight). */
     channels: number[]
+    /**
+     * Optional class name for this highlight.  When the parent ``HighlightContext`` has
+     * ``classColors`` and ``colorMode === 'by-class'``, the display color is resolved from
+     * ``classColors[class]`` rather than from the highlight's own ``color`` field.
+     */
+    class?: string
     /** End time in recording seconds. */
     end: number
     /** Descriptive label for the highlight. */
