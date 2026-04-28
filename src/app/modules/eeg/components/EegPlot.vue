@@ -938,10 +938,12 @@ export default defineComponent({
         // Wait for the signals to be cached before loading the first frame.
         let prevStart = this.RESOURCE.signalCacheStatus[0]
         let prevEnd = this.RESOURCE.signalCacheStatus[1]
+        let cacheAlreadyReady = false
         if (prevStart !== prevEnd) {
             this.cacheHasData = true
             if (prevStart <= this.RESOURCE.viewStart && prevEnd >= this.RESOURCE.viewStart + this.viewRange) {
                 this.viewDataAvailable = true
+                cacheAlreadyReady = true
             }
         }
         /**
@@ -980,6 +982,16 @@ export default defineComponent({
         this.$nextTick(() => {
             this.drawPlot()
             checkCacheState()
+            // If the cache was already fully populated before this component
+            // mounted, checkCacheState() above detects no change and skips
+            // updateTraces(). Call it explicitly so the plot is not left blank.
+            // This happens with small single-record files (e.g. epoch slices)
+            // that finish loading before the EEG view component is mounted.
+            if (cacheAlreadyReady) {
+                this.$nextTick(() => {
+                    this.updateTraces()
+                })
+            }
         })
         /**
          * Anomation frame processer to update the plot if necessary.
