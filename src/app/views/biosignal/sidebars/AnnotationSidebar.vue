@@ -281,13 +281,13 @@ export default defineComponent({
         timeWidth (): string {
             if (!this.isOverADay && !this.isOverAnHour) {
                 // If the recording is less than an hour, we only need to show minutes and seconds.
-                return '4rem'
+                return '3.5rem'
             } else if (!this.isOverADay) {
                 // If the recording is less than 24 hours, HH:MM:SS is enough.
-                return '5.25rem'
+                return '4.5rem'
             }
             // If the recording is longer than 24 hours, we need to show days as well.
-            return '6.25rem'
+            return '5.25rem'
         },
     },
     methods: {
@@ -613,7 +613,9 @@ export default defineComponent({
             background-color: var(--epicv-background-hover);
         }
         .time {
+            color: var(--epicv-text-emphasis);
             flex-basis: v-bind(timeWidth);
+            min-width: v-bind(timeWidth);
             padding-left: 0.25rem;
         }
             .time > span:not(.main) {
@@ -642,11 +644,18 @@ export default defineComponent({
             .row:hover .action {
                 opacity: 1;
             }
+        .row .time {
+            font-size: 0.875rem;
+        }
 .submit {
     display: flex;
     gap: 0.25rem;
     padding: 0.5rem 0.25rem;
+    width: 100%;
 }
+    .submit wa-select {
+        flex: 1;
+    }
 .create-text {
     margin: 0 0.25rem;
 }
