@@ -587,7 +587,10 @@ export default defineComponent({
 .events-content {
     border-top: 1px solid var(--epicv-border-active);
     border-bottom: 1px solid var(--epicv-border-active);
+    height: calc(100% - 2rem);
     margin: 0 0.25rem;
+    overflow: hidden;
+    padding-bottom: 0.5rem;
 }
     .events-content wa-scroller::part(content) {
         padding: 0.25rem 0;
