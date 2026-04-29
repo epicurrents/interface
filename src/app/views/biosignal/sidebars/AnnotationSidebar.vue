@@ -33,6 +33,9 @@
             <wa-tab v-if="availableTabs.includes('create')" panel="create">
                 {{ $t('Create') }}
             </wa-tab>
+            <wa-tab v-if="availableTabs.includes('labels')" panel="labels">
+                {{ $t('Labels') }}
+            </wa-tab>
             <wa-tab-panel v-if="availableTabs.includes('events')" name="events">
                 <div class="header">
                     <div class="time">{{ $t('Time') }}</div>
@@ -136,6 +139,13 @@
                     </wa-button>
                 </div>
             </wa-tab-panel>
+            <wa-tab-panel v-if="availableTabs.includes('labels')" name="labels">
+                <sidebar-label v-for="(label, idx) of (SETTINGS.labels?.availableLabels || [])"
+                    :key="`sidebar-label-${idx}`"
+                    :label="label"
+                ></sidebar-label>
+                <div v-if="SETTINGS.labels?.wildcardEnabled"></div>
+            </wa-tab-panel>
         </wa-tab-group>
     </div>
 </template>
@@ -165,12 +175,17 @@ import {
 } from "@epicurrents/core/util"
 import { PlotSelection } from '#app/views/biosignal/types'
 import { Log } from "scoped-event-log"
-import { ResourceLabel } from '#workspace/epicurrents/core/dist'
+import { ResourceLabel } from '@epicurrents/core'
+
+import SidebarLabel from "./SidebarLabel.vue"
 
 type AnnotationExportFormat = 'epicurrents' | 'mne'
 
 export default defineComponent({
     name: 'BiosignalAnnotationSidebar',
+    components: {
+        SidebarLabel,
+    },
     props: {
         areDeletedEvents: {
             type: Boolean,
@@ -178,7 +193,7 @@ export default defineComponent({
         },
         availableTabs: {
             type: Array as PropType<string[]>,
-            default: ['labels', 'events', 'create'],
+            default: [],
         },
         open: {
             type: Boolean,

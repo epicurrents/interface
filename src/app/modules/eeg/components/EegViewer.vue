@@ -184,6 +184,7 @@
                 <template v-slot:end>
                     <annotation-sidebar ref="sidebar"
                         :areDeletedEvents="undoableRemoveEvents.length > 0"
+                        :availableTabs="['create', 'events']"
                         class="sidebar"
                         :open="sidebarOpen === 'annotations'"
                         :selections="plotSelections"
