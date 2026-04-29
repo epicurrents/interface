@@ -110,7 +110,7 @@
             <wa-tab-panel v-if="availableTabs.includes('create')" name="create">
                 <wa-textarea ref="newText"
                     class="create-text"
-                    resize="auto"
+                    resize="vertical"
                     rows="2"
                     size="small"
                 ></wa-textarea>
