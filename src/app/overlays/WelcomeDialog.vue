@@ -1,82 +1,83 @@
 <template>
-        <wa-dialog data-component="welcome-dialog"
-            class="epicv-welcome-dialog"
-            :label="$t('Welcome to using Epicurrents!')"
-            light-dismiss="This is needed to display the hint"
-            :open="open"
-            ref="dialog"
-            without-header
-            @wa-hide="preventDialogDismissal"
-        >
-            <h4>{{ $t('welcome.title') }}</h4>
-            <h5>
-                <app-icon name="circle-exclamation"></app-icon>
-                {{ $t('welcome.instruction') }}
-            </h5>
-            <!-- Dialog body -->
-            <p>{{ $t('welcome.warranty') }}</p>
-            <p>{{ $t('welcome.medical') }}</p>
-            <div v-if="$config.user" class="auth">
-                <wa-select v-if="$config.user.nameOptions"
-                    id="select-user-name"
-                    :placeholder="$t('welcome.select')"
+    <wa-dialog data-component="welcome-dialog"
+        class="epicv-welcome-dialog"
+        :label="$t('Welcome to using Epicurrents!')"
+        light-dismiss="This is needed to display the hint"
+        :open="open"
+        ref="dialog"
+        with-footer
+        without-header
+        @wa-hide="preventDialogDismissal"
+    >
+        <h4>{{ $t('welcome.title') }}</h4>
+        <h5>
+            <app-icon name="circle-exclamation"></app-icon>
+            {{ $t('welcome.instruction') }}
+        </h5>
+        <!-- Dialog body -->
+        <p>{{ $t('welcome.warranty') }}</p>
+        <p>{{ $t('welcome.medical') }}</p>
+        <div v-if="$config.user" class="auth">
+            <wa-select v-if="$config.user.nameOptions"
+                id="select-user-name"
+                :placeholder="$t('welcome.select')"
+                v-property="'userName'"
+                @wa-hide.stop=""
+            >
+                <template v-for="option in $config.user.nameOptions">
+                    <wa-divider v-if="option.name === 'HORIZONTAL_DIVIDER'"></wa-divider>
+                    <wa-option v-else
+                        :key="`username-option-${option.name}`"
+                        :value="option.name"
+                    >{{ option.label || option.name }}</wa-option>
+                </template>
+            </wa-select>
+            <div v-else class="credentials">
+                <wa-input
+                    :disabled="isLoggedIn || undefined"
+                    :placeholder="$t('welcome.username')"
                     v-property="'userName'"
-                    @wa-hide.stop=""
+                ></wa-input>
+                <wa-input v-if="$config.user.authenticationBackend"
+                    :disabled="isLoggedIn || undefined"
+                    :placeholder="$t('welcome.password')"
+                    type="password"
+                    v-property="'password'"
+                ></wa-input>
+                <wa-button v-if="$config.user.authenticationBackend"
+                    appearance="filled-outlined"
+                    variant="brand"
+                    @click="login"
                 >
-                    <template v-for="option in $config.user.nameOptions">
-                        <wa-divider v-if="option.name === 'HORIZONTAL_DIVIDER'"></wa-divider>
-                        <wa-option v-else
-                            :key="`username-option-${option.name}`"
-                            :value="option.name"
-                        >{{ option.label || option.name }}</wa-option>
-                    </template>
-                </wa-select>
-                <div v-else class="credentials">
-                    <wa-input
-                        :disabled="isLoggedIn || undefined"
-                        :placeholder="$t('welcome.username')"
-                        v-property="'userName'"
-                    ></wa-input>
-                    <wa-input v-if="$config.user.authenticationBackend"
-                        :disabled="isLoggedIn || undefined"
-                        :placeholder="$t('welcome.password')"
-                        type="password"
-                        v-property="'password'"
-                    ></wa-input>
-                    <wa-button v-if="$config.user.authenticationBackend"
-                        appearance="filled-outlined"
-                        variant="brand"
-                        @click="login"
-                    >
-                        {{ $t('welcome.login') }}
-                    </wa-button>
-                </div>
+                    {{ $t('welcome.login') }}
+                </wa-button>
             </div>
-            <!-- Dialog footer -->
-            <div
-                :class="[
-                    'notice',
-                    { 'epicv-hidden' : !displayNotice },
-                ]"
-                slot="footer"
-            >
-                {{ $t(
-                    displayLoginError
-                    ? 'welcome.notice.error'
-                    : displayLoginNotice
-                        ? 'welcome.notice.login'
-                        : 'welcome.notice.disclaimer'
-                ) }}
-            </div>
-            <wa-button id="accept-disclaimer-button"
-                appearance="filled-outlined"
-                data-dialog="close"
-                slot="footer"
-                variant="brand"
-            >
-                {{ $t('welcome.accept') }}
-            </wa-button>
-        </wa-dialog>
+        </div>
+        <!-- Dialog footer -->
+        <div
+            :class="[
+                'notice',
+                { 'epicv-hidden' : !displayNotice },
+            ]"
+            slot="footer"
+        >
+            {{ $t(
+                displayLoginError
+                ? 'welcome.notice.error'
+                : displayLoginNotice
+                    ? 'welcome.notice.login'
+                    : 'welcome.notice.disclaimer'
+            ) }}
+        </div>
+        <wa-button id="accept-disclaimer-button"
+            appearance="filled-outlined"
+            data-dialog="close"
+            slot="footer"
+            variant="brand"
+        >
+            {{ $t('welcome.accept') }}
+        </wa-button>
+    </wa-dialog>
 </template>
 
 <script lang="ts">
