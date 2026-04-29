@@ -5,7 +5,7 @@
         }"
     >
         <div class="title">{{ $t('Annotations') }}</div>
-        <div class="export">
+        <div class="save">
             <wa-switch v-if="hasAnnotationConnector"
                 :checked="SETTINGS.annotations.saveToDataset"
                 @change="saveAnnotationsChanged($event.target.checked)"
@@ -14,7 +14,7 @@
             </wa-switch>
             <template v-else>
                 <wa-button
-                    appearance="filled-outlined"
+                    appearance="filled"
                     :disabled="isAnnotationsSubmitted"
                     size="small"
                     variant="brand"
@@ -584,6 +584,11 @@ export default defineComponent({
     .header wa-icon {
         cursor: pointer;
     }
+.save {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
 .events-content {
     border-top: 1px solid var(--epicv-border-active);
     border-bottom: 1px solid var(--epicv-border-active);
