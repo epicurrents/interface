@@ -2,12 +2,20 @@
     <div data-component="channel-highlights" ref="component">
         <template v-for="(highlight, idx) of highlights" :key="`highlight-${idx}`">
             <template v-if="highlight.background">
-                <div v-for="(chan, idy) in highlight.channels" :key="`hl-${idx}-chan-${idy}`"
-                    :id="`hl-element-${idx}`"
+                <div v-if="!highlight.channels.length"
                     class="highlight-area"
-                    :style="`position:absolute;${getBackgroundProperties(highlight, chan)}`"
+                    :style="`position:absolute;${getGlobalBackgroundProperties(highlight)}`"
                     :title="highlight.label"
                 ></div>
+                <template v-else>
+                    <div v-for="(chan, idy) in highlight.channels"
+                        :key="`hl-${idx}-chan-${idy}`"
+                        :id="`hl-element-${idx}`"
+                        class="highlight-area"
+                        :style="`position:absolute;${getBackgroundProperties(highlight, chan)}`"
+                        :title="highlight.label"
+                    ></div>
+                </template>
             </template>
         </template>
         <template v-for="(annotation, idx) of annotations" :key="`annotation-${idx}`">
@@ -87,6 +95,18 @@ export default defineComponent({
          */
         $t: function (key: string, params = {}, capitalized = false) {
             return T(key, this.$options.name, params, capitalized)
+        },
+        getGlobalBackgroundProperties (highlight: SignalHighlight): string {
+            if (!highlight.color) {
+                return ''
+            }
+            const overlayW = this.overlay.getOffsetWidth()
+            const startX = (Math.max(highlight.start - this.RESOURCE.viewStart, 0) / this.viewRange) * overlayW
+            const endX = (Math.min(highlight.end - this.RESOURCE.viewStart, this.viewRange) / this.viewRange) * overlayW
+            const bg = Array.isArray(highlight.opacity)
+                ? `background-image: linear-gradient(to right, ${settingsColorToRgba(highlight.color, highlight.opacity[0])},${settingsColorToRgba(highlight.color, highlight.opacity[1])})`
+                : `background-color:${settingsColorToRgba(highlight.color, highlight.opacity)}`
+            return `top: 0; bottom: 0; left: ${startX}px; right: ${overlayW - endX}px; ${bg}`
         },
         getBackgroundProperties (highlight: SignalHighlight, chanIdx: number) {
             const montage = this.RESOURCE.activeMontage

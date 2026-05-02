@@ -479,7 +479,7 @@ export default defineComponent({
                     if (!hl.visible) {
                         continue
                     }
-                    const nChan = hl.channels.length
+                    const nChan = hl.channels.length || totalChannels
                     const startIdx = Math.floor(hl.start / SAMPLE_INTERVAL)
                     const endIdx = Math.min(Math.ceil(hl.end / SAMPLE_INTERVAL), nSamples)
                     for (let i = startIdx; i < endIdx; i++) {
