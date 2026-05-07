@@ -165,17 +165,25 @@
         ></log-dialog>
         <!-- Welcome dialog -->
         <welcome-dialog :open="!$store.state.INTERFACE.app.disclaimerAccepted"></welcome-dialog>
-        <!-- Callouts are displayed over everything else -->
-        <div class="epicv-callouts">
-            <wa-callout v-for="(callout, idx) in callouts" :key="`callout-${idx}`"
-                appearance="filled-outlined"
-                :class="{ 'expired': callout.expired }"
+        <!-- Toasts are displayed over everything else -->
+        <wa-toast placement="bottom-end">
+            <wa-toast-item v-for="callout in callouts" :key="`callout-${callout.id}`"
+                :duration="10000"
+                size="s"
                 :variant="getCalloutVariant(callout.role)"
+                @wa-after-hide="removeCallout(callout.id)"
             >
                 <app-icon slot="icon" :name="getCalloutIcon(callout.role)"></app-icon>
-                {{ callout.message }}
-            </wa-callout>
-        </div>
+                <div v-for="(line, idx) in callout.message" :key="`callout-${callout.id}-line-${idx}`"
+                    :class="{
+                        'message-topic': callout.message.length > 1 &&  !idx,
+                        'message-text': callout.message.length > 1 &&  idx,
+                    }"
+                >
+                    {{ line }}
+                </div>
+            </wa-toast-item>
+        </wa-toast>
         <!-- File inputs for opening a select file or folder dialog -->
         <input type="file" ref="open-file" style="visibility:hidden" multiple="true" @change="handleFileSelect" />
         <input type="file" ref="open-folder" style="visibility:hidden" webkitdirectory="true" directory="true" multiple="true" @change="handleFolderSelect" />
@@ -233,6 +241,8 @@ if (window.__EPICURRENTS__.SETUP.activeViews?.includes('radiology')) {
     VIEWS.RadiologyInterface = loadAsyncComponent(() => import('#app/views/radiology/RadiologyInterface.vue'))
 }
 
+let _calloutId = 0
+
 export default defineComponent({
     name: 'App',
     components: {
@@ -255,9 +265,8 @@ export default defineComponent({
         const overrideBrowser = window.location.href.match(/[&?]override(&|$)/) !== null
         const browserValid = ref(overrideBrowser || window.chrome !== undefined)
         const callouts = ref([] as {
-            expired: boolean
-            message: string
-            remove: boolean
+            id: number
+            message: string[]
             role: 'confirm' | 'error' | 'warning'
         }[])
         const dialogs = reactive({
@@ -334,22 +343,11 @@ export default defineComponent({
         $t: function (key: string, params = {}, capitalized = false) {
             return T(key, this.$options.name, params, capitalized)
         },
-        addCallout (message: string, role: 'confirm' | 'error' | 'warning') {
-            const newCallout = {
-                expired: false,
-                message,
-                remove: false,
-                role,
-            }
-            this.callouts.push(newCallout)
-            window.setTimeout(() => {
-                newCallout.expired = true
-                this.callouts = this.callouts.filter(c => !c.remove)
-            }, 5000) // Fade out callout after 5 seconds.
-            window.setTimeout(() => {
-                newCallout.remove = true
-                this.callouts = this.callouts.filter(c => !c.remove)
-            }, 10000) // Remove callout after 10 seconds.
+        addCallout (message: string[], role: 'confirm' | 'error' | 'warning') {
+            this.callouts.push({ id: _calloutId++, message, role })
+        },
+        removeCallout (id: number) {
+            this.callouts = this.callouts.filter(c => c.id !== id)
         },
         /**
          * Add new styles to the shadow root.
@@ -784,6 +782,14 @@ export default defineComponent({
         window.addEventListener('keyup', this.handleKeyup, false)
         // Cancel all hotkey events if user leaves the tab.
         window.addEventListener('blur', this.cancelHotkeyEvents, false)
+        Log.addEventListener(['ERROR', 'WARN'], (level, event) => {
+            if (event?.announce) {
+                this.addCallout(
+                    Array.isArray(event.message) ? event.message : [event.message],
+                    level === 'ERROR' ? 'error' : 'warning'
+                )
+            }
+        })
         // Bind methods to page elements.
         this.$store.subscribeAction((action) => {
             if (action.type === 'toggle-dialog') {
@@ -1011,20 +1017,6 @@ WebAwesome style overrides
     .epicv-app wa-button[appearance="epicv"].confirm:hover::part(base) {
         color: var(--epicv-button-confirm-border);
     }
-/* WA-CALLOUT */
-.epicv-app wa-callout {
-    padding: 0;
-}
-    .epicv-app wa-callout wa-icon {
-        margin-inline-end: 0;
-        margin-inline-start: 0.75rem;
-    }
-    .epicv-app wa-callout::part(message) {
-        padding: 0.5rem;
-    }
-    .epicv-app wa-callout p {
-        margin: 0.5rem;
-    }
 /* WA-DIALOG */
 .epicv-app wa-dialog {
     position: absolute;
@@ -1099,6 +1091,24 @@ WebAwesome style overrides
     --height: 1.5em;
     --thumb-size: 1em;
 }
+/* WA-TOAST */
+.epicv-app wa-toast {
+    position: absolute;
+    z-index: 9999;
+    --width: 33vw;
+}
+    .epicv-app wa-toast-item::part(button),
+    .epicv-app wa-toast-item::part(content),
+    .epicv-app wa-toast-item::part(icon) {
+        padding: var(--wa-space-m);
+    }
+    .epicv-app wa-toast-item::part(content) {
+        padding-left: 0;
+        padding-right: 0;
+    }
+    .epicv-app wa-toast-item .message-topic {
+        font-weight: bold;
+    }
 
 /*******************
 
@@ -1170,37 +1180,6 @@ App component styles
             position: relative;
             overflow: hidden;
         }
-    .epicv-callouts {
-        display: flex;
-        flex-direction: column;
-        align-items: start;
-        position: absolute;
-        bottom: 2rem;
-        right: 1rem;
-        z-index: 9999;
-    }
-        .epicv-callouts wa-callout::part(base) {
-            margin: 0 0 0.5rem auto;
-            max-width: 50vw;
-            transition: opacity 2s ease, margin-bottom 0.5s ease 2s;
-        }
-            .epicv-callouts wa-callout.expired::part(base) {
-                opacity: 0;
-                margin-bottom: 0;
-            }
-        .epicv-callouts wa-callout::part(message) {
-            height: 3rem;
-            padding: 0 1rem;
-            line-height: 3rem;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            /* Alerts should always disappear in order (from top to bottom), so this may never be needed. */
-            transition: height 0.5s ease 2s;
-        }
-            .epicv-callouts wa-callout.expired::part(message) {
-                height: 0;
-            }
     /* Hide the file input */
     .epicv-app input[type=file] {
         display: none;
