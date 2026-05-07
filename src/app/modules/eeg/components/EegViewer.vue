@@ -70,7 +70,7 @@
                                 :secPerPage="viewRange"
                                 :SETTINGS="SETTINGS"
                                 :viewRange="viewRange"
-                                v-on:delete-annotation="removeEvents"
+                                v-on:delete-annotation="removeUserEvents"
                                 v-on:edit-annotation="editEvent"
                                 v-on:updated="handleEventsUpdated"
                             />
@@ -192,7 +192,7 @@
                         :visibleRange="visibleRange"
                         v-on:close="hideSideDrawer"
                         v-on:create-events="createEvents"
-                        v-on:remove-event="removeEvents"
+                        v-on:remove-event="removeUserEvents"
                         v-on:tab-changed="selectDrawerTab"
                         v-on:undo-remove="undoRemoveEvents"
                     ></annotation-sidebar>
@@ -217,7 +217,7 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, PropType, reactive, Ref, ref } from 'vue'
+import { computed, defineComponent, PropType, reactive, Ref, ref } from 'vue'
 import { T } from '#i18n'
 import { settingsColorToRgba } from '@epicurrents/core/util'
 import { useEegContext } from '../'
@@ -226,14 +226,17 @@ import { NUMERIC_ERROR_VALUE } from '@epicurrents/core/util'
 import { NO_POINTER_BUTTON_DOWN } from '#util'
 import { Log } from 'scoped-event-log'
 import type {
-    AnnotationLabel,
     AnnotationEventTemplate,
     BiosignalAnnotationEvent,
     BiosignalChannel,
     ChannelPositionProperties,
     MontageChannel,
 } from '@epicurrents/core/types'
-import type { SignalSelectionLimit, UndoOrRedoAction } from '#types/interface'
+import type { SignalSelectionLimit } from '#types/interface'
+import { useBiosignalAnnotations } from '#app/views/biosignal/useBiosignalAnnotations'
+import { useBiosignalAnnotationEditor } from '#app/views/biosignal/useBiosignalAnnotationEditor'
+import { useBiosignalPointer } from '#app/views/biosignal/useBiosignalPointer'
+import { useBiosignalViewerComputed } from '#app/views/biosignal/useBiosignalViewerComputed'
 import type { ContextMenuContext } from '#types/interface'
 import { EegEvent } from '@epicurrents/eeg-module'
 import type { PlotSelection } from '#app/views/biosignal/types'
@@ -260,7 +263,6 @@ import { deepEqual } from '@epicurrents/core/util'
 import type { default as WaSplitPanel } from '@awesome.me/webawesome/dist/components/split-panel/split-panel.js'
 import { SchemaManager } from '#root/src/components/report'
 
-const MAX_SIGNAL_SELECTIONS = 20
 
 export default defineComponent({
     name: 'EegViewer',
@@ -371,7 +373,7 @@ export default defineComponent({
             top: window.innerHeight*0.05,
             width: 800,
         })
-        const resolvePlotUpdate = null as ((result: any) => void) | null
+        const resolvePlotUpdate = ref(null as ((result: any) => void) | null)
         const secPerPage = ref(0)
         const selectedIndex = ref(0)
         const selectionBound = ref(null as SignalSelectionLimit | null)
@@ -397,23 +399,75 @@ export default defineComponent({
         const yaxis = ref<InstanceType<typeof PlotYAxis>>() as Ref<InstanceType<typeof PlotYAxis>>
         // Pointer interaction handlers
         const pointerLeaveHandlers = ref([]) as Ref<((event?: PointerEvent) => void)[]>
-        /**
-         * List of redoable actions ordered from the oldest to the most recent.
-         * Type of `args` depends on the action:
-         * - `add-annotations`: BiosignalAnnotationEvent[]
-         * - `remove-annotations`: BiosignalAnnotationEvent[]
-         */
-        const redoableActions = ref([] as UndoOrRedoAction[])
-        /**
-         * List of undoable actions ordered from the oldest to the most recent.
-         * Type of `args` depends on the action:
-         * - `add-annotations`: BiosignalAnnotationEvent[]
-         * - `remove-annotations`: BiosignalAnnotationEvent[]
-         */
-        const undoableActions = ref([] as UndoOrRedoAction[])
         // Unsubscribe from store mutations
         const unsubscribe = ref(null as (() => void) | null)
         const unsubscribeActions = ref(null as (() => void) | null)
+
+        // ── Composable setup ─────────────────────────────────────────────────
+        const eegCtx = useEegContext(store, 'EegViewer')
+        const viewerComputed = useBiosignalViewerComputed(eegCtx.SETTINGS)
+        const viewRange = computed(() => secPerPage.value || plotDimensions.value[0] / pxPerSecond.value)
+        const annoEditor = useBiosignalAnnotationEditor(eegCtx.RESOURCE, editingEvents, editingEventsMode)
+
+        // Setup closures for analysis window (passed as callbacks to pointer composable,
+        // also returned so they remain accessible as this.xxx in Options API methods).
+        async function loadSelectionSignals (): Promise<boolean> {
+            const result = await Promise.all(plotSelections.map(async (selection) => {
+                if (selection.channel) {
+                    const signal = await eegCtx.RESOURCE.getChannelSignal(
+                        selection.channel.name,
+                        [...selection.range].sort((a, b) => a - b),
+                    )
+                    if (signal) {
+                        selection.signal = signal.signals[0]
+                        return true
+                    }
+                    return false
+                }
+                return true
+            }))
+            return result.every((value) => value !== false)
+        }
+        function closeAnalysisWindow () {
+            analysisWindow.open = false
+        }
+        async function openAnalysisWindow (tab?: string) {
+            analysisWindow.nr++
+            if (tab) {
+                analysisWindow.tab = tab
+            }
+            if (!analysisWindow.open) {
+                if (!(await loadSelectionSignals())) {
+                    Log.error(`Could not load signal data to trace selections.`, 'EegViewer')
+                } else {
+                    analysisWindow.open = true
+                }
+            }
+        }
+
+        const pointer = useBiosignalPointer({
+            resource: eegCtx.RESOURCE,
+            settings: eegCtx.SETTINGS,
+            activeCursorTool,
+            activeSelection,
+            borderWidth: viewerComputed.borderWidth,
+            contextMenu,
+            cursors: cursors as Ref<{ disable: () => void, enable: () => void, setCursorPos: (n: number) => void }>,
+            dragAction,
+            overlay,
+            plotSelections,
+            pointerLeaveHandlers: pointerLeaveHandlers.value,
+            pxPerSecond,
+            resolvePlotUpdate,
+            selectedIndex,
+            selectionBound,
+            visibleRange: viewRange,
+            wrapper,
+            onCloseAnalysis: closeAnalysisWindow,
+            onExitEditor: annoEditor.exitEventEditor,
+            onOpenAnalysis: () => openAnalysisWindow(),
+        })
+
         return {
             activeCursorTool,
             activeSelection,
@@ -445,10 +499,8 @@ export default defineComponent({
             onnxHighlights,
             plotDimensions,
             recordingReady,
-            redoableActions,
             reportSchemaManager,
             reportWindow,
-            resolvePlotUpdate,
             /** Alternative to the dynamic cm per second. */
             secPerPage,
             /** Index of the plot selection that was last clicked. */
@@ -459,7 +511,7 @@ export default defineComponent({
             sidebarTab,
             sidebarWidth,
             plotSelections,
-            undoableActions,
+            viewRange,
             viewReady,
             yAxisWidth,
             // Template refs
@@ -486,8 +538,18 @@ export default defineComponent({
             unsubscribeActions,
             // Imported methods
             settingsColorToRgba,
+            // Setup closures
+            closeAnalysisWindow,
+            loadSelectionSignals,
+            openAnalysisWindow,
+            resolvePlotUpdate,
             // Scope properties
-            ...useEegContext(store, 'EegViewer'),
+            ...eegCtx,
+            // Composables
+            ...useBiosignalAnnotations(eegCtx.RESOURCE),
+            ...viewerComputed,
+            ...annoEditor,
+            ...pointer,
         }
     },
     watch: {
@@ -507,30 +569,6 @@ export default defineComponent({
         },
     },
     computed: {
-        borderWidth () {
-            const showLeftBorder = this.SETTINGS.border.left !== undefined
-                                   ? this.SETTINGS.border.left.show === false
-                                     ? false : true
-                                   : false
-            const showRightBorder = this.SETTINGS.border.right !== undefined
-                                    ? this.SETTINGS.border.right.show === false
-                                      ? false : true
-                                    : false
-            const showTopBorder = this.SETTINGS.border.top !== undefined
-                                  ? this.SETTINGS.border.top.show === false
-                                    ? false : true
-                                  : false
-            const showBtmBorder = this.SETTINGS.border.bottom !== undefined
-                                  ? this.SETTINGS.border.bottom.show === false
-                                    ? false : true
-                                  : false
-            return {
-                bottom: showBtmBorder ? this.SETTINGS.border.bottom?.width || 0 : 0,
-                left: showLeftBorder ? this.SETTINGS.border.left?.width || 0 : 0,
-                right: showRightBorder ? this.SETTINGS.border.right?.width || 0 : 0,
-                top: showTopBorder ? this.SETTINGS.border.top?.width || 0 : 0,
-            }
-        },
         isOnlyMenuChannelActive (): boolean {
             if (this.menuChannel) {
                 const activeChans = (this.RESOURCE.activeMontage?.channels || []).filter(c => c?.isActive)
@@ -543,46 +581,6 @@ export default defineComponent({
         pointerDragThreshold (): number {
             // Require at least 5 mm (~0.2 inches) of pointer movement to register a drag event
             return this.$store.state.INTERFACE.app.screenPPI/5
-        },
-        selectionBoundStyles (): string {
-            if (!this.selectionBound) {
-                return 'display:none'
-            }
-            const relPos = this.selectionBound.position - this.RESOURCE.viewStart
-            if (relPos < 0 || relPos >= this.viewRange) {
-                return 'display:none'
-            }
-            const leftPos = this.timeToOverlayX(this.selectionBound.position)
-            if (leftPos !== NUMERIC_ERROR_VALUE) {
-                return [
-                    `display:block`,
-                    `left:${leftPos - this.SETTINGS.selectionBound.width/2}px`,
-                    `border-left: ${[
-                        this.SETTINGS.selectionBound.style || 'solid',
-                        this.SETTINGS.selectionBound.width + 'px',
-                        settingsColorToRgba(this.SETTINGS.selectionBound.color)
-                    ].join(' ')}`
-                ].join(';')
-            }
-            return 'display:none'
-        },
-        selectionStyles (): string {
-            return [
-                `background-color:${settingsColorToRgba(this.SETTINGS.trace.selections.color)}`,
-                `cursor:pointer`,
-            ].join(';')
-        },
-        undoableRemoveEvents (): UndoOrRedoAction[] {
-            const removedEvents = this.undoableActions.filter(a => a.action === 'remove-events')
-            return removedEvents
-        },
-        undoableRemoveLabels (): UndoOrRedoAction[] {
-            const removedLabels = this.undoableActions.filter(a => a.action === 'remove-labels')
-            return removedLabels
-        },
-        /** Current view range in seconds. */
-        viewRange (): number {
-            return this.secPerPage || this.plotDimensions[0]/this.pxPerSecond
         },
         /** Signal range visible outside the side sidebar. */
         visibleRange (): number {
@@ -617,32 +615,6 @@ export default defineComponent({
          * Add a `handler` method for when the pointer leaves the given `element`.
          * @param handler - method to execute in the event of pointer leaving the element
          */
-        addPointerLeaveHandler (handler: (event?: PointerEvent) => void) {
-            this.pointerLeaveHandlers.push(handler)
-        },
-        addRedoAction (action: string, ...args: unknown[]) {
-            this.redoableActions.push({ action: action, args: Array.isArray(args) ? args : [args] })
-            if (!this.$store.state.APP.hasRedoableAction) {
-                this.$store.commit('set-redoable-action', true)
-            }
-        },
-        /**
-         * Add an actions to undoable actions.
-         * @param action - Name of the action.
-         * @param isOriginal - Was this an original action or a redo action. Original actions will clear any remaining actions from the redoable actions queue.
-         * @param args - Arguments to use with the action.
-         */
-        addUndoAction (action: string, isOriginal: boolean, ...args: unknown[]) {
-            this.undoableActions.push({ action: action, args: Array.isArray(args) ? args : [args] })
-            // Remove possible redo actions from the array.
-            if (isOriginal && this.redoableActions.length) {
-                this.redoableActions.splice(0)
-                this.$store.commit('set-redoable-action', false)
-            }
-            if (!this.$store.state.APP.hasUndoableAction) {
-                this.$store.commit('set-undoable-action', true)
-            }
-        },
         /**
          * Return a promise that resolves when the plot is updated next time.
          */
@@ -706,13 +678,6 @@ export default defineComponent({
         clearCursorTool () {
             this.$store.dispatch('eeg.set-cursor-tool', null)
         },
-        /**
-         * Close the analysis window, clearing the associated chennal and signal data.
-         */
-        closeAnalysisWindow () {
-            // Reset channel and signal data
-            this.analysisWindow.open = false
-        },
         closeReportWindow () {
             console.log('Closing report window')
             // Reset channel and signal data
@@ -766,7 +731,7 @@ export default defineComponent({
                         text: '',
                         value: [selection.range[0], selection.range[1] - selection.range[0]],
                     } as AnnotationEventTemplate)
-                    this.RESOURCE.addEvents(newEvent)
+                    this.addUserEvents(newEvent)
                     undoEvents.push(newEvent)
                     if (!props?.skipEditor) {
                         this.editingEvents.push(newEvent)
@@ -791,7 +756,7 @@ export default defineComponent({
                         text: '',
                         value: [props?.start || 0, props?.duration ? props.duration : 0],
                     } as AnnotationEventTemplate)
-                    this.RESOURCE.addEvents(newEvent)
+                    this.addUserEvents(newEvent)
                     undoEvents.push(newEvent)
                     if (!props?.skipEditor) {
                         this.editingEvents.push(newEvent)
@@ -822,91 +787,6 @@ export default defineComponent({
                 this.editingEventsMode = 'new'
             }
             this.addUndoAction('add-annotations', true, ...undoEvents)
-        },
-        /**
-         * Create a new signal selection.
-         * @param start - The starting position of the selection (in recording seconds).
-         * @param end - Ending position of the selection (in recording seconds).
-         * @param channelProps - Channel properties if this is a channel selection.
-         * @param pointerButton - Possible pointer button (if this is a dragging action).
-         */
-        createSignalSelection (
-            start: number,
-            end: number,
-            channelProps: ChannelPositionProperties | null,
-            pointerButton?: 0 | 2
-        ) {
-            // Reset the selected index.
-            this.selectedIndex = 0
-            // Create a new selection
-            const nextIndex = this.plotSelections.length
-            const selection = {
-                canceled: false,
-                channel: channelProps ? this.RESOURCE.visibleChannels[channelProps.index] : null,
-                crop: [],
-                dimensions: [],
-                getElement: () => {
-                    return this.wrapper.querySelector(`#signal-selection-${nextIndex}`) as HTMLDivElement
-                },
-                markers: [], // TODO: grab possible markers within the selection.
-                range: [start, end].sort((a, b) => a - b),
-                signal: null,
-            } as PlotSelection
-            this.plotSelections.push(selection)
-            if (pointerButton !== undefined) {
-                // This is a dragging selection.
-                this.activeSelection = selection
-                this.dragAction = {
-                    button: pointerButton !== undefined ? pointerButton : NO_POINTER_BUTTON_DOWN,
-                    channelProps: channelProps,
-                    dragging: end < start ? 0 : 1,
-                    dragPos: end,
-                    fromLeft: 0,
-                    fromRight: 0,
-                    startPos: start,
-                }
-                // Don't register any more pointer events on the cursor before this interaction finishes
-                this.cursors.disable()
-                this.$nextTick(() => {
-                    this.updateDragElement()
-                })
-            } else {
-                if (selection.channel) {
-                    // If this is a channel selection, try to fetch the signal part.
-                    this.RESOURCE.getChannelSignal(selection.channel.name, selection.range).then(response => {
-                        if (response) {
-                            selection.signal = response.signals[0]
-                        }
-                    })
-                }
-                // Add selection element styles in next tick, when the after the DOM has updated.
-                this.$nextTick(() => {
-                    const selEl = selection.getElement()
-                    if (!selEl) {
-                        Log.error(`Selection element not available.`, this.$options.name as string)
-                    }
-                    selection.dimensions = [
-                        this.timeToOverlayX(start),
-                        this.timeToOverlayX(end)
-                    ].sort((a, b) => a - b)
-                    const dif = selection.dimensions[1] - selection.dimensions[0]
-                    // Apply appropriate y-coordinates for the clicked channel
-                    selEl.style.top = `${100*(1 - (channelProps?.top || 1))}%`
-                    selEl.style.bottom = `${100*(channelProps?.bottom || 0)}%`
-                    selEl.style.left = `${selection.dimensions[0]}px`
-                    selEl.style.width = `${Math.abs(dif)}px`
-                })
-            }
-        },
-        editEvent (annotation: BiosignalAnnotationEvent) {
-            this.editingEvents.push(annotation)
-            this.editingEventsMode = 'edit'
-        },
-        exitEventEditor () {
-            for (const anno of this.editingEvents) {
-                anno.isActive = false
-            }
-            this.editingEvents.splice(0)
         },
         getHighlightProperties (channel: BiosignalChannel, range: number[]) {
             const overlayW = this.overlay.getOffsetWidth()
@@ -1036,9 +916,6 @@ export default defineComponent({
                 this.isAtEnd = false
             }
         },
-        handleEventsUpdated () {
-            this.RESOURCE.dispatchPropertyChangeEvent('events')
-        },
         handleContextMenuAction (props: any) {
             switch (props.action) {
                 case ('cancel-selection'): {
@@ -1167,6 +1044,18 @@ export default defineComponent({
                 if (quickCode) {
                     // Execute a quick code action depending on the active hotkey.
                     if (this.hotkeyEvents.annotation && this.plotSelections.length) {
+                        if (this.RESOURCE.annotationsLocked) {
+                            Log.warn(
+                                [
+                                    'Annotations are locked.',
+                                    'No events or labels can be added to the recording.'
+                                ],
+                                this.$options.name!,
+                                { announce: true }
+                            )
+                            this.hotkeyEvents.annotation = false
+                            return
+                        }
                         for (const props of Object.values(this.SETTINGS.annotations.classes)) {
                             const code = parseInt(quickCode[1])
                             if (props.quickCode === code) {
@@ -1245,69 +1134,6 @@ export default defineComponent({
             this.navigatorHeight = value.end
             this.resizeElements()
         },
-        handlePlotDoubleClick (event: CustomEvent) {
-            if (this.activeSelection || this.plotSelections.length) {
-                return
-            }
-            const { detail } = event
-            // Select a range of 1 second around the double-clicked point, not excdeeding visible range.
-            const startPos = Math.max(
-                this.RESOURCE.viewStart,
-                detail.startPos - 0.5
-            )
-            const endPos = Math.min(
-                this.RESOURCE.viewStart + this.visibleRange,
-                detail.startPos + 0.5
-            )
-            this.createSignalSelection(startPos, endPos, detail.channelProps)
-            if (this.activeCursorTool === 'inspect') {
-                this.openAnalysisWindow()
-            }
-            this.cursors.setCursorPos(detail.startPos)
-        },
-        /**
-         * Handle pointer leave events by executing and removing the appropriate the handlers.
-         */
-        handlePointerLeave (event: PointerEvent) {
-            // Run all appropriate pointerleave handlers
-            while (this.pointerLeaveHandlers.length) {
-                // Remove handlers from the list and execute them
-                const evHandler = this.pointerLeaveHandlers.shift()
-                // Check that element still exists
-                if (evHandler) {
-                    evHandler(event)
-                }
-            }
-        },
-        /**
-         * Handle mouse click on the plot.
-         */
-        handlePlotMouseClick (event: CustomEvent) {
-            // Practically only emitted when the user clicks a part of the plot that
-            // does not support drag or select interactions (empty space).
-            this.closeAnalysisWindow()
-            this.exitEventEditor()
-            const { detail } = event
-            if ([0, 2].includes(detail.pointerButton)) {
-                this.removeAllDragElements()
-                if (detail.pointerButton === 2) {
-                    // Display context menu (make sure it has time to reset in case it was already open).
-                    this.contextMenu = null
-                    this.$nextTick(() => {
-                        this.contextMenu = {
-                            channel: null,
-                            position: detail.pointerPosition,
-                            target: 'plot',
-                            timestamp: detail.position,
-                            props: null,
-                        }
-                    })
-                } else if (detail.pointerButton === 0) {
-                    // Close the context menu on left mouse click.
-                    this.contextMenu = null
-                }
-            }
-        },
         /**
          * React to updates in the plot.
          */
@@ -1324,197 +1150,9 @@ export default defineComponent({
                 this.video.pause()
             }
         },
-        /**
-         * Handle pointer down event on the overlay.
-         */
-        handlePlotPointerdown (event: CustomEvent) {
-            const { detail } = event
-            this.closeAnalysisWindow()
-            this.exitEventEditor()
-            if (!detail.ctrlKey || this.activeCursorTool) {
-                // New pointer click removes active drag elements if ctrl is not pressed.
-                this.removeAllDragElements()
-                this.contextMenu = null
-            }
-        },
-        handlePlotPointerDrag (event: CustomEvent) {
-            const { detail } = event
-            // Allow drag in both directions.
-            if (!this.activeSelection) {
-                if (
-                    this.plotSelections.length >= MAX_SIGNAL_SELECTIONS ||
-                    // Only allow more than one selection of control is pressed
-                    this.plotSelections.length && !detail.ctrlKey
-                ) {
-                    return
-                }
-                this.createSignalSelection(
-                    detail.startPos,
-                    detail.position,
-                    detail.channelProps,
-                    detail.pointerButton
-                )
-            } else if (this.dragAction) {
-                this.dragAction.dragPos = detail.position
-                this.dragAction.dragging = detail.position < detail.startPos ? 0 : 1
-                this.activeSelection.range = [detail.startPos, detail.position].sort((a, b) => a - b)
-                this.updateDragElement()
-            }
-        },
-        handlePlotPointerDragCancel () {
-            this.removeActiveSelection()
-            this.dragAction = null
-        },
-        handlePlotPointerDragEnd (event: CustomEvent) {
-            if (this.activeSelection?.canceled) {
-                // If the selection was cancelled, remove it.
-                this.removeActiveSelection()
-                return
-            }
-            if (!this.dragAction) {
-                return
-            }
-            if (Math.abs(this.dragAction.dragPos - this.dragAction.startPos) < this.SETTINGS.minSignalSelection) {
-                this.handlePlotPointerDragCancel()
-                return
-            }
-            const { detail } = event
-            if (detail.channelProps) {
-                const chans = this.RESOURCE.activeMontage?.visibleChannels || []
-                const selectionChannel = chans[detail.channelProps.index]
-                if (!this.activeSelection || !selectionChannel) {
-                    return
-                }
-                this.activeSelection.channel = selectionChannel
-                this.activeSelection.getElement().style.pointerEvents = 'initial'
-                this.cursors.enable()
-                if (detail.pointerButton === 2 || this.activeCursorTool === 'inspect') {
-                    this.openAnalysisWindow()
-                }
-            }
-            this.activeSelection = null
-            this.dragAction = null
-        },
-        /**
-         * Triggered when pointer button is released without triggering a drag event.
-         * Essentially equals a click.
-         */
-        handlePlotPointerup (event: CustomEvent) {
-            this.cursors.enable()
-            const { detail } = event
-            const chans = this.RESOURCE.activeMontage?.visibleChannels || []
-            if (this.activeSelection) {
-                this.activeSelection = null
-                // Remove the last element as this drag action was cancelled.
-                this.plotSelections.pop()
-                this.dragAction = null
-            } else if (
-                this.plotSelections.length &&
-                this.plotSelections.length < MAX_SIGNAL_SELECTIONS &&
-                detail.ctrlKey
-            ) {
-                if (!detail.channelProps) {
-                    return
-                }
-                const channelProps =  detail.channelProps as ChannelPositionProperties
-                // If control was pressed, try to add an identical selection to this channel.
-                const lastSelection = this.plotSelections[this.plotSelections.length - 1]
-                const selectionChannel = chans[channelProps.index]
-                if (!selectionChannel) {
-                    return
-                }
-                // Check that there isn't already a selection on this channel.
-                // Previously the signal data was loaded when the selection was made which made it possible to compare the same
-                // selection with different filter settings by selecting the same channel repeatedly while changing the filter
-                // settings between selections. This is not the most useful feature but could be worth re-implementing in some way,
-                // at some point.
-                for (const sel of this.plotSelections) {
-                    if (sel.channel?.id === selectionChannel.id) {
-                        return
-                    }
-                }
-                const nextIndex = this.plotSelections.length
-                const selection = {
-                    canceled: false,
-                    channel: selectionChannel,
-                    crop: [],
-                    dimensions: [...lastSelection.dimensions],
-                    getElement: () => {
-                        return this.wrapper.querySelector(`#signal-selection-${nextIndex}`) as HTMLDivElement
-                    },
-                    markers: [],
-                    range: [...lastSelection.range],
-                    // Delay signal loading to when the analysis window is opened.
-                    // This way filter changes between marking the selection and opening the window are reflected in the signal.
-                    signal: null,
-                } as PlotSelection
-                this.plotSelections.push(selection)
-                this.$nextTick(() => {
-                    const dragEl = selection.getElement()
-                    if (!dragEl) {
-                        Log.error('New drag element not available!', 'EegViewer')
-                        return
-                    }
-                    const offsetLeft = lastSelection.dimensions[0]
-                    const dif = lastSelection.dimensions[1] - lastSelection.dimensions[0]
-                    // Apply appropriate y-coordinates for the clicked channel
-                    dragEl.style.top = `${100*(1 - channelProps.top)}%`
-                    dragEl.style.bottom = `${100*channelProps.bottom}%`
-                    dragEl.style.left = `${offsetLeft}px`
-                    dragEl.style.width = `${Math.abs(dif)}px`
-                    if (detail.pointerButton === 2 || this.activeCursorTool === 'inspect') {
-                        this.openAnalysisWindow()
-                    }
-                })
-            } else if (detail.pointerButton === 2) {
-                // Display context menu.
-                this.contextMenu = {
-                    channel: detail?.channelProps ? chans[detail.channelProps.index] : null,
-                    position: detail.pointerPosition,
-                    target: 'plot',
-                    timestamp: detail.position,
-                    props: null,
-                }
-            } else if (detail.pointerType === 'touch') {
-                // Clear the context menu and selections if the pointer type is touch.
-                this.contextMenu = null
-                this.removeAllDragElements()
-            }
-        },
-        /**
-         * Handle touch start event on the overlay. This event is triggered when the user touches the plot but hasn't
-         * moved their finger yet.
-         */
-        handlePlotTouchStart (_event: TouchEvent) {
-            // We just use this to close the overlays.
-            this.closeAnalysisWindow()
-            this.exitEventEditor()
-        },
-        /**
-         * React to updates in the plot.
-         */
-        handlePlotUpdated (context: any) {
-            // Resolve the possible update promise
-            if (this.resolvePlotUpdate) {
-                this.resolvePlotUpdate(context)
-                this.resolvePlotUpdate = null
-            }
-        },
-        handleSelectionClick (index: number) {
-            this.selectedIndex = index
-            this.openAnalysisWindow()
-        },
         handleSidebarResize (value: { start: number, end: number }) {
             this.sidebarWidth = value.end
             this.resizeElements()
-        },
-        /**
-         * Hide drag indicators overlaying the plot.
-         */
-        hideAllDragElements () {
-            for (const selection of this.plotSelections) {
-                selection.getElement().classList.add('epicv-hidden')
-            }
         },
         /**
          * Hide all elements overlaying the plot, including windows.
@@ -1567,30 +1205,6 @@ export default defineComponent({
         isVideoPlaying () {
             return this.video && !this.video.paused && !this.video.ended
         },
-        /**
-         * Load up-to-date signals into all trace selection objects.
-         * @returns Promise that resolves with the success of the operation (true/false).
-         */
-        async loadSelectionSignals (): Promise<boolean> {
-            const result = await Promise.all(this.plotSelections.map(async (selection) => {
-                if (selection.channel) {
-                    const signal = await this.RESOURCE.getChannelSignal(
-                        selection.channel.name,
-                        [...selection.range].sort((a, b) => a - b)
-                    )
-                    if (signal) {
-                        selection.signal = signal.signals[0]
-                        return true
-                    }
-                    return false
-                } else {
-                    // Global selections don't contain signals.
-                    // TODO: Or should they load all signals?
-                    return true
-                }
-            }))
-            return result.every((value) => value !== false)
-        },
         async montagesChanged () {
             if (!this.montageSetupDone) {
                 // Get number of montages in setups that are included in defaultSetups to load.
@@ -1640,63 +1254,6 @@ export default defineComponent({
                 }
             }
         },
-        async openAnalysisWindow (tab?: string) {
-            this.analysisWindow.nr++
-            if (tab) {
-                this.analysisWindow.tab = tab
-            }
-            if (!this.analysisWindow.open) {
-                if (!(await this.loadSelectionSignals())) {
-                    Log.error(`Could not load signal data to trace selections.`, this.$options.name as string)
-                } else {
-                    this.analysisWindow.open = true
-                }
-            }
-        },
-        redoAction () {
-            const lastAction = this.redoableActions.pop()
-            if (lastAction) {
-                switch (lastAction.action) {
-                    case 'add-events': {
-                        const events = lastAction.args as BiosignalAnnotationEvent[]
-                        this.RESOURCE.addEvents(...events)
-                        this.addUndoAction('add-events', false, ...events)
-                        break
-                    }
-                    case 'remove-events': {
-                        const delEvents = lastAction.args as BiosignalAnnotationEvent[]
-                        this.RESOURCE.removeEvents(...delEvents)
-                        this.addUndoAction('remove-events', false, ...delEvents)
-                        break
-                    }
-                }
-                if (!this.redoableActions.length) {
-                    this.$store.commit('set-redoable-action', false)
-                }
-            }
-        },
-        removeActiveSelection () {
-            if (!this.activeSelection) {
-                return
-            }
-            this.removeSelection(this.plotSelections.indexOf(this.activeSelection))
-            this.activeSelection = null
-        },
-        removeAllDragElements (keepActive = false) {
-            if (keepActive) {
-                for (let i=0; i<this.plotSelections.length; i++) {
-                    if (this.plotSelections[i] !== this.activeSelection) {
-                        this.plotSelections.splice(i, 1)
-                        i--
-                        continue
-                    }
-                }
-            } else {
-                this.plotSelections.splice(0)
-                this.activeSelection = null
-                this.dragAction = null
-            }
-        },
         removeAllHighlights () {
             this.onnxHighlights.splice(0)
         },
@@ -1705,30 +1262,6 @@ export default defineComponent({
             this.contextMenu = null
             this.removeAllDragElements(keepActiveDrag)
             this.removeAllHighlights()
-        },
-        /**
-         * Remove the given events from active recording.
-         * @param events - Events or event IDs to remove.
-         */
-        removeEvents (...events: string[] | number[] | BiosignalAnnotationEvent[]) {
-            const removed = this.RESOURCE.removeEvents(...events)
-            this.addUndoAction('remove-events', true, ...removed)
-        },
-        removePointerLeaveHandler (handler: (event?: PointerEvent) => void) {
-            for (let i=0; i<this.pointerLeaveHandlers.length; i++) {
-                if (this.pointerLeaveHandlers[i] === handler) {
-                    this.pointerLeaveHandlers.splice(i, 1)
-                }
-            }
-        },
-        removeSelection (index: number) {
-            if (!this.plotSelections[index]) {
-                return
-            }
-            if (this.plotSelections[index] === this.activeSelection) {
-                this.activeSelection = null
-            }
-            this.plotSelections.splice(index, 1)
         },
         resizeElements () {
             // Check that trace and navigator are ready
@@ -1757,30 +1290,8 @@ export default defineComponent({
             // Set cursor properties
             this.cursors.updateCursors()
         },
-        saveEventEdits (props: { class: string, label: string }) {
-            let anyChanged = false
-            for (const event of this.editingEvents) {
-                if (event.class !== props.class) {
-                    event.class = props.class as typeof event['class']
-                    anyChanged = true
-                }
-                if (event.label !== props.label) {
-                    event.label = props.label
-                    anyChanged = true
-                }
-            }
-            if (anyChanged) {
-                this.RESOURCE.dispatchPropertyChangeEvent('events')
-            }
-            this.exitEventEditor()
-        },
         selectDrawerTab (value: string) {
             this.sidebarTab = value
-        },
-        showAllDragElements () {
-            for (const selection of this.plotSelections) {
-                selection.getElement().classList.remove('epicv-hidden')
-            }
         },
         signalCacheChanged () {
             if (this.RESOURCE.signalCacheStatus[1] > 0) {
@@ -1800,22 +1311,6 @@ export default defineComponent({
                 this.cmPerSec = this.RESOURCE.timebase
             }
             this.calculatePxPerSecond()
-        },
-        /**
-         * Convert a recording `time` to corresponding x-axis position as pixels from the left edge of the overlay.
-         * Offset (including left border) from the actual edge is applied to the returned value.
-         * @param time - Recording time (in seconds).
-         * @returns Overlay x-position at the given time index. This method always returns a valid coordinate, even if the time position is outside visible range.
-         */
-        timeToOverlayX (time: number) {
-            // First check if position is outside of view range.
-            if (time <= this.RESOURCE.viewStart) {
-                return this.borderWidth.left
-            }
-            return Math.min(
-                (time - this.RESOURCE.viewStart)*this.pxPerSecond + this.borderWidth.left,
-                this.overlay.getOffsetWidth() - this.borderWidth.right
-            )
         },
         toggleChannelActive (channel: MontageChannel) {
             if (!channel?.id) {
@@ -1864,91 +1359,6 @@ export default defineComponent({
             } else {
                 this.$store.dispatch('eeg.set-open-sidebar', sidebar)
             }
-        },
-        undoAction () {
-            const lastAction = this.undoableActions.pop()
-            if (lastAction) {
-                switch (lastAction.action) {
-                    case 'add-events': {
-                        const addedEvents = lastAction.args as BiosignalAnnotationEvent[]
-                        const deletedEvents = this.RESOURCE.removeEvents(...addedEvents)
-                        this.addRedoAction('add-events', ...deletedEvents)
-                        break
-                    }
-                    case 'add-labels': {
-                        const addedLabels = lastAction.args as BiosignalAnnotationEvent[]
-                        const deletedLabels = this.RESOURCE.removeEvents(...addedLabels)
-                        this.addRedoAction('add-labels', ...deletedLabels)
-                        break
-                    }
-                    case 'remove-events': {
-                        const delEvents = lastAction.args as BiosignalAnnotationEvent[]
-                        this.RESOURCE.addEvents(...delEvents)
-                        this.addRedoAction('remove-events', ...delEvents)
-                        break
-                    }
-                    case 'remove-labels': {
-                        const delLabels = lastAction.args as BiosignalAnnotationEvent[]
-                        this.RESOURCE.addEvents(...delLabels)
-                        this.addRedoAction('remove-labels', ...delLabels)
-                        break
-                    }
-                }
-                if (!this.undoableActions.length) {
-                    this.$store.commit('set-undoable-action', false)
-                }
-            }
-        },
-        undoRemoveEvents () {
-            if (!this.undoableRemoveEvents.length) {
-                return
-            }
-            // Find the most recent removed events and return them to the array.
-            for (let i = this.undoableActions.length - 1; i >= 0; i--) {
-                const undo = this.undoableActions[i]
-                if (undo.action === 'remove-events') {
-                    const removed = this.undoableActions.splice(i, 1)[0]
-                    this.RESOURCE.addEvents(...(removed.args as BiosignalAnnotationEvent[]))
-                    this.addRedoAction(removed.action, ...(removed.args as BiosignalAnnotationEvent[]))
-                    return
-                }
-            }
-        },
-        undoRemoveLabels () {
-            if (!this.undoableRemoveLabels.length) {
-                return
-            }
-            // Find the most recent removed labels and return them to the array.
-            for (let i = this.undoableActions.length - 1; i >= 0; i--) {
-                const undo = this.undoableActions[i]
-                if (undo.action === 'remove-labels') {
-                    const removed = this.undoableActions.splice(i, 1)[0]
-                    this.RESOURCE.addLabels(...(removed.args as AnnotationLabel[]))
-                    this.addRedoAction(removed.action, ...(removed.args as AnnotationLabel[]))
-                    return
-                }
-            }
-        },
-        updateDragElement () {
-            if (!this.activeSelection || !this.dragAction) {
-                return
-            }
-            const dragEl = this.activeSelection.getElement()
-            if (!dragEl) {
-                Log.error('Drag element not available!', 'EegViewer')
-                return
-            }
-            this.activeSelection.dimensions = [
-                this.timeToOverlayX(this.dragAction.startPos),
-                this.timeToOverlayX(this.dragAction.dragPos)
-            ].sort((a, b) => a - b)
-            const dif = this.activeSelection.dimensions[1] - this.activeSelection.dimensions[0]
-            // Apply appropriate y-coordinates for the clicked channel
-            dragEl.style.top = `${100*(1 - (this.dragAction.channelProps?.top || 1))}%`
-            dragEl.style.bottom = `${100*(this.dragAction.channelProps?.bottom || 0)}%`
-            dragEl.style.left = `${this.activeSelection.dimensions[0]}px`
-            dragEl.style.width = `${Math.abs(dif)}px`
-            dragEl.style.pointerEvents = 'none'
         },
         updateHighlights () {
             for (let i=0; i<this.onnxHighlights.length; i++) {
