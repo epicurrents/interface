@@ -133,9 +133,10 @@ import { useEmgContext } from '..'
 import { useBiosignalAnalysis } from '#app/views/biosignal/useBiosignalAnalysis'
 import { useBiosignalAnnotations } from '#app/views/biosignal/useBiosignalAnnotations'
 import { useBiosignalAnnotationEditor } from '#app/views/biosignal/useBiosignalAnnotationEditor'
+import { useBiosignalKeyboard } from '#app/views/biosignal/useBiosignalKeyboard'
+import { useBiosignalLayout } from '#app/views/biosignal/useBiosignalLayout'
 import { useBiosignalNavigation } from '#app/views/biosignal/useBiosignalNavigation'
 import { useBiosignalPointer } from '#app/views/biosignal/useBiosignalPointer'
-import { useBiosignalLayout } from '#app/views/biosignal/useBiosignalLayout'
 import { EmgEvent, EmgRecording } from '@epicurrents/emg-module'
 import { Log } from 'scoped-event-log'
 
@@ -187,12 +188,6 @@ export default defineComponent({
         const dragAction = ref<DragAction | null>(null)
         const editingEvents = ref([] as BiosignalAnnotationEvent[])
         const editingEventsMode = ref('new' as 'new' | 'edit')
-        const hotkeyEvents = reactive({
-            annotation: false,
-            examine: false,
-            inspect: false,
-            notch: false,
-        })
         const navigatorHeight = ref(75)
         const plotSelections = reactive([] as PlotSelection[])
         const resolvePlotUpdate = ref(null as ((result: any) => void) | null)
@@ -265,6 +260,27 @@ export default defineComponent({
             onOpenAnalysis: () => analysis.openAnalysisWindow(),
         })
 
+        const keyboard = useBiosignalKeyboard(
+            ['annotation', 'examine', 'inspect', 'notch'],
+            context.SETTINGS,
+            () => [],
+            () => (store.state as any).INTERFACE.app.hotkeyAltOrOpt,
+            () => {
+                store.dispatch('emg.set-cursor-tool', null)
+                analysis.closeAnalysisWindow()
+                contextMenu.value = null
+                pointer.hideAllDragElements()
+                store.dispatch('emg.set-open-sidebar', null)
+                annoEditor.exitEventEditor()
+                pointer.removeAllDragElements(true)
+                if (activeSelection.value) {
+                    activeSelection.value.canceled = true
+                }
+                dragAction.value = null
+                selectionBound.value = null
+            }
+        )
+
         return {
             activeCursorTool,
             activeSelection,
@@ -273,7 +289,6 @@ export default defineComponent({
             dragAction,
             editingEvents,
             editingEventsMode,
-            hotkeyEvents,
             navigatorHeight,
             plotSelections,
             secPerPage,
@@ -301,6 +316,8 @@ export default defineComponent({
             // Composables
             ...annotations,
             ...layout,
+            ...keyboard,
+            hotkeyEvents: keyboard.hotkeyEvents,
             ...annoEditor,
             ...analysis,
             ...nav,
@@ -354,11 +371,6 @@ export default defineComponent({
             return new Promise<any>((resolve) => {
                 this.resolvePlotUpdate = resolve
             })
-        },
-        cancelHotkeyEvents () {
-            for (const key in this.hotkeyEvents) {
-                this.hotkeyEvents[key as keyof typeof this.hotkeyEvents] = false
-            }
         },
         clearCursorTool () {
             this.$store.dispatch('emg.set-cursor-tool', null)
@@ -523,55 +535,6 @@ export default defineComponent({
         /**
          * Handle keyup events with the viewer visible.
          */
-        handleKeydown (event: KeyboardEvent) {
-            if (event.target && (event.target as HTMLElement).tagName.match(/input|textarea/i)) {
-                // Don't handle hotkeys if the user is typing in an input or textarea element.
-                return
-            }
-            if (event.key === 'Escape') {
-                this.cancelHotkeyEvents()
-                this.clearCursorTool()
-                this.hideAllOverlayElements()
-                this.hideSideDrawer()
-                this.exitEventEditor()
-                // Remove all drag elements and cancel the active selection (or it will be reapplied on drag).
-                this.removeAllDragElements(true)
-                if (this.activeSelection) {
-                    this.activeSelection.canceled = true
-                }
-                this.dragAction = null
-                this.selectionBound = null
-            } else if ((this.$store.state.INTERFACE.app.hotkeyAltOrOpt && event.altKey) || !event.altKey) {
-                for (const key in this.hotkeyEvents) {
-                    if (Object.keys(this.SETTINGS.hotkeys).includes(key)) {
-                        const hotkey = this.SETTINGS.hotkeys[key as keyof typeof this.SETTINGS.hotkeys]
-                        if (!hotkey) {
-                            continue
-                        }
-                        if (hotkey.control && !event.ctrlKey) {
-                            continue
-                        }
-                        if (hotkey.shift && !event.shiftKey) {
-                            continue
-                        }
-                        if (
-                            hotkey.key !== event.key &&
-                            // We also have to check event.code here, because alt changes the value in event.key.
-                            // There is a slight possibility that a single physical key would map to a different actions
-                            // via event.key and event.code (on a non-QWERTY keyboard), and maybe there's a better way
-                            // to handle this.
-                            (!event.altKey || hotkey.code !== event.code)
-                        ) {
-                            continue
-                        }
-                        this.hotkeyEvents[key as keyof typeof this.hotkeyEvents] = true
-                        if (event.altKey) {
-                            event.preventDefault()
-                        }
-                    }
-                }
-            }
-        },
         /**
          * Handle keyup events with the viewer visible.
          */
@@ -748,11 +711,8 @@ export default defineComponent({
                 this.RESOURCE.viewStart = 0
             }
         }, this.ID)
-        // Add event listeners.
-        window.addEventListener('keydown', this.handleKeydown, false)
+        // keydown and blur are managed by useBiosignalKeyboard; register keyup here.
         window.addEventListener('keyup', this.handleKeyup, false)
-        // Cancel all hotkey events if user leaves the tab.
-        window.addEventListener('blur', this.cancelHotkeyEvents, false)
         // Subscribe to actions.
         this.unsubscribeActions = this.$store.subscribeAction((action) => {
             if (action.type === 'redo-action') {
@@ -777,9 +737,7 @@ export default defineComponent({
     },
     beforeUnmount () {
         this.RESOURCE?.removeAllEventListeners(this.ID)
-        window.removeEventListener('keydown', this.handleKeydown, false)
         window.removeEventListener('keyup', this.handleKeyup, false)
-        window.removeEventListener('blur', this.cancelHotkeyEvents, false)
         // Unsubscribe from store
         this.unsubscribe?.()
         this.unsubscribeActions?.()

@@ -156,7 +156,7 @@ export default defineComponent({
         }
     },
     watch: {
-        msPerPage () {
+        pxPerSecond () {
             this.updateAnnotations()
         },
         viewRange () {
