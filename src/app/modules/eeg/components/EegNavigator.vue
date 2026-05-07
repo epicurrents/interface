@@ -462,19 +462,22 @@ export default defineComponent({
                 this.drawNavigator()
                 return
             }
-            // Adaptive sample interval: target ~3 samples per navigator pixel so the
-            // curve is smooth at any recording length.  Minimum 5 s to avoid spikes
-            // from individual short rejected epochs dominating the display.
-            const SAMPLE_INTERVAL = Math.max(5, Math.round(totalDuration / this.canvasWidth * 3))
+            // Adaptive sample interval: target ~1 sample per navigator pixel.
+            // Minimum 1 s gives sub-second resolution on short recordings while
+            // the adaptive formula keeps sample counts reasonable on long ones.
+            const SAMPLE_INTERVAL = Math.max(1, Math.round(totalDuration / this.canvasWidth))
             const nSamples = Math.ceil(totalDuration / SAMPLE_INTERVAL)
             for (const [_source, ctx] of Object.entries(montage.highlights) as [string, HighlightContext][]) {
                 if (!ctx.visible || !ctx.plotDisplay || !ctx.highlights.length) {
                     continue
                 }
-                // Weighted rejection fraction per sample: each highlight contributes
-                // (channels in highlight) × (overlap with sample / sample length) / totalChannels.
-                // Weighting by overlap fraction smooths short bursts naturally.
-                const weightMap = new Float32Array(nSamples)
+                // Weighted fraction per sample: each highlight contributes
+                // (channels in highlight) × (overlap / sample length) / totalChannels.
+                // centroidMap accumulates Σ(overlap_midpoint × contribution) so that
+                // the reported time position is the true centre-of-mass of the highlights
+                // within each sample rather than the geometric sample centre.
+                const weightMap   = new Float32Array(nSamples)
+                const centroidMap = new Float64Array(nSamples)
                 for (const hl of ctx.highlights) {
                     if (!hl.visible) {
                         continue
@@ -484,18 +487,23 @@ export default defineComponent({
                     const endIdx = Math.min(Math.ceil(hl.end / SAMPLE_INTERVAL), nSamples)
                     for (let i = startIdx; i < endIdx; i++) {
                         const sampleStart = i * SAMPLE_INTERVAL
-                        const sampleEnd = sampleStart + SAMPLE_INTERVAL
-                        const overlap = Math.min(hl.end, sampleEnd) - Math.max(hl.start, sampleStart)
+                        const sampleEnd   = sampleStart + SAMPLE_INTERVAL
+                        const overlapStart = Math.max(hl.start, sampleStart)
+                        const overlapEnd   = Math.min(hl.end,   sampleEnd)
+                        const overlap = overlapEnd - overlapStart
                         if (overlap > 0) {
-                            weightMap[i] += nChan * (overlap / SAMPLE_INTERVAL) / totalChannels
+                            const contribution = nChan * (overlap / SAMPLE_INTERVAL) / totalChannels
+                            weightMap[i]   += contribution
+                            centroidMap[i] += ((overlapStart + overlapEnd) / 2) * contribution
                         }
                     }
                 }
-                // Convert to [time_offset, fraction] pairs, skipping zero samples.
+                // Convert to [time_offset, fraction] pairs using the weighted centroid
+                // as the position so narrow highlights appear at their true timestamp.
                 const series: [number, number][] = []
                 for (let i = 0; i < nSamples; i++) {
                     if (weightMap[i] > 0) {
-                        series.push([i * SAMPLE_INTERVAL, Math.min(weightMap[i], 1)])
+                        series.push([centroidMap[i] / weightMap[i], Math.min(weightMap[i], 1)])
                     }
                 }
                 if (series.length > 0) {
