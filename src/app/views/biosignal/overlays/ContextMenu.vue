@@ -206,6 +206,7 @@ export default defineComponent({
                 // Add channel options if context has channel information.
                 plotOptions.push({
                     action: 'create-channel-annotation',
+                    disabled: this.RESOURCE.annotationsLocked,
                     icon: 'message-dots',
                     label: T('Create channel annotation'),
                     type: 'item',
@@ -233,6 +234,7 @@ export default defineComponent({
             // Global options.
             plotOptions.push({
                 action: 'create-global-annotation',
+                disabled: this.RESOURCE.annotationsLocked,
                 icon: 'input-text',
                 label: T('Create global annotation'),
                 type: 'item',

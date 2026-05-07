@@ -6,16 +6,16 @@
                 :ref="storeAnnotationRef"
                 :class="[
                     'annotation',
-                    { 'active': context.event.isActive }
+                    { 'active': context.event.isActive },
+                    { 'locked': context.event.locked },
+                    { 'spot': !context.event.duration }
                 ]"
                 :style="context.style"
                 @pointerdown.prevent.stop="handleAnnotationPointerdown(id, $event)"
                 @pointerup.prevent.stop="handleAnnotationPointerup(id, $event)"
             >
-                <!-- Annotation -->
-                <div v-if="!context.event.duration" id="line" :style="getLineStyles(id)"></div>
                 <div id="wrapper" class="labelwrapper">
-                    <div v-if="context.event.duration && !context.extendsLeft"
+                    <div v-if="context.event.duration && !context.extendsLeft && !context.event.locked"
                         id="start"
                         class="resize"
                         @pointerdown.prevent="handleStartPointerDown(id, $event)"
@@ -32,7 +32,7 @@
                     >
                         {{ context.event.label || context.label || $t('Event') }}
                     </button>
-                    <div v-if="context.event.duration && !context.extendsRight"
+                    <div v-if="context.event.duration && !context.extendsRight && !context.event.locked"
                         id="end"
                         class="resize"
                         @pointerdown.prevent="handleEndPointerDown(id, $event)"
@@ -325,17 +325,6 @@ export default defineComponent({
             const bottom = `${100*channel.offset.bottom}%`
             return `top: ${top}; bottom: ${bottom}; left: ${left}; right: ${right}`
         },
-        getLineStyles (id: string): string {
-            const annoColor = this.annotationContexts.get(id)?.color
-            if (!annoColor) {
-                return ''
-            }
-            const styles = [
-                `width: ${this.SETTINGS.annotations.width}px`,
-                `background-color: ${settingsColorToRgba(annoColor)}`,
-            ]
-            return styles.join(';')
-        },
         getPagePosition (startTime: number): number {
             return (startTime - this.RESOURCE.viewStart)/this.secPerPage
         },
@@ -360,7 +349,9 @@ export default defineComponent({
                 // Check if annotation and button match the last click event.
                 if (this.lastClicked.id === id && this.lastClicked.button === event.button) {
                     if (timestamp - this.lastClicked.timestamp < DBLCLICK_THRESHOLD) {
-                        this.editingAnnotation = context.event
+                        if (!context.event.locked) {
+                            this.editingAnnotation = context.event
+                        }
                         this.lastClicked.timestamp = timestamp
                         return
                     } else {
@@ -370,8 +361,8 @@ export default defineComponent({
                     this.lastClicked = { button: event.button, id: context.event.id, timestamp: timestamp }
                 }
             }
-            // Only allow drag on spot annotations
-            if (context.event.duration) {
+            // Only allow drag on unlocked spot annotations.
+            if (context.event.duration || context.event.locked) {
                 return
             }
             this.draggingAnnotation = {
@@ -391,11 +382,12 @@ export default defineComponent({
                 this.setAnnotationStart(context, this.RESOURCE.viewStart + meta.relX*this.secPerPage)
             }
             const pointerUp = (_left: number, _top: number, _meta: OverlayPointerEventMeta) => {
+                this.overlay.style.cursor = ''
                 this.draggingAnnotation.context = null
                 if (this.draggingAnnotation.overThreshold) {
                     // Deactivate the event and update to reflect the new position.
                     this.deactivateAnnotation(context.event)
-                    this.RESOURCE.dispatchPropertyChangeEvent('events')
+                    this.RESOURCE.dispatchPropertyChangeEvent('events', undefined, undefined, 'after', { source: 'user' })
                 }
             }
             this.overlay.trackPointer(
@@ -403,6 +395,7 @@ export default defineComponent({
                 { move: pointerMove, up: pointerUp },
                 ...Array.from(this.annotationContexts.values()).map(ctx => ctx.el).filter(el => el !== null),
             )
+            this.overlay.style.cursor = 'col-resize'
             // Fire pointerup handler to register "click" event.
             this.handleAnnotationPointerup(id, event)
         },
@@ -478,7 +471,7 @@ export default defineComponent({
                 if (this.draggingAnnotation.overThreshold) {
                     // Deactivate the annotation and update to reflect new duration.
                     this.deactivateAnnotation(context.event)
-                    this.RESOURCE.dispatchPropertyChangeEvent('events')
+                    this.RESOURCE.dispatchPropertyChangeEvent('events', undefined, undefined, 'after', { source: 'user' })
                 }
             }
             this.overlay.trackPointer(
@@ -498,7 +491,7 @@ export default defineComponent({
             if (event.key === 'Delete') {
                 // Handle delete event in keyup so it can be cancelled by hitting Escape before the key is released.
                 for (const context of this.annotationContexts.values()) {
-                    if (context.event.isActive) {
+                    if (context.event.isActive && !context.event.locked) {
                         // Stop drag action if one is active.
                         if (this.draggingAnnotation.context?.event.id === context.event.id) {
                             this.draggingAnnotation.context = null
@@ -574,7 +567,7 @@ export default defineComponent({
                 if (this.draggingAnnotation.overThreshold) {
                     // Deactivate the annotation and update to reflect new start and duration.
                     this.deactivateAnnotation(context.event)
-                    this.RESOURCE.dispatchPropertyChangeEvent('events')
+                    this.RESOURCE.dispatchPropertyChangeEvent('events', undefined, undefined, 'after', { source: 'user' })
                 }
             }
             this.overlay.trackPointer(
@@ -598,6 +591,9 @@ export default defineComponent({
          * @param end - New annotation end position (in recording seconds).
          */
         setAnnotationEnd (context: AnnotationContext, end: number) {
+            if (context.event.locked) {
+                return
+            }
             if (this.SETTINGS.annotations.containWithinRecording && end >= this.RESOURCE.totalDuration) {
                 return
             }
@@ -626,6 +622,9 @@ export default defineComponent({
          * @param start - New annotation start position (in recording seconds).
          */
         setAnnotationStart (context: AnnotationContext, start: number) {
+            if (context.event.locked) {
+                return
+            }
             if (this.SETTINGS.annotations.containWithinRecording && start < 0) {
                 return
             }
@@ -674,8 +673,8 @@ export default defineComponent({
                         if (
                             cIndex.some(
                                 i => shouldDisplayChannel(
-                                    this.RESOURCE.visibleChannels[i],
-                                    this.RESOURCE.activeMontage === null,
+                                    this.RESOURCE.activeMontage!.channels[i],
+                                    false,
                                     this.SETTINGS
                                 )
                             )
@@ -770,6 +769,8 @@ export default defineComponent({
             if (!lblWrapper || !annoLabel) {
                 return
             }
+            context.el.style.setProperty('--annotation-color', settingsColorToRgba(context.color))
+            context.el.style.setProperty('--annotation-width', `${this.SETTINGS.annotations.width}px`)
             //const annoPos = this.getPagePosition(annotation.start)
             if (annoStart) {
                 annoStart.style.left = `-${0.5*ANNOTATION_MARGIN}px`
@@ -810,7 +811,7 @@ export default defineComponent({
                 annoLabel.style.textAlign = `left`
                 lblWrapper.style.borderLeft = `none`
                 lblWrapper.style.borderRight = `solid 1px ${settingsColorToRgba(context.color)}`
-                lblWrapper.style.cursor = `pointer`
+                lblWrapper.style.cursor = context.event.locked ? 'default' : 'pointer'
             }
             // Each label must be processed in the next tick or the label's DOM properties won't be available yet.
             this.$nextTick(() => {
@@ -955,6 +956,22 @@ export default defineComponent({
         cursor: pointer;
         pointer-events: all;
     }
+        .annotation.spot {
+            cursor: col-resize;
+        }
+        .annotation.spot.locked {
+            cursor: default;
+        }
+        .annotation.spot::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 5px; /* ANNOTATION_MARGIN */
+            width: var(--annotation-width);
+            background-color: var(--annotation-color);
+            pointer-events: none;
+        }
         .annotation > div {
             height: 100%;
         }

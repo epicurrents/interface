@@ -6,14 +6,16 @@
         >
             <app-icon class="icon" :name="action === 'new' ? `bookmark-plus` : `pencil`"></app-icon>
             <wa-input ref="input"
-                :value="annotationLabel"
+                :disabled="isLocked"
                 :placeholder="$t('Annotation text')"
                 size="small"
+                :value="annotationLabel"
                 @input="updateLabel($event.target.value)"
                 @keydown="handleLabelKeydown"
                 @keyup="handleLabelKeyup"
             ></wa-input>
             <wa-select
+                :disabled="isLocked"
                 size="small"
                 :value="annotationClass"
                 @input="updateClass($event.target.value)"
@@ -24,6 +26,7 @@
             </wa-select>
             <wa-button ref="savebtn"
                 appearance="filled-outlined"
+                :disabled="isLocked"
                 id="annotation-editor-save-button"
                 size="small"
                 variant="brand"
@@ -81,6 +84,9 @@ export default defineComponent({
         }
     },
     computed: {
+        isLocked (): boolean {
+            return this.action === 'edit' && this.annotation.locked
+        },
     },
     methods: {
         /**

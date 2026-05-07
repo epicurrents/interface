@@ -73,7 +73,7 @@
                                 ]"
                                 :title="event.label"
                             >{{ event.label }}</div>
-                            <div class="action" @click="removeEvent($event, event.id)">
+                            <div v-if="!event.locked" class="action" @click="removeEvent($event, event.id)">
                                 <app-icon name="trash" :title="$t('Remove event')"></app-icon>
                             </div>
                         </div>
@@ -447,7 +447,7 @@ export default defineComponent({
                         priority: 200,
                     }
                 )
-                this.RESOURCE.addLabels(newLabel)
+                this.RESOURCE.addLabels({ source: 'user' }, newLabel)
             } else if (!submitLabel.value) {
                 submitLabel.value = true
             }
