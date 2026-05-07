@@ -248,12 +248,12 @@ const OverlayComponent = defineComponent({
             this.component.style.pointerEvents = 'auto'
             // Show a pointer icon while dragging.
             this.component.style.cursor = 'pointer'
-            if (
-                event.pointerType === 'touch'
-                && (event.target as HTMLDivElement).hasPointerCapture(event.pointerId)
-            ) {
-                // Release pointer capture on the original target to allow tracking movement on the overlay element.
-                (event.target as HTMLDivElement).releasePointerCapture(event.pointerId)
+            if (event.pointerType === 'touch') {
+                // Transfer pointer capture to the overlay so pointermove events follow
+                // the finger regardless of which child element the touch started on.
+                if ((event.target as HTMLDivElement).hasPointerCapture(event.pointerId)) {
+                    (event.target as HTMLDivElement).releasePointerCapture(event.pointerId)
+                }
                 this.component.setPointerCapture(event.pointerId)
             }
             if (handlers.down) {

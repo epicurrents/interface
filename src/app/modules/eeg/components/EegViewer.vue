@@ -31,6 +31,7 @@
                             <!-- Highlights -->
                             <channel-highlights v-if="overlay"
                                 :overlay="overlay"
+                                :pxPerSecond="pxPerSecond"
                                 :secPerPage="viewRange"
                                 :SETTINGS="SETTINGS"
                                 :viewRange="viewRange"
@@ -67,6 +68,7 @@
                             <!-- Annotations-->
                             <annotation-labels v-if="overlay && viewReady"
                                 :overlay="overlay"
+                                :pxPerSecond="pxPerSecond"
                                 :secPerPage="viewRange"
                                 :SETTINGS="SETTINGS"
                                 :viewRange="viewRange"
@@ -89,6 +91,7 @@
                             <!-- Cursors must come after the plot element to be placed on top of it -->
                             <vertical-cursors ref="cursors"
                                 :overlay="overlay"
+                                :pxPerSecond="pxPerSecond"
                                 :viewRange="viewRange"
                                 v-on:main-cursor-position=""
                             ></vertical-cursors>
@@ -217,7 +220,7 @@
 </template>
 
 <script lang="ts">
-import { computed, defineComponent, PropType, reactive, Ref, ref } from 'vue'
+import { computed, defineComponent, PropType, reactive, Ref, ref, toRef } from 'vue'
 import { T } from '#i18n'
 import { settingsColorToRgba } from '@epicurrents/core/util'
 import { useEegContext } from '../'
@@ -233,10 +236,12 @@ import type {
     MontageChannel,
 } from '@epicurrents/core/types'
 import type { SignalSelectionLimit } from '#types/interface'
+import { useBiosignalAnalysis } from '#app/views/biosignal/useBiosignalAnalysis'
 import { useBiosignalAnnotations } from '#app/views/biosignal/useBiosignalAnnotations'
 import { useBiosignalAnnotationEditor } from '#app/views/biosignal/useBiosignalAnnotationEditor'
+import { useBiosignalLayout } from '#app/views/biosignal/useBiosignalLayout'
+import { useBiosignalNavigation } from '#app/views/biosignal/useBiosignalNavigation'
 import { useBiosignalPointer } from '#app/views/biosignal/useBiosignalPointer'
-import { useBiosignalViewerComputed } from '#app/views/biosignal/useBiosignalViewerComputed'
 import type { ContextMenuContext } from '#types/interface'
 import { EegEvent } from '@epicurrents/eeg-module'
 import type { PlotSelection } from '#app/views/biosignal/types'
@@ -292,18 +297,9 @@ export default defineComponent({
     },
     setup (props) {
         const store = useStore()
+        const viewerSize = toRef(props, 'viewerSize') as Ref<number[]>
         const activeCursorTool = ref(null as string | null)
         const activeSelection = ref(null as PlotSelection | null)
-        const analysisWindow = reactive({
-            height: 600,
-            left: window.innerWidth / 2 - 350,
-            /** Update the number each time the analysis window is opened to discard any cached data. */
-            nr: 0,
-            open: false,
-            tab: 'fft',
-            top: window.innerHeight / 2 - 300,
-            width: 700,
-        })
         const channelsChanged = ref(0)
         const cmPerSec = ref(0)
         const contextMenu = ref(null as ContextMenuContext | null)
@@ -330,7 +326,6 @@ export default defineComponent({
         const dragButton = ref(NUMERIC_ERROR_VALUE)
         const editingEvents = ref([] as BiosignalAnnotationEvent[])
         const editingEventsMode = ref('new' as 'new' | 'edit')
-        const epochStart = ref(0)
         const hotkeyEvents = reactive({
             annotation: false,
             examine: false,
@@ -344,9 +339,6 @@ export default defineComponent({
             report: false,
             topogram: false,
         })
-        const isAtEnd = ref(false)
-        const isAtStart = ref(false)
-        const isInEpochMode = ref(false)
         const lastCacheEnd = ref(0)
         const lastVideoTime = ref(0)
         const menuChannel = ref(null as MontageChannel | null)
@@ -357,9 +349,7 @@ export default defineComponent({
         const nextAnimationFrame = 0
         const onnxContinue = ref(false)
         const onnxHighlights = reactive([] as SignalHighlight[])
-        const plotDimensions = ref([0, 0])
         const plotSelections = reactive([] as PlotSelection[])
-        const pxPerSecond = ref(0)
         const recordingReady = ref(false)
         const reportSchemaManager = new SchemaManager()
         const reportWindow = reactive({
@@ -405,52 +395,41 @@ export default defineComponent({
 
         // ── Composable setup ─────────────────────────────────────────────────
         const eegCtx = useEegContext(store, 'EegViewer')
-        const viewerComputed = useBiosignalViewerComputed(eegCtx.SETTINGS)
+        const layout = useBiosignalLayout(
+            eegCtx.SETTINGS,
+            viewerSize,
+            secPerPage,
+            sidebarOpen,
+            sidebarWidth,
+            { plot, navigator },
+            cursors as Ref<{ updateCursors(): void } | undefined>,
+            yAxisWidth,
+            navigatorHeight,
+            cmPerSec,
+            () => (store.state as any).INTERFACE.app.screenPPI,
+        )
+        const { borderWidth, plotDimensions, pxPerSecond, visibleRange } = layout
         const viewRange = computed(() => secPerPage.value || plotDimensions.value[0] / pxPerSecond.value)
         const annoEditor = useBiosignalAnnotationEditor(eegCtx.RESOURCE, editingEvents, editingEventsMode)
 
-        // Setup closures for analysis window (passed as callbacks to pointer composable,
-        // also returned so they remain accessible as this.xxx in Options API methods).
-        async function loadSelectionSignals (): Promise<boolean> {
-            const result = await Promise.all(plotSelections.map(async (selection) => {
-                if (selection.channel) {
-                    const signal = await eegCtx.RESOURCE.getChannelSignal(
-                        selection.channel.name,
-                        [...selection.range].sort((a, b) => a - b),
-                    )
-                    if (signal) {
-                        selection.signal = signal.signals[0]
-                        return true
-                    }
-                    return false
-                }
-                return true
-            }))
-            return result.every((value) => value !== false)
-        }
-        function closeAnalysisWindow () {
-            analysisWindow.open = false
-        }
-        async function openAnalysisWindow (tab?: string) {
-            analysisWindow.nr++
-            if (tab) {
-                analysisWindow.tab = tab
-            }
-            if (!analysisWindow.open) {
-                if (!(await loadSelectionSignals())) {
-                    Log.error(`Could not load signal data to trace selections.`, 'EegViewer')
-                } else {
-                    analysisWindow.open = true
-                }
-            }
-        }
+        const analysis = useBiosignalAnalysis(eegCtx.RESOURCE, plotSelections, 'EegViewer')
+
+        const nav = useBiosignalNavigation(
+            eegCtx.RESOURCE,
+            eegCtx.SETTINGS,
+            visibleRange,
+            (position, _goTo) => {
+                eegCtx.RESOURCE.viewStart = Math.max(Math.floor(position - visibleRange.value/2), 0)
+            },
+            video,
+        )
 
         const pointer = useBiosignalPointer({
             resource: eegCtx.RESOURCE,
             settings: eegCtx.SETTINGS,
             activeCursorTool,
             activeSelection,
-            borderWidth: viewerComputed.borderWidth,
+            borderWidth,
             contextMenu,
             cursors: cursors as Ref<{ disable: () => void, enable: () => void, setCursorPos: (n: number) => void }>,
             dragAction,
@@ -463,9 +442,9 @@ export default defineComponent({
             selectionBound,
             visibleRange: viewRange,
             wrapper,
-            onCloseAnalysis: closeAnalysisWindow,
+            onCloseAnalysis: analysis.closeAnalysisWindow,
             onExitEditor: annoEditor.exitEventEditor,
-            onOpenAnalysis: () => openAnalysisWindow(),
+            onOpenAnalysis: () => analysis.openAnalysisWindow(),
         })
 
         return {
@@ -479,15 +458,7 @@ export default defineComponent({
             dragButton,
             editingEvents,
             editingEventsMode,
-            /** Time position where the first epoch starts. */
-            epochStart,
             hotkeyEvents,
-            /** Is the current view at the end of the loaded data? */
-            isAtEnd,
-            /** Is the current view at the start of the loaded data? */
-            isAtStart,
-            /** Should data be browsed in epocs. */
-            isInEpochMode,
             lastCacheEnd,
             lastVideoTime,
             menuChannel,
@@ -497,7 +468,6 @@ export default defineComponent({
             nextAnimationFrame,
             onnxContinue,
             onnxHighlights,
-            plotDimensions,
             recordingReady,
             reportSchemaManager,
             reportWindow,
@@ -521,12 +491,10 @@ export default defineComponent({
             overlay,
             panel,
             plot,
-            pxPerSecond,
             montageSetupDone,
             setupMessage,
             sidebar,
             //timebase,
-            analysisWindow,
             video,
             videoWrapper,
             wrapper,
@@ -538,17 +506,16 @@ export default defineComponent({
             unsubscribeActions,
             // Imported methods
             settingsColorToRgba,
-            // Setup closures
-            closeAnalysisWindow,
-            loadSelectionSignals,
-            openAnalysisWindow,
             resolvePlotUpdate,
             // Scope properties
             ...eegCtx,
             // Composables
             ...useBiosignalAnnotations(eegCtx.RESOURCE),
-            ...viewerComputed,
+            ...layout,
             ...annoEditor,
+            ...analysis,
+            analysisWindow: analysis.analysisWindow,
+            ...nav,
             ...pointer,
         }
     },
@@ -582,16 +549,6 @@ export default defineComponent({
             // Require at least 5 mm (~0.2 inches) of pointer movement to register a drag event
             return this.$store.state.INTERFACE.app.screenPPI/5
         },
-        /** Signal range visible outside the side sidebar. */
-        visibleRange (): number {
-            const anyDrawerOpen = this.sidebarOpen !== null
-            // Subtract the sidebar width from the visible width if any sidebar is open.
-            if (anyDrawerOpen) {
-                return (this.plotDimensions[0] - this.sidebarWidth)/this.pxPerSecond
-            }
-            // If not and the view width is a whole number, use that value.
-            return this.viewRange
-        },
     },
     methods: {
         /**
@@ -623,21 +580,10 @@ export default defineComponent({
                 this.resolvePlotUpdate = resolve
             })
         },
-        calculatePxPerSecond () {
-            if (this.secPerPage) {
-                // Total viewer size minus y-label part.
-                this.pxPerSecond = Math.max(0, this.viewerSize[0] - 80)/this.secPerPage
-            } else {
-                this.pxPerSecond = (this.$store.state.INTERFACE.app.screenPPI/2.54)*this.cmPerSec
-            }
-        },
         cancelHotkeyEvents () {
             for (const key in this.hotkeyEvents) {
                 this.hotkeyEvents[key as keyof typeof this.hotkeyEvents] = false
             }
-        },
-        checkEpochMode () {
-            this.isInEpochMode = this.SETTINGS.epochMode.enabled && this.SETTINGS.epochMode.epochLength > 0
         },
         async checkVideoPosLoop () {
             /*
@@ -819,102 +765,6 @@ export default defineComponent({
                 }
                 return false
             })[0]?.name || null
-        },
-        /**
-         * Move the view backward `step` amount of seconds from the current location.
-         * @param step - Amount of seconds (optional, defaults to page length setting).
-         */
-        goBackward (step?: number) {
-            if (this.isAtStart) {
-                return
-            }
-            if (this.isInEpochMode) {
-                // When using epoch mode, any move backward is an epoch backward.
-                this.goTo(this.RESOURCE.viewStart - this.SETTINGS.epochMode.epochLength)
-            } else {
-                if (!step) {
-                    // Maximum move distance is the number of full visible seconds to avoid skipping any data.
-                    step = Math.min(
-                        this.SETTINGS.pageLength,
-                        // If page length is in whole seconds, move distance is 1 second less than that.
-                        Math.ceil(this.visibleRange) - 1
-                    )
-                }
-                // Don't backtrack beyond the start of the recording.
-                if (this.RESOURCE.viewStart <= step) {
-                    this.RESOURCE.viewStart = 0
-                    this.isAtStart = true
-                } else {
-                    this.goTo(this.RESOURCE.viewStart - step)
-                }
-            }
-        },
-        /**
-         * Move the view forward `step` amount of seconds from the current location.
-         * @param step - amount of seconds (optional, defaults to page length setting)
-         */
-        goForward (step?: number) {
-            // Browse right
-            if (this.isAtEnd) {
-                return
-            }
-            if (this.isInEpochMode) {
-                // When using epoch mode, any move forward is an epoch forward.
-                step = this.SETTINGS.epochMode.epochLength
-            } else {
-                if (!step) {
-                    step = Math.min(this.SETTINGS.pageLength, Math.ceil(this.visibleRange) - 1)
-                }
-            }
-            this.goTo(this.RESOURCE.viewStart + step)
-        },
-        /**
-         * Move the view to `time` point in the resource.
-         * @param time - recording time point in seconds from record start
-         */
-        goTo (time: number) {
-            if (time < 0 || time >= this.RESOURCE.totalDuration) {
-                return
-            }
-            const nEpochs = (this.RESOURCE.totalDuration - this.epochStart)/(this.SETTINGS.epochMode.epochLength || 1)
-            const endEpoch = (this.SETTINGS.epochMode.onlyFullEpochs ? Math.floor(nEpochs) : Math.ceil(nEpochs)) - 1
-            if (this.isInEpochMode) {
-                if (time < this.epochStart) {
-                    // Correct time position before epoch start to the epoch start.
-                    this.RESOURCE.viewStart = this.epochStart
-                } else if ((time - this.epochStart)/this.SETTINGS.epochMode.epochLength >= endEpoch + 1) {
-                    // Correct time position at or after the last epoch end to the last epoch start.
-                    this.RESOURCE.viewStart = this.epochStart + endEpoch*this.SETTINGS.epochMode.epochLength
-                } else {
-                    // Find the epoch containing the time point.
-                    const epochIndex = Math.min(
-                        Math.floor((time - this.epochStart)/this.SETTINGS.epochMode.epochLength),
-                        // Do not exceed the last epoch.
-                        endEpoch
-                    )
-                    this.RESOURCE.viewStart = this.epochStart + epochIndex*this.SETTINGS.epochMode.epochLength
-                }
-            } else {
-                this.RESOURCE.viewStart = time
-            }
-            if (
-                !this.RESOURCE.viewStart
-                || (this.isInEpochMode && this.RESOURCE.viewStart === this.epochStart)
-            ) {
-                this.isAtStart = true
-            } else {
-                this.isAtStart = false
-            }
-            if (
-                this.RESOURCE.viewStart + this.visibleRange >= this.RESOURCE.totalDuration
-                || (this.isInEpochMode
-                    && this.RESOURCE.viewStart === this.epochStart + (nEpochs - 1)*this.SETTINGS.epochMode.epochLength
-                )
-            ) {
-                this.isAtEnd = true
-            } else {
-                this.isAtEnd = false
-            }
         },
         handleContextMenuAction (props: any) {
             switch (props.action) {
@@ -1130,30 +980,6 @@ export default defineComponent({
                 this.modKey = null
             }
         },
-        handleNavigatorResize (value: { start: number, end: number }) {
-            this.navigatorHeight = value.end
-            this.resizeElements()
-        },
-        /**
-         * React to updates in the plot.
-         */
-        handlePlotNavigation (position: number) {
-            if (this.isInEpochMode) {
-                this.goTo(position)
-            } else {
-                // Set middle of the view to double clicked point.
-                const newView = Math.floor(position - this.visibleRange/2)
-                this.RESOURCE.viewStart = Math.max(newView, 0)
-            }
-            // Pause video if it is running
-            if (this.isVideoPlaying()) {
-                this.video.pause()
-            }
-        },
-        handleSidebarResize (value: { start: number, end: number }) {
-            this.sidebarWidth = value.end
-            this.resizeElements()
-        },
         /**
          * Hide all elements overlaying the plot, including windows.
          */
@@ -1262,33 +1088,6 @@ export default defineComponent({
             this.contextMenu = null
             this.removeAllDragElements(keepActiveDrag)
             this.removeAllHighlights()
-        },
-        resizeElements () {
-            // Check that trace and navigator are ready
-            if (!this.plot || !this.navigator) {
-                return
-            }
-            // Recalculate trace dimensions and x-label position
-            this.plotDimensions = [
-                // Deduct y-label width (but not sidebar width; draw behind it)
-                this.viewerSize[0] - this.yAxisWidth,
-                // Deduct navigator height
-                this.viewerSize[1] - this.navigatorHeight
-            ]
-            // Update the timebase lines
-            //const majColor = settingsColorToRgba(this.SETTINGS.majorGrid.color)
-            //const minColor = settingsColorToRgba(this.SETTINGS.minorGrid.color)
-            //const majWidth = this.SETTINGS.majorGrid.width
-            //const majSpace = this.pxPerSecond - majWidth
-            //const bgStyle = `repeating-linear-gradient(
-            //    90deg,
-            //    transparent 0 ${majSpace}px,
-            //    ${majColor} ${majSpace}px ${majSpace + majWidth}px
-            //)`
-            //this.timebase.style.backgroundImage = bgStyle
-            //this.timebase.style.backgroundPosition = `${majWidth}px 0`
-            // Set cursor properties
-            this.cursors.updateCursors()
         },
         selectDrawerTab (value: string) {
             this.sidebarTab = value

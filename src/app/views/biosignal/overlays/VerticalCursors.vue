@@ -41,6 +41,10 @@ export default defineComponent({
             type: Object as PropType<PointerEventOverlay>,
             required: true,
         },
+        pxPerSecond: {
+            type: Number,
+            required: true,
+        },
         viewRange: {
             type: Number,
             required: true,
@@ -152,8 +156,8 @@ export default defineComponent({
                 const cursor = this.cursors[idx]
                 const cursorDiv = this.cursorDivs[idx]
                 const pointerMove = (left: number, _top: number, meta: OverlayPointerEventMeta) => {
-                    cursor.setValue(((left - meta.initialX)/this.overlay.getOffsetWidth())*this.viewRange)
-                    cursorDiv.style.left = `${100*cursor.position/this.viewRange}%`
+                    cursor.setValue((left - meta.initialX) / this.pxPerSecond)
+                    cursorDiv.style.left = `${cursor.position * this.pxPerSecond - CURSOR_MARGIN}px`
                 }
                 this.overlay.trackPointer(event, { move: pointerMove })
             } else if (this.displayMainCursor && this.mainCursor) {
@@ -162,7 +166,7 @@ export default defineComponent({
                     const rangeFromEnd = this.RESOURCE.totalDuration - this.RESOURCE.viewStart
                     const leftPos = Math.min(
                         Math.max(left, 0),
-                        this.overlay.getOffsetWidth()*(rangeFromEnd/this.viewRange)
+                        rangeFromEnd * this.pxPerSecond
                     )
                     if (leftPos <= CURSOR_MARGIN) {
                         // Treat cursor as returned to start position.
@@ -171,7 +175,7 @@ export default defineComponent({
                         this.mainCursorMoved = true
                     }
                     this.mainCursor!.style.left = `${leftPos - CURSOR_MARGIN}px`
-                    this.mainCursorPos = leftPos*this.viewRange/this.overlay.getOffsetWidth() + this.RESOURCE.viewStart
+                    this.mainCursorPos = this.RESOURCE.viewStart + leftPos / this.pxPerSecond
                     this.$emit('main-cursor-position', this.mainCursorPos)
                 }
                 this.overlay.trackPointer(event, { move: pointerMove })
@@ -231,8 +235,7 @@ export default defineComponent({
                     this.mainCursorPos = this.RESOURCE.viewStart
                     this.$emit('main-cursor-position', this.mainCursorPos)
                 }
-                const mainCursorLeft = (this.mainCursorPos - this.RESOURCE.viewStart)/this.viewRange
-                this.mainCursor.style.left = `calc(${100*mainCursorLeft}% - ${CURSOR_MARGIN}px)`
+                this.mainCursor.style.left = `${(this.mainCursorPos - this.RESOURCE.viewStart) * this.pxPerSecond - CURSOR_MARGIN}px`
             } else {
                 this.mainCursorPos = 0
             }
@@ -250,12 +253,12 @@ export default defineComponent({
                     label: cursor.label,
                     dragging: false,
                     position: cursor.position,
-                    style: `left:calc(${100*cursor.position/this.viewRange}% - ${CURSOR_MARGIN}px);${this.cursorStyles};`,
+                    style: `left:${cursor.position * this.pxPerSecond - CURSOR_MARGIN}px;${this.cursorStyles};`,
                     value: cursor.value,
                     setPosition: (position: number) =>  {
                         cursor.position = position
                         newCursor.position = position
-                        newCursor.style = `left:calc(${100*newCursor.position/this.viewRange}% - ${CURSOR_MARGIN}px);${this.cursorStyles}`
+                        newCursor.style = `left:${newCursor.position * this.pxPerSecond - CURSOR_MARGIN}px;${this.cursorStyles}`
                         this.$emit('cursors-updated')
                     },
                     setValue: (value: number) => {

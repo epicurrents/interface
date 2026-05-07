@@ -45,11 +45,12 @@
     /* Module Resolution Options */
     "moduleResolution": "bundler",            /* Specify module resolution strategy: 'node' (Node.js) or 'classic' (TypeScript pre-1.6). */
     "resolveJsonModule": true,
+    "baseUrl": "./",                          /* Required for #-prefixed path aliases in dist declaration files to resolve correctly. */
     "paths": {                                /* A series of entries which re-map imports to lookup locations relative to the 'baseUrl'. */
       "#root/*": ["./*"],
       "#workspace/*": ["../*"],
       /* All the rest must point to the src-folder. */
-      "#*": ["./src/*"],
+      "#*": ["src/*"],
       "@fortawesome/fontawesome-common-types": [
         "./node_modules/@fortawesome/fontawesome-common-types/index" /* To fix incompatible fontawesome-common-types peer-deps */
       ]

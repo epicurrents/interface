@@ -95,6 +95,10 @@ export default defineComponent({
             type: Object as PropType<PointerEventOverlay>,
             required: true,
         },
+        pxPerSecond: {
+            type: Number,
+            required: true,
+        },
         secPerPage: {
             type: Number,
             required: true,
@@ -294,10 +298,9 @@ export default defineComponent({
                 styles: string[]
                 width: number
             } & Partial<typeof this.SETTINGS.annotations.classes[string]>
-            const contW = this.overlay.getOffsetWidth()
             const evtPos = this.getPagePosition(event.start)
             properties.styles = [
-                `left: ${Math.max(evtPos*contW, 0) - ANNOTATION_MARGIN}px`,
+                `left: ${Math.max((event.start - this.RESOURCE.viewStart) * this.pxPerSecond, 0) - ANNOTATION_MARGIN}px`,
                 `${this.annotationStyles}`,
             ]
             if (event.duration) {
@@ -309,21 +312,19 @@ export default defineComponent({
                     properties.extendsRight = true
                 }
                 properties.width = (
-                    Math.min(spanEnd, 1) - Math.max(evtPos, 0)
-                )*this.overlay.getOffsetWidth()
+                    Math.min(event.start + event.duration, this.RESOURCE.viewStart + this.secPerPage)
+                    - Math.max(event.start, this.RESOURCE.viewStart)
+                ) * this.pxPerSecond
             }
             return properties
         },
         getBackgroundProperties (context: AnnotationContext, channel: BiosignalChannel) {
             const range = [context.event.start, context.event.start + context.event.duration]
-            const overlayW = this.overlay.getOffsetWidth()
-            const startX = (Math.max(range[0] - this.RESOURCE.viewStart, 0)/this.viewRange)*overlayW
-            const endX = (Math.min(range[1] - this.RESOURCE.viewStart, this.viewRange)/this.viewRange)*overlayW
-            const left = `${startX}px`
-            const right = `${overlayW - endX}px`
+            const startX = Math.max(range[0] - this.RESOURCE.viewStart, 0) * this.pxPerSecond
+            const endX = Math.max(range[1] - this.RESOURCE.viewStart, 0) * this.pxPerSecond
             const top = `${100*(1 - channel.offset.top)}%`
             const bottom = `${100*channel.offset.bottom}%`
-            return `top: ${top}; bottom: ${bottom}; left: ${left}; right: ${right}`
+            return `top: ${top}; bottom: ${bottom}; left: ${startX}px; width: ${endX - startX}px`
         },
         getPagePosition (startTime: number): number {
             return (startTime - this.RESOURCE.viewStart)/this.secPerPage
@@ -785,7 +786,7 @@ export default defineComponent({
             lblWrapper.style.backgroundColor = `color-mix(in srgb, var(--epicv-background), ${
                                                     this.annotationColorToBgColor(context.color)
                                                 } 10%)`
-            const thisStart = Math.max(this.getPagePosition(context.event.start)*this.overlay.getOffsetWidth(), 0)
+            const thisStart = Math.max((context.event.start - this.RESOURCE.viewStart) * this.pxPerSecond, 0)
             // This conditional clauses must always set the same properties at each conclusion, else
             // some of the properties may "spill over" to other annotation elements.
             if (context.event.duration) {
@@ -830,7 +831,7 @@ export default defineComponent({
                         continue
                     }
                     //const otherDiv = this.annotationDivs[i]
-                    const otherStart = this.getPagePosition(otherCtx.event.start)*this.overlay.getOffsetWidth()
+                    const otherStart = (otherCtx.event.start - this.RESOURCE.viewStart) * this.pxPerSecond
                     if (otherStart < 0 && !otherCtx.event.duration) {
                         // Out of sight instant annotation
                         continue
@@ -955,6 +956,7 @@ export default defineComponent({
         overflow-x: visible;
         cursor: pointer;
         pointer-events: all;
+        touch-action: none;
     }
         .annotation.spot {
             cursor: col-resize;
@@ -1002,5 +1004,6 @@ export default defineComponent({
             flex: 0 0 10px;
             height: 1.5rem;
             cursor: ew-resize;
+            touch-action: none;
         }
 </style>

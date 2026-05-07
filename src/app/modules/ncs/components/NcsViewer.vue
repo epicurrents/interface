@@ -35,6 +35,7 @@
                 <!-- Annotations-->
                 <annotation-labels v-if="overlay"
                     :overlay="overlay"
+                    :pxPerSecond="pxPerSecond"
                     :secPerPage="secPerPage"
                     :SETTINGS="SETTINGS"
                     :viewRange="secPerPage"
@@ -62,6 +63,7 @@
                 />
                 <vertical-cursors ref="cursors"
                     :overlay="overlay"
+                    :pxPerSecond="pxPerSecond"
                     :viewRange="secPerPage"
                     v-on:main-cursor-position=""
                 ></vertical-cursors>
@@ -91,7 +93,7 @@
 </template>
 
 <script lang="ts">
-import { computed, defineComponent, PropType, reactive, Ref, ref } from "vue"
+import { defineComponent, PropType, reactive, Ref, ref, toRef } from "vue"
 import { T } from "#i18n"
 import { useStore } from "vuex"
 import type {
@@ -99,10 +101,11 @@ import type {
     SignalSelectionLimit,
 } from "#types/interface"
 import { useNcsContext } from '..'
+import { useBiosignalAnalysis } from '#app/views/biosignal/useBiosignalAnalysis'
 import { useBiosignalAnnotations } from '#app/views/biosignal/useBiosignalAnnotations'
 import { useBiosignalAnnotationEditor } from '#app/views/biosignal/useBiosignalAnnotationEditor'
 import { useBiosignalPointer } from '#app/views/biosignal/useBiosignalPointer'
-import { useBiosignalViewerComputed } from '#app/views/biosignal/useBiosignalViewerComputed'
+import { useBiosignalLayout } from '#app/views/biosignal/useBiosignalLayout'
 import { Log } from 'scoped-event-log'
 
 import AnnotationLabels from '#app/views/biosignal/overlays/AnnotationLabels.vue'
@@ -142,22 +145,13 @@ export default defineComponent({
         VerticalCursors,
         ViewerOverlay,
     },
-    setup () {
+    setup (props) {
         const store = useStore()
         const context = useNcsContext(store, 'NcsViewer')
+        const viewerSize = toRef(props, 'viewerSize') as Ref<number[]>
         const annotations = useBiosignalAnnotations(context.RESOURCE)
         const activeCursorTool = ref(null as string | null)
         const activeSelection = ref(null as PlotSelection | null)
-        const analysisWindow = reactive({
-            height: 600,
-            left: 0,
-            /** Update the number each time the analysis window is opened to discard any cached data. */
-            nr: 0,
-            open: false,
-            tab: 'fft',
-            top: 0,
-            width: 700,
-        })
         const contextMenu = ref(null as ContextMenuContext | null)
         const dataSetupDone = ref(false)
         const dragAction = ref<DragAction | null>(null)
@@ -171,9 +165,7 @@ export default defineComponent({
             notch: false,
         })
         const secPerPage = ref(0)
-        const plotDimensions = ref([0, 0])
         const plotSelections = reactive([] as PlotSelection[])
-        const pxPerSecond = ref(0)
         const resolvePlotUpdate = ref(null as ((result: any) => void) | null)
         const selectedIndex = ref(0)
         const selectionBound = ref(null as SignalSelectionLimit | null)
@@ -190,57 +182,26 @@ export default defineComponent({
         const pointerLeaveHandlers = [] as ((event?: PointerEvent) => void)[]
         // Unsubscribe from store mutations
         // ── Composable setup ─────────────────────────────────────────────────
-        const viewerComputed = useBiosignalViewerComputed(context.SETTINGS)
-        const visibleRange = computed(() => {
-            const anySidebarOpen = sidebarOpen.value !== null
-            if (anySidebarOpen) {
-                return (plotDimensions.value[0] - sidebarWidth.value) / pxPerSecond.value
-            }
-            return secPerPage.value
-        })
+        const layout = useBiosignalLayout(
+            context.SETTINGS,
+            viewerSize,
+            secPerPage,
+            sidebarOpen,
+            sidebarWidth,
+            { plot },
+            cursors as Ref<{ updateCursors(): void } | undefined>,
+        )
+        const { borderWidth, pxPerSecond, visibleRange } = layout
         const annoEditor = useBiosignalAnnotationEditor(context.RESOURCE, editingEvents, editingEventsMode)
 
-        function closeAnalysisWindow () {
-            analysisWindow.open = false
-        }
-        async function loadSelectionSignals (): Promise<boolean> {
-            const result = await Promise.all(plotSelections.map(async (selection) => {
-                const channel = context.RESOURCE.channels.length === 1 ? context.RESOURCE.channels[0] : selection.channel
-                if (channel) {
-                    const signal = await context.RESOURCE.getChannelSignal(
-                        channel.name,
-                        [...selection.range].sort((a, b) => a - b),
-                    )
-                    if (signal) {
-                        selection.signal = signal.signals[0]
-                        return true
-                    }
-                    return false
-                }
-                return true
-            }))
-            return result.every((value) => value !== false)
-        }
-        async function openAnalysisWindow (tab?: string) {
-            analysisWindow.nr++
-            if (tab) {
-                analysisWindow.tab = tab
-            }
-            if (!analysisWindow.open) {
-                if (!(await loadSelectionSignals())) {
-                    Log.error(`Could not load signal data to trace selections.`, 'NcsViewer')
-                } else {
-                    analysisWindow.open = true
-                }
-            }
-        }
+        const analysis = useBiosignalAnalysis(context.RESOURCE, plotSelections, 'NcsViewer')
 
         const pointer = useBiosignalPointer({
             resource: context.RESOURCE,
             settings: context.SETTINGS,
             activeCursorTool,
             activeSelection,
-            borderWidth: viewerComputed.borderWidth,
+            borderWidth,
             contextMenu,
             cursors: cursors as Ref<{ disable: () => void, enable: () => void, setCursorPos: (n: number) => void }>,
             dragAction,
@@ -253,16 +214,15 @@ export default defineComponent({
             selectionBound,
             visibleRange,
             wrapper,
-            onCloseAnalysis: closeAnalysisWindow,
+            onCloseAnalysis: analysis.closeAnalysisWindow,
             onExitEditor: annoEditor.exitEventEditor,
-            onOpenAnalysis: () => openAnalysisWindow(),
+            onOpenAnalysis: () => analysis.openAnalysisWindow(),
         })
         const unsubscribe = null as (() => void) | null
         const unsubscribeActions = null as (() => void) | null
         return {
             activeCursorTool,
             activeSelection,
-            analysisWindow,
             contextMenu,
             dataSetupDone,
             dragAction,
@@ -271,15 +231,12 @@ export default defineComponent({
             epochStart,
             hotkeyEvents,
             secPerPage,
-            plotDimensions,
             plotSelections,
-            pxPerSecond,
             selectedIndex,
             selectionBound,
             sidebarOpen,
             sidebarTab,
             sidebarWidth,
-            visibleRange,
             // Template refs
             cursors,
             navigator,
@@ -292,17 +249,15 @@ export default defineComponent({
             // Unsubscribers
             unsubscribe,
             unsubscribeActions,
-            // Setup closures
-            closeAnalysisWindow,
-            loadSelectionSignals,
-            openAnalysisWindow,
             resolvePlotUpdate,
             // Context properties.
             ...context,
             // Composables
             ...annotations,
-            ...viewerComputed,
+            ...layout,
             ...annoEditor,
+            ...analysis,
+            analysisWindow: analysis.analysisWindow,
             ...pointer,
         }
     },
@@ -352,10 +307,6 @@ export default defineComponent({
             return new Promise<any>((resolve) => {
                 this.resolvePlotUpdate = resolve
             })
-        },
-        calculatePxPerSecond () {
-            // Total viewer size minus y-label part.
-            this.pxPerSecond = Math.max(0, this.viewerSize[0])/this.secPerPage
         },
         cancelHotkeyEvents () {
             for (const key in this.hotkeyEvents) {
@@ -648,23 +599,6 @@ export default defineComponent({
             this.analysisWindow.open = false
             this.contextMenu = null
             this.removeAllDragElements(keepActiveDrag)
-        },
-        resizeElements () {
-            // Check that trace and navigator are ready.
-            if (!this.plot || !this.navigator) {
-                return
-            }
-            // Recalculate trace dimensions and x-label position.
-            this.plotDimensions = [
-                // Deduct border widths.
-                this.viewerSize[0]
-                    - (this.SETTINGS.border.left?.width || 0)
-                    - (this.SETTINGS.border.right?.width || 0),
-                this.viewerSize[1]
-                    - (this.SETTINGS.border.top?.width || 0)
-                    - (this.SETTINGS.border.bottom?.width || 0)
-            ]
-            this.cursors?.updateCursors()
         },
         selectSidebarTab (value: string) {
             this.sidebarTab = value

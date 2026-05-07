@@ -186,6 +186,7 @@ export default defineComponent({
 }
 [data-component="window-dialog"]::part(title) {
     padding: 1rem;
+    touch-action: none;
 }
 [data-component="window-dialog"]::part(header-actions) {
     padding: 0.5rem;

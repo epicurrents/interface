@@ -53,6 +53,7 @@
                             <!-- Annotations-->
                             <annotation-labels v-if="overlay"
                                 :overlay="overlay"
+                                :pxPerSecond="pxPerSecond"
                                 :secPerPage="secPerPage"
                                 :SETTINGS="SETTINGS"
                                 :viewRange="secPerPage"
@@ -75,6 +76,7 @@
                             <!-- Cursors must come after the plot element to be placed on top of it -->
                             <vertical-cursors ref="cursors"
                                 :overlay="overlay"
+                                :pxPerSecond="pxPerSecond"
                                 :viewRange="secPerPage"
                                 v-on:main-cursor-position=""
                             ></vertical-cursors>
@@ -120,7 +122,7 @@
 </template>
 
 <script lang="ts">
-import { computed, defineComponent, PropType, reactive, Ref, ref } from "vue"
+import { defineComponent, PropType, reactive, Ref, ref, toRef } from "vue"
 import { T } from "#i18n"
 import { useStore } from "vuex"
 import type {
@@ -128,10 +130,12 @@ import type {
     SignalSelectionLimit,
 } from "#types/interface"
 import { useEmgContext } from '..'
+import { useBiosignalAnalysis } from '#app/views/biosignal/useBiosignalAnalysis'
 import { useBiosignalAnnotations } from '#app/views/biosignal/useBiosignalAnnotations'
 import { useBiosignalAnnotationEditor } from '#app/views/biosignal/useBiosignalAnnotationEditor'
+import { useBiosignalNavigation } from '#app/views/biosignal/useBiosignalNavigation'
 import { useBiosignalPointer } from '#app/views/biosignal/useBiosignalPointer'
-import { useBiosignalViewerComputed } from '#app/views/biosignal/useBiosignalViewerComputed'
+import { useBiosignalLayout } from '#app/views/biosignal/useBiosignalLayout'
 import { EmgEvent, EmgRecording } from '@epicurrents/emg-module'
 import { Log } from 'scoped-event-log'
 
@@ -171,41 +175,26 @@ export default defineComponent({
         VerticalCursors,
         ViewerOverlay,
     },
-    setup () {
+    setup (props) {
         const store = useStore()
         const context = useEmgContext(store, 'EmgViewer')
+        const viewerSize = toRef(props, 'viewerSize') as Ref<number[]>
         const annotations = useBiosignalAnnotations(context.RESOURCE)
         const activeCursorTool = ref(null as string | null)
         const activeSelection = ref(null as PlotSelection | null)
-        const analysisWindow = reactive({
-            height: 600,
-            left: 0,
-            /** Update the number each time the analysis window is opened to discard any cached data. */
-            nr: 0,
-            open: false,
-            tab: 'fft',
-            top: 0,
-            width: 700,
-        })
         const contextMenu = ref(null as ContextMenuContext | null)
         const dataSetupDone = ref(false)
         const dragAction = ref<DragAction | null>(null)
         const editingEvents = ref([] as BiosignalAnnotationEvent[])
         const editingEventsMode = ref('new' as 'new' | 'edit')
-        const epochStart = ref(0)
         const hotkeyEvents = reactive({
             annotation: false,
             examine: false,
             inspect: false,
             notch: false,
         })
-        const isAtEnd = ref(false)
-        const isAtStart = ref(false)
-        const isInEpochMode = ref(false)
         const navigatorHeight = ref(75)
-        const plotDimensions = ref([0, 0])
         const plotSelections = reactive([] as PlotSelection[])
-        const pxPerSecond = ref(0)
         const resolvePlotUpdate = ref(null as ((result: any) => void) | null)
         const secPerPage = ref(0)
         const selectedIndex = ref(0)
@@ -228,57 +217,37 @@ export default defineComponent({
         const unsubscribeActions = null as (() => void) | null
 
         // ── Composable setup ─────────────────────────────────────────────────
-        const viewerComputed = useBiosignalViewerComputed(context.SETTINGS)
-        const visibleRange = computed(() => {
-            const anyDrawerOpen = sidebarOpen.value !== null
-            if (anyDrawerOpen) {
-                return (plotDimensions.value[0] - sidebarWidth.value) / pxPerSecond.value
-            }
-            return secPerPage.value
-        })
+        const layout = useBiosignalLayout(
+            context.SETTINGS,
+            viewerSize,
+            secPerPage,
+            sidebarOpen,
+            sidebarWidth,
+            { plot, navigator },
+            cursors as Ref<{ updateCursors(): void } | undefined>,
+            ref(0),
+            navigatorHeight,
+        )
+        const { borderWidth, pxPerSecond, visibleRange } = layout
         const annoEditor = useBiosignalAnnotationEditor(context.RESOURCE, editingEvents, editingEventsMode)
 
-        function closeAnalysisWindow () {
-            analysisWindow.open = false
-        }
-        async function loadSelectionSignals (): Promise<boolean> {
-            const result = await Promise.all(plotSelections.map(async (selection) => {
-                const channel = context.RESOURCE.channels.length === 1 ? context.RESOURCE.channels[0] : selection.channel
-                if (channel) {
-                    const signal = await context.RESOURCE.getChannelSignal(
-                        channel.name,
-                        [...selection.range].sort((a, b) => a - b),
-                    )
-                    if (signal) {
-                        selection.signal = signal.signals[0]
-                        return true
-                    }
-                    return false
-                }
-                return true
-            }))
-            return result.every((value) => value !== false)
-        }
-        async function openAnalysisWindow (tab?: string) {
-            analysisWindow.nr++
-            if (tab) {
-                analysisWindow.tab = tab
+        const analysis = useBiosignalAnalysis(context.RESOURCE, plotSelections, 'EmgViewer')
+
+        const nav = useBiosignalNavigation(
+            context.RESOURCE,
+            context.SETTINGS,
+            visibleRange,
+            (position, goTo) => {
+                goTo(position - position%secPerPage.value)
             }
-            if (!analysisWindow.open) {
-                if (!(await loadSelectionSignals())) {
-                    Log.error(`Could not load signal data to trace selections.`, 'EmgViewer')
-                } else {
-                    analysisWindow.open = true
-                }
-            }
-        }
+        )
 
         const pointer = useBiosignalPointer({
             resource: context.RESOURCE,
             settings: context.SETTINGS,
             activeCursorTool,
             activeSelection,
-            borderWidth: viewerComputed.borderWidth,
+            borderWidth,
             contextMenu,
             cursors: cursors as Ref<{ disable: () => void, enable: () => void, setCursorPos: (n: number) => void }>,
             dragAction,
@@ -291,36 +260,28 @@ export default defineComponent({
             selectionBound,
             visibleRange,
             wrapper,
-            onCloseAnalysis: closeAnalysisWindow,
+            onCloseAnalysis: analysis.closeAnalysisWindow,
             onExitEditor: annoEditor.exitEventEditor,
-            onOpenAnalysis: () => openAnalysisWindow(),
+            onOpenAnalysis: () => analysis.openAnalysisWindow(),
         })
 
         return {
             activeCursorTool,
             activeSelection,
-            analysisWindow,
             contextMenu,
             dataSetupDone,
             dragAction,
             editingEvents,
             editingEventsMode,
-            epochStart,
             hotkeyEvents,
-            isAtEnd,
-            isAtStart,
-            isInEpochMode,
             navigatorHeight,
-            plotDimensions,
             plotSelections,
-            pxPerSecond,
             secPerPage,
             selectedIndex,
             selectionBound,
             sidebarOpen,
             sidebarTab,
             sidebarWidth,
-            visibleRange,
             // Template refs
             component,
             cursors,
@@ -334,17 +295,16 @@ export default defineComponent({
             // Unsubscribers
             unsubscribe,
             unsubscribeActions,
-            // Setup closures
-            closeAnalysisWindow,
-            loadSelectionSignals,
-            openAnalysisWindow,
             resolvePlotUpdate,
             // Context properties.
             ...context,
             // Composables
             ...annotations,
-            ...viewerComputed,
+            ...layout,
             ...annoEditor,
+            ...analysis,
+            ...nav,
+            analysisWindow: analysis.analysisWindow,
             ...pointer,
         }
     },
@@ -395,17 +355,10 @@ export default defineComponent({
                 this.resolvePlotUpdate = resolve
             })
         },
-        calculatePxPerSecond () {
-            // Total viewer size minus y-label part.
-            this.pxPerSecond = Math.max(0, this.viewerSize[0])/this.secPerPage
-        },
         cancelHotkeyEvents () {
             for (const key in this.hotkeyEvents) {
                 this.hotkeyEvents[key as keyof typeof this.hotkeyEvents] = false
             }
-        },
-        checkEpochMode () {
-            this.isInEpochMode = this.SETTINGS.epochMode.enabled && this.SETTINGS.epochMode.epochLength > 0
         },
         clearCursorTool () {
             this.$store.dispatch('emg.set-cursor-tool', null)
@@ -511,98 +464,6 @@ export default defineComponent({
          * Move the view backward `step` amount of seconds from the current location.
          * @param step - Amount of seconds (optional, defaults to page length setting).
          */
-        goBackward (step?: number) {
-            if (this.isAtStart) {
-                return
-            }
-            if (this.isInEpochMode) {
-                // When using epoch mode, any move backward is an epoch backward.
-                this.goTo(this.RESOURCE.viewStart - this.SETTINGS.epochMode.epochLength)
-            } else {
-                if (!step) {
-                    // Maximum move distance is the number of full visible seconds to avoid skipping any data.
-                    step = Math.min(
-                        this.SETTINGS.pageLength,
-                        // If page length is in whole seconds, move distance is 1 second less than that.
-                        Math.ceil(this.visibleRange) - 1
-                    )
-                }
-                // Don't backtrack beyond the start of the recording.
-                if (this.RESOURCE.viewStart <= step) {
-                    this.RESOURCE.viewStart = 0
-                    this.isAtStart = true
-                } else {
-                    this.goTo(this.RESOURCE.viewStart - step)
-                }
-            }
-        },
-        /**
-         * Move the view forward `step` amount of seconds from the current location.
-         * @param step - amount of seconds (optional, defaults to page length setting)
-         */
-        goForward (step?: number) {
-            // Browse right
-            if (this.isAtEnd) {
-                return
-            }
-            if (this.isInEpochMode) {
-                // When using epoch mode, any move forward is an epoch forward.
-                step = this.SETTINGS.epochMode.epochLength
-            } else {
-                if (!step) {
-                    step = Math.min(this.SETTINGS.pageLength, Math.ceil(this.visibleRange) - 1)
-                }
-            }
-            this.goTo(this.RESOURCE.viewStart + step)
-        },
-        /**
-         * Move the view to `time` point in the resource.
-         * @param time - recording time point in seconds from record start
-         */
-        goTo (time: number) {
-            if (time < 0 || time >= this.RESOURCE.totalDuration) {
-                return
-            }
-            const nEpochs = (this.RESOURCE.totalDuration - this.epochStart)/(this.SETTINGS.epochMode.epochLength || 1)
-            const endEpoch = (this.SETTINGS.epochMode.onlyFullEpochs ? Math.floor(nEpochs) : Math.ceil(nEpochs)) - 1
-            if (this.isInEpochMode) {
-                if (time < this.epochStart) {
-                    // Correct time position before epoch start to the epoch start.
-                    this.RESOURCE.viewStart = this.epochStart
-                } else if ((time - this.epochStart)/this.SETTINGS.epochMode.epochLength >= endEpoch + 1) {
-                    // Correct time position at or after the last epoch end to the last epoch start.
-                    this.RESOURCE.viewStart = this.epochStart + endEpoch*this.SETTINGS.epochMode.epochLength
-                } else {
-                    // Find the epoch containing the time point.
-                    const epochIndex = Math.min(
-                        Math.floor((time - this.epochStart)/this.SETTINGS.epochMode.epochLength),
-                        // Do not exceed the last epoch.
-                        endEpoch
-                    )
-                    this.RESOURCE.viewStart = this.epochStart + epochIndex*this.SETTINGS.epochMode.epochLength
-                }
-            } else {
-                this.RESOURCE.viewStart = time
-            }
-            if (
-                !this.RESOURCE.viewStart
-                || (this.isInEpochMode && this.RESOURCE.viewStart === this.epochStart)
-            ) {
-                this.isAtStart = true
-            } else {
-                this.isAtStart = false
-            }
-            if (
-                this.RESOURCE.viewStart + this.visibleRange >= this.RESOURCE.totalDuration
-                || (this.isInEpochMode
-                    && this.RESOURCE.viewStart === this.epochStart + (nEpochs - 1)*this.SETTINGS.epochMode.epochLength
-                )
-            ) {
-                this.isAtEnd = true
-            } else {
-                this.isAtEnd = false
-            }
-        },
         handleContextMenuAction (props: any) {
             switch (props.action) {
                 case ('cancel-selection'): {
@@ -777,26 +638,6 @@ export default defineComponent({
                 }
             }
         },
-        handleNavigatorResize (value: { start: number, end: number }) {
-            this.navigatorHeight = value.end
-            this.resizeElements()
-        },
-        /**
-         * React to updates in the plot.
-         */
-        handlePlotNavigation (position: number) {
-            if (this.isInEpochMode) {
-                // goTo will handle view adjustment in epoch mode.
-                this.goTo(position)
-            } else {
-                // Set the view to double-clicked point.
-                this.goTo(position - position%this.secPerPage)
-            }
-        },
-        handleSidebarResize (value: { start: number, end: number }) {
-            this.sidebarWidth = value.end
-            this.resizeElements()
-        },
         /**
          * Hide all elements overlaying the plot, including windows.
          */
@@ -812,20 +653,6 @@ export default defineComponent({
             this.analysisWindow.open = false
             this.contextMenu = null
             this.removeAllDragElements(keepActiveDrag)
-        },
-        resizeElements () {
-            // Check that trace and navigator are ready.
-            if (!this.plot || !this.navigator) {
-                return
-            }
-            // Recalculate trace dimensions.
-            this.plotDimensions = [
-                // Deduct sidebar width.
-                this.viewerSize[0] - (this.sidebarWidth || 0),
-                // Deduct navigator height.
-                this.viewerSize[1] - (this.navigatorHeight || 0)
-            ]
-            this.cursors?.updateCursors()
         },
         selectDrawerTab (value: string) {
             this.sidebarTab = value

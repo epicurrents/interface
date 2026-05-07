@@ -46,6 +46,10 @@ export default defineComponent({
             type: Object as PropType<PointerEventOverlay>,
             required: true,
         },
+        pxPerSecond: {
+            type: Number,
+            required: true,
+        },
         secPerPage: {
             type: Number,
             required: true,
@@ -81,7 +85,7 @@ export default defineComponent({
         }
     },
     watch: {
-        msPerPage () {
+        viewRange () {
             this.updateHighlights()
         },
     },
@@ -100,13 +104,12 @@ export default defineComponent({
             if (!highlight.color) {
                 return ''
             }
-            const overlayW = this.overlay.getOffsetWidth()
-            const startX = (Math.max(highlight.start - this.RESOURCE.viewStart, 0) / this.viewRange) * overlayW
-            const endX = (Math.min(highlight.end - this.RESOURCE.viewStart, this.viewRange) / this.viewRange) * overlayW
+            const startX = Math.max(highlight.start - this.RESOURCE.viewStart, 0) * this.pxPerSecond
+            const endX = Math.max(highlight.end - this.RESOURCE.viewStart, 0) * this.pxPerSecond
             const bg = Array.isArray(highlight.opacity)
                 ? `background-image: linear-gradient(to right, ${settingsColorToRgba(highlight.color, highlight.opacity[0])},${settingsColorToRgba(highlight.color, highlight.opacity[1])})`
                 : `background-color:${settingsColorToRgba(highlight.color, highlight.opacity)}`
-            return `top: 0; bottom: 0; left: ${startX}px; right: ${overlayW - endX}px; ${bg}`
+            return `top: 0; bottom: 0; left: ${startX}px; width: ${endX - startX}px; ${bg}`
         },
         getBackgroundProperties (highlight: SignalHighlight, chanIdx: number) {
             const montage = this.RESOURCE.activeMontage
@@ -121,18 +124,15 @@ export default defineComponent({
                 return
             }
             const range = [highlight.start, highlight.end]
-            const overlayW = this.overlay.getOffsetWidth()
-            const startX = (Math.max(range[0] - this.RESOURCE.viewStart, 0)/this.viewRange)*overlayW
-            const endX = (Math.min(range[1] - this.RESOURCE.viewStart, this.viewRange)/this.viewRange)*overlayW
-            const left = `${startX}px`
-            const right = `${overlayW - endX}px`
+            const startX = Math.max(range[0] - this.RESOURCE.viewStart, 0) * this.pxPerSecond
+            const endX = Math.max(range[1] - this.RESOURCE.viewStart, 0) * this.pxPerSecond
             const top = `${100*(1 - channel.offset.top)}%`
             const bottom = `${100*channel.offset.bottom}%`
             // Color
             const bg = Array.isArray(highlight.opacity)
                        ? `background-image: linear-gradient(to right, ${settingsColorToRgba(highlight.color, highlight.opacity[0])},${settingsColorToRgba(highlight.color, highlight.opacity[1])})`
                        : `background-color:${settingsColorToRgba(highlight.color, highlight.opacity)}`
-            return `top: ${top}; bottom: ${bottom}; left: ${left}; right: ${right}; ${bg}`
+            return `top: ${top}; bottom: ${bottom}; left: ${startX}px; width: ${endX - startX}px; ${bg}`
         },
         getPagePosition (startTime: number): number {
             return (startTime - this.RESOURCE.viewStart)/this.secPerPage
