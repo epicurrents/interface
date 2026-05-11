@@ -43,10 +43,20 @@ const SCOPE = "Store"
 
 // Getters
 export type Getters = AppGetters & {
+    /** Get the main biosignal plot instance. */
     getBiosignalPlot: () => () => BiosignalPlot
+    /** Get the controls component for the active resource, or a placeholder if not found. */
     getResourceControls: (type?: string) => () => (new () => ComponentPublicInstance<unknown>)
+    /** Get the footer component for the active resource, or a placeholder if not found. */
     getResourceFooter: (type?: string) => () => (new () => ComponentPublicInstance<unknown>)
+    /** Get the viewer component for the active resource, or a placeholder if not found. */
     getResourceViewer: (type?: string) => () => (new () => ComponentPublicInstance<unknown>)
+    /**
+     * Get the value of a specific setting, optionally specifying the depth.
+     * @param field - The setting field to retrieve (e.g. 'eeg.trace.margin.top').
+     * @param depth - Optional field index (negative values count from the end). E.g. ('eeg.trace.margin.top', 1) retrieves the value of `trace` object.
+     */
+    getSettingsValue: () => (field: string, depth?: number) => SettingsValue
 }
 
 /**
@@ -248,6 +258,13 @@ export default class AppStore implements InterfaceStoreManager {
                     return () => loadAsyncComponent(() => nullPromise)
                 }
                 return resourceMod.getViewerComponent
+            },
+            getSettingsValue: () => (field: string, depth?: number) => {
+                const intfValue = INTERFACE_SETTINGS.getFieldValue(field, depth)
+                if (intfValue !== undefined) {
+                    return intfValue
+                }
+                return this.runtime?.SETTINGS.getFieldValue(field, depth)
             },
             ...appGetters,
         }
