@@ -187,7 +187,7 @@
                 <template v-slot:end>
                     <annotation-sidebar ref="sidebar"
                         :areDeletedEvents="undoableRemoveEvents.length > 0"
-                        :availableTabs="['create', 'events']"
+                        :availableTabs="sidebarTabs"
                         class="sidebar"
                         :open="sidebarOpen === 'annotations'"
                         :selections="plotSelections"
@@ -562,6 +562,11 @@ export default defineComponent({
         pointerDragThreshold (): number {
             // Require at least 5 mm (~0.2 inches) of pointer movement to register a drag event
             return this.$store.state.INTERFACE.app.screenPPI/5
+        },
+        sidebarTabs (): string[] {
+            return this.RESOURCE.annotationsLocked
+                ? ['events']
+                : ['create', 'events']
         },
     },
     methods: {

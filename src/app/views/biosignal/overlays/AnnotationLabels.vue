@@ -428,6 +428,10 @@ export default defineComponent({
                 }
                 this.lastClicked = { button: INDEX_NOT_ASSIGNED, id: null, timestamp: 0 }
                 this.editingAnnotation = null
+            } else if (context.event.locked) {
+                // Locked annotations cannot be dragged, so a single click safely activates them.
+                // The editor opens in read-only mode; the platform panel handles review interaction.
+                this.activateAnnotation(context.event)
             }
         },
         handleEndPointerDown (id: string, event: PointerEvent) {
