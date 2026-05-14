@@ -95,8 +95,8 @@ import * as interfacePdfModule from '#app/modules/pdf'
  *      import { FooImporter, FooWorkerSubstitute } from '@epicurrents/foo-reader'
  *
  *  - Add an inline worker source (if you ship a worker with the build):
- *      import fooWorkerSrc from '#root/dist/workers/foo.worker.js?raw'
- *      const fooWorker = () => inlineWorker('FooWorker', fooWorkerSrc).create()
+ *      import FooWorker from '#root/dist/workers/foo.worker.js?worker&inline'
+ *      const fooWorker = () => new FooWorker()
  *
  *  - In `createEpicurrentsApp()` add the registration block:
  *      if (!SETUP.activeModules.length || SETUP.activeModules.includes('foo')) {
@@ -114,8 +114,10 @@ import * as interfacePdfModule from '#app/modules/pdf'
  *    to a list that does not include the module key (e.g. ['eeg','pdf']).
  *
  * Notes on workers and Pyodide
- *  - This file often uses `inlineWorker(...?raw)` to embed worker sources so
- *    Vite's dev server and single-file builds resolve worker code reliably.
+ *  - Worker sources are imported with Vite's `?worker&inline` query so the
+ *    worker code is base64-embedded in the main bundle. This keeps dev mode
+ *    and the single-file app build self-contained (no separate worker files
+ *    served via HTTP).
  *  - Pyodide requires an `indexURL` pointing to a WASM asset path. The
  *    default `SETUP.pyodideAssetPath` uses JSDelivr. For local testing, host
  *    the pyodide assets on a static server and update `SETUP.pyodideAssetPath`.
@@ -136,34 +138,44 @@ import { DefaultInterface } from '#DefaultInterface'
 // Initial logging threshold.
 Log.setPrintThreshold(SETUP.logThreshold)
 
-// Vite doesn't handle worker modules from packages very well (at least in dev mode), so this is necessary.
-// inlineWorker gets the worker source from the compiled app file, removing the need for a file server.
-import memWorkerSrc from '#root/dist/workers/memory-manager.worker.js?raw'
-const memWorker = () => inlineWorker('MemoryManagerWorker', memWorkerSrc).create()
-import montWorkerSrc from '#root/dist/workers/montage.worker.js?raw'
-const montWorker = () => inlineWorker('MontageWorker', montWorkerSrc).create()
+// Workers are bundled via Vite's `?worker&inline` query — Vite compiles each source into a
+// standalone worker chunk and base64-embeds it into the main bundle, returning a `Worker`
+// constructor. The `worker.format: 'iife'` setting in `vite.config*.ts` spawns them as classic
+// workers, matching the UMD-style sources copied from each package's `umd/` directory by
+// `scripts/workers.mjs` (run during `npm run start`).
+import MemWorker from '#root/dist/workers/memory-manager.worker.js?worker&inline'
+const memWorker = () => new MemWorker()
+import MontWorker from '#root/dist/workers/montage.worker.js?worker&inline'
+const montWorker = () => new MontWorker()
 
 // Markdown.
-import mdWorkerSrc from '#root/dist/workers/markdown.worker.js?raw'
-const mdWorker = () => inlineWorker('MarkdownWorker', mdWorkerSrc).create()
+import MdWorker from '#root/dist/workers/markdown.worker.js?worker&inline'
+const mdWorker = () => new MdWorker()
 
-// Pyodide
+// Pyodide — the Pyodide virtual compiler has significant startup cost, so the worker is created
+// once at module load and reused across all overrides that target it.
+//
+// Pyodide's worker source calls `importScripts('https://.../pyodide.js')` at startup, which only
+// works in CLASSIC workers — module workers throw `Module scripts don't support importScripts()`
+// and the worker is dead on arrival. Vite's `?worker&inline` spawns a module worker in library
+// builds regardless of `worker.format`, so we route the pyodide worker through `inlineWorker`,
+// which uses a Blob URL + explicit `{ type: 'classic' }` spawn.
 import pyoWorkerSrc from '#root/dist/workers/pyodide.worker.js?raw'
-// We may need to use this worker for two purposes, but only want to create it once due to the
-// overhead associated with the Pyodide virtual compiler.
 const pwrk = inlineWorker('PyodideWorker', pyoWorkerSrc).create()
 const pyoWorker = () => pwrk
 
 // DICOM (for testing purposes).
-import dcmWorkerSrc from '#root/dist/workers/dicom.worker.js?raw'
-const dcmWorker = () => inlineWorker('DicomWorker', dcmWorkerSrc).create()
+import DcmWorker from '#root/dist/workers/dicom.worker.js?worker&inline'
+const dcmWorker = () => new DcmWorker()
 
 // EDF
-import edfWorkerSrc from '#root/dist/workers/edf.worker.js?raw'
-const edfWorker = () => inlineWorker('EdfWorker', edfWorkerSrc).create()
+import EdfWorker from '#root/dist/workers/edf.worker.js?worker&inline'
+const edfWorker = () => new EdfWorker()
 
-// PDF
-import pdfWorkerSrc from '#root/dist/workers/pdfjs.worker.js?raw'
+// PDF — pdfjs requires a URL string for `GlobalWorkerOptions.workerSrc`, so we expose the bundled
+// worker file as an asset URL. With `viteSingleFile` (app build) this becomes a data: URL; in
+// dev / lib builds it resolves to a path served by the dev server.
+import pdfWorkerUrl from '#root/dist/workers/pdfjs.worker.js?url'
 
 // This method creates an instance of the core Epicurrents application and registers the desired modules.
 export const createEpicurrentsApp = async (config?: ApplicationInterfaceConfig) => {
@@ -285,9 +297,7 @@ export const createEpicurrentsApp = async (config?: ApplicationInterfaceConfig) 
     // PDF module setup.
     if (!SETUP.activeModules.length || SETUP.activeModules.includes('pdf')) {
         coreApp.registerModule('pdf', docModule)
-        const pdfReader = new PdfImporter(
-            inlineWorker('PdfWorker', pdfWorkerSrc).url
-        )
+        const pdfReader = new PdfImporter(pdfWorkerUrl)
         const pdfLoader = new docModule.DocumentLoader(
             'PDFLoader',
             'pdf',

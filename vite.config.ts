@@ -67,6 +67,14 @@ export default defineConfig({
       },
       keepNames: true,
     },
+    // The bundled worker sources (in `dist/workers/`) are UMD IIFEs produced by webpack — they
+    // assign to `self` and don't use ES module syntax. Spawning them as module workers (Vite's
+    // default) would parse them under module strict-mode and trip on the implicit globals; iife
+    // format spawns them as classic workers, matching the previous `inlineWorker(...).create()`
+    // behaviour.
+    worker: {
+        format: 'iife',
+    },
     optimizeDeps: {
         exclude: [
             "local",

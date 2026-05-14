@@ -2,7 +2,7 @@
     <split-panel-view
         data-component="eeg-viewer"
         orientation="vertical"
-        :primary-size-bounds="['75px', '20%']"
+        :primary-size-bounds="bottomSlotBounds"
         primary-slot="end"
         :primary-start-size="navigatorHeight"
         @resize="handleNavigatorResize"
@@ -203,18 +203,38 @@
             </split-panel-view>
         </template>
         <template v-slot:end>
-            <eeg-navigator ref="navigator"
-                class="navigator"
-                :cursorPos="cursors?.mainCursorPos || 0"
-                :height="navigatorHeight"
-                :selectionBound="selectionBound"
-                :visibleRange="visibleRange"
-                :width="viewerSize[0]"
-                v-on:loaded="resizeElements"
-                v-on:backward="goBackward"
-                v-on:forward="goForward"
-                v-on:navigation="handlePlotNavigation"
-            />
+            <div class="bottom-stack">
+                <!-- Mount the trend strip whenever the user has toggled it on, regardless of
+                     whether there is currently enough space to show it. Toggling visibility via
+                     `v-if` from `effectiveTrendVisible` here creates a layout feedback loop:
+                     unmounting changes the bottom slot's intrinsic content size, wa-split-panel
+                     re-emits `wa-reposition`, `handleNavigatorResize` writes back into
+                     `navigatorHeight`, the threshold check flips again, and the component remounts
+                     — repeating forever. Using flex-basis 0 when the strip is "effectively
+                     hidden" keeps it mounted but visually collapsed. -->
+                <eeg-trend v-if="trendVisible"
+                    v-show="effectiveTrendVisible"
+                    class="trend"
+                    :displayMode="effectiveTrendDisplayMode"
+                    :height="effectiveTrendVisible ? trendHeight : 0"
+                    :style="{ flex: `0 0 ${effectiveTrendVisible ? trendHeight : 0}px` }"
+                    :visibleRange="visibleRange"
+                    :width="viewerSize[0]"
+                />
+                <eeg-navigator ref="navigator"
+                    class="navigator"
+                    :cursorPos="cursors?.mainCursorPos || 0"
+                    :height="actualNavigatorHeight"
+                    :selectionBound="selectionBound"
+                    :style="{ flex: `0 0 ${actualNavigatorHeight}px` }"
+                    :visibleRange="visibleRange"
+                    :width="viewerSize[0]"
+                    v-on:loaded="resizeElements"
+                    v-on:backward="goBackward"
+                    v-on:forward="goForward"
+                    v-on:navigation="handlePlotNavigation"
+                />
+            </div>
         </template>
     </split-panel-view>
 </template>
@@ -259,6 +279,7 @@ import EegAnalysisTools from './overlays/EegAnalysisTools.vue'
 import EegChannelProperties from './overlays/EegChannelProperties.vue'
 import EegNavigator from './EegNavigator.vue'
 import EegPlot from './EegPlot.vue'
+import EegTrend from './EegTrend.vue'
 import PlotYAxis from '#app/views/biosignal/plots/PlotYAxis.vue'
 import SplitPanelView from '#root/src/app/views/SplitPanelView.vue'
 import TimescaleGrid from '#app/views/biosignal/overlays/TimescaleGrid.vue'
@@ -289,6 +310,7 @@ export default defineComponent({
         EegChannelProperties,
         EegNavigator,
         EegPlot,
+        EegTrend,
         PlotYAxis,
         SplitPanelView,
         TimescaleGrid,
@@ -333,6 +355,13 @@ export default defineComponent({
         const montageSetupDone = ref(false)
         const pointerDownPoint = reactive({ x: NUMERIC_ERROR_VALUE, y: NUMERIC_ERROR_VALUE })
         const navigatorHeight = ref(75)
+        // Trend strip lives stacked above the navigator inside the same split-panel end slot.
+        // Sizes are coordinated by a few breakpoint constants:
+        //   - NAVIGATOR_MIN_HEIGHT (75): natural navigator strip height
+        //   - TREND_MIN_HEIGHT (40): below this, trend auto-hides; navigator takes full slot
+        //   - TREND_SUPERIMPOSE_HEIGHT (80): below this, trend forces 'superimposed' display
+        //   - TREND_DEFAULT_HEIGHT (150): extra space added to bottom slot when trend toggles on
+        const trendVisible = ref(false)
         const nextAnimationFrame = 0
         const onnxContinue = ref(false)
         const onnxHighlights = reactive([] as SignalHighlight[])
@@ -492,6 +521,7 @@ export default defineComponent({
             sidebarTab,
             sidebarWidth,
             plotSelections,
+            trendVisible,
             viewRange,
             viewReady,
             yAxisWidth,
@@ -550,6 +580,15 @@ export default defineComponent({
         },
     },
     computed: {
+        /** Bottom split-panel slot bounds (navigator + optional trend). When the trend is hidden
+         *  the navigator is the only occupant and the layout doesn't support a resizable
+         *  compartment — pin min === max so the divider becomes a no-op (handled by
+         *  `SplitPanelView` via wa-split-panel's `disabled` and a hidden divider). */
+        bottomSlotBounds (): [string, string] {
+            return this.trendVisible
+                ? ['75px', '40%']
+                : ['75px', '75px']
+        },
         isOnlyMenuChannelActive (): boolean {
             if (this.menuChannel) {
                 const activeChans = (this.RESOURCE.activeMontage?.channels || []).filter(c => c?.isActive)
@@ -567,6 +606,32 @@ export default defineComponent({
             return this.RESOURCE.annotationsLocked
                 ? ['events']
                 : ['create', 'events']
+        },
+        /** Height the trend strip would receive given the current bottom-slot size. */
+        trendHeight (): number {
+            return Math.max(0, this.navigatorHeight - 75)
+        },
+        /** Whether the trend strip is shown right now. Even when `trendVisible` is true, the strip
+         *  collapses when the user drags the bottom slot below the navigator + min trend height. */
+        effectiveTrendVisible (): boolean {
+            return this.trendVisible && this.trendHeight >= 40
+        },
+        /** When the user compresses the strip below 2× the minimum (80 px), force the
+         *  superimposed mode regardless of the configured display mode so all bands stay visible. */
+        effectiveTrendDisplayMode (): 'separate' | 'superimposed' | null {
+            if (!this.effectiveTrendVisible) {
+                return null
+            }
+            if (this.trendHeight < 80) {
+                return 'superimposed'
+            }
+            return null
+        },
+        /** Height to pass to the navigator. When the trend is hidden, the navigator owns the full
+         *  bottom slot; when the trend is visible, the navigator stays at its 75 px minimum and
+         *  the trend takes the rest. */
+        actualNavigatorHeight (): number {
+            return this.effectiveTrendVisible ? 75 : this.navigatorHeight
         },
     },
     methods: {
@@ -1103,6 +1168,42 @@ export default defineComponent({
                 this.$store.dispatch('eeg.set-cursor-tool', tool)
             }
         },
+        /**
+         * Toggle the trend strip and resize the bottom split-panel slot accordingly. Toggling on
+         * expands the slot by `TREND_DEFAULT_HEIGHT` (150 px) so the trend has room; toggling off
+         * snaps the slot back to the navigator's natural 75 px (per user preference — simpler
+         * model than remembering the dragged size).
+         */
+        setTrendVisible (visible: boolean) {
+            if (this.trendVisible === visible) {
+                return
+            }
+            this.trendVisible = visible
+            // Suppress `handleNavigatorResize`'s writeback during the wa-split-panel transition.
+            // Without this, wa-split-panel emits `wa-reposition` with intermediate / stale
+            // offsetHeight values while it animates the divider, those values get written back
+            // into `navigatorHeight`, our reactive cascade fires again, the split panel transitions
+            // again, etc. — a feedback loop with ~250 ms per iteration (drawTrends iterating the
+            // accumulated trend signal). 400 ms is generous for the transition to settle.
+            this.suppressResizeFor(400)
+            if (visible) {
+                // Default to 75 + 150 = 225 unless the user has already dragged the slot wider.
+                if (this.navigatorHeight < 75 + 150) {
+                    this.navigatorHeight = 75 + 150
+                }
+                // On-demand trend setup: when `aeeg.autoCompute` is false (the default), the
+                // recording defers trend instantiation until something asks for it. Toggling
+                // the strip visible IS that ask. `ensureAeegTrendSetup` is a no-op when the
+                // trend already exists for the active montage, so repeated toggles are cheap;
+                // it also handles the case of caching not yet complete by queueing the request
+                // for the `SIGNAL_CACHING_COMPLETE` event.
+                const resource = this.RESOURCE as unknown as { ensureAeegTrendSetup?: () => void }
+                resource.ensureAeegTrendSetup?.()
+            } else {
+                this.navigatorHeight = 75
+            }
+            this.$nextTick(() => this.resizeElements())
+        },
         toggleReport (state?: boolean) {
             const isActive = this.$interface.store.modules.get('eeg')!.isReportOpen
             if (isActive && !state) {
@@ -1269,6 +1370,10 @@ export default defineComponent({
                 this.reportWindow.open = action.payload
             } else if (action.type === 'eeg.set-open-sidebar') {
                 this.sidebarOpen = action.payload
+            } else if (action.type === 'eeg.set-trend-visible') {
+                this.setTrendVisible(action.payload as boolean)
+            } else if (action.type === 'eeg.toggle-trend-visible') {
+                this.setTrendVisible(!this.trendVisible)
             } else if (action.type === 'undo-action') {
                 this.undoAction()
             }
@@ -1408,4 +1513,19 @@ export default defineComponent({
             background-color: var(--epicv-background);
             opacity: 30%;
         }
+.bottom-stack {
+    /* Explicit pixel flex basis is bound inline via :style on each child (trend / navigator) —
+       this is the only way to guarantee the two strips don't overlap when wa-split-panel's
+       layout update lags behind the prop change. The CSS here only sets the layout direction. */
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+}
+    .bottom-stack > .trend,
+    .bottom-stack > .navigator {
+        min-height: 0;
+        overflow: hidden;
+    }
 </style>

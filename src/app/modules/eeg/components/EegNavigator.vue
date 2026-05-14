@@ -21,6 +21,11 @@
                 :width="canvasWidth"
                 @dblclick="handleNavigatorDblClick"
             ></canvas>
+            <canvas ref="viewbox"
+                :height="canvasHeight"
+                style="pointer-events: none;"
+                :width="canvasWidth"
+            ></canvas>
             <navigator-timeline
                 :duration="RESOURCE.totalDuration"
                 :startTime="getTimeAtPosition(0)"
@@ -151,6 +156,7 @@ export default defineComponent({
         const isTouchScreen = 'ontouchstart' in window || window.navigator.maxTouchPoints > 0
         const isControlsOpen = ref(isTouchScreen) // Controls are open by default on touch devices.
         const navigator = ref<HTMLCanvasElement>() as Ref<HTMLCanvasElement>
+        const viewbox = ref<HTMLCanvasElement>() as Ref<HTMLCanvasElement>
         const timeValue = reactive([] as string[])
         const unsubscribe = ref(null as (() => void) | null)
         return {
@@ -158,6 +164,7 @@ export default defineComponent({
             isControlsOpen,
             navigator,
             timeValue,
+            viewbox,
             // Unsubscribers
             unsubscribe,
             ...useEegContext(useStore(), 'EegNavigator'),
@@ -213,7 +220,8 @@ export default defineComponent({
             this.drawNavigator()
         },
         visibleRange () {
-            this.drawNavigator()
+            // Only the viewbox width depends on visibleRange — no need to redraw the main canvas.
+            this.drawViewbox()
         },
         width () {
             this.$nextTick(() => {
@@ -381,9 +389,33 @@ export default defineComponent({
                 context.fillStyle = settingsColorToRgba(this.SETTINGS.navigator.interruptionColor)
                 context.fillRect(xPos, 0, xLen || 1, this.navigator.height)
             }
-            // Draw viewbox
+            // Viewbox is drawn on a separate overlay canvas via drawViewbox().
+            this.drawViewbox()
+        },
+        /**
+         * Draw the view-position marker on its own overlay canvas. Light enough to repaint on every
+         * scroll without re-rendering the heavy `drawNavigator` content.
+         */
+        drawViewbox () {
+            const canvas = this.viewbox
+            if (!canvas) {
+                return
+            }
+            const context = canvas.getContext('2d')
+            if (!context) {
+                return
+            }
+            context.clearRect(0, 0, this.canvasWidth, this.canvasHeight)
+            const totalDuration = this.RESOURCE.totalDuration
+            if (!totalDuration) {
+                return
+            }
+            const durWidth = canvas.width/totalDuration
             const viewStart = this.RESOURCE.viewStart
-            const viewLen = Math.min(this.visibleRange, this.RESOURCE.totalDuration - this.RESOURCE.viewStart)
+            const viewLen = Math.min(this.visibleRange, totalDuration - viewStart)
+            if (viewLen <= 0) {
+                return
+            }
             context.fillStyle = settingsColorToRgba(this.SETTINGS.navigator.viewBoxColor)
             context.fillRect(
                 Math.round(viewStart*durWidth),
@@ -529,7 +561,9 @@ export default defineComponent({
         this.RESOURCE.onPropertyChange('activeMontage', this.montageChanged, this.ID)
         this.RESOURCE.onPropertyChange('events', this.drawNavigator, this.ID)
         this.RESOURCE.onPropertyChange('interruptions', this.drawNavigator, this.ID)
-        this.RESOURCE.onPropertyChange('displayViewStart', this.drawNavigator, this.ID)
+        // View-position changes only repaint the lightweight viewbox overlay layer (separate
+        // canvas) so scrolling doesn't trigger the full navigator redraw.
+        this.RESOURCE.onPropertyChange('displayViewStart', this.drawViewbox, this.ID)
         this.RESOURCE.onPropertyChange('signalCacheStatus', this.drawNavigator, this.ID)
         this.RESOURCE.activeMontage?.onPropertyChange('highlights', this.updateHighlights, this.ID)
         // Trigger element resize in parent component once this component is done loading
@@ -589,7 +623,15 @@ export default defineComponent({
 .timeline {
     flex: 1 1 auto;
     padding-top: 10px;
+    position: relative;
 }
+    /* Stack the viewbox layer over the main navigator canvas so view-position scrolls only
+       repaint the lightweight overlay (same pattern as EmgNavigator). */
+    .timeline > canvas + canvas {
+        position: absolute;
+        top: 10px;
+        left: 0;
+    }
 .controls {
     bottom: 20px;
     display: flex;

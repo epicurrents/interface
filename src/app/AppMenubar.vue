@@ -18,9 +18,9 @@
                 <template v-for="(item, idy) in menu.items"
                     :key="`epicv-${$store.state.APP.id}-menubar-menu-${idx}-item-${idy}`"
                 >
-                    <h2 v-if="item.type === 'header'">{{ item.label }}</h2>
-                    <wa-divider v-else-if="item.type === 'divider'"></wa-divider>
-                    <wa-dropdown-item v-else
+                    <h2 v-if="item.type === 'header' && item.visible !== false">{{ item.label }}</h2>
+                    <wa-divider v-else-if="item.type === 'divider' && item.visible !== false"></wa-divider>
+                    <wa-dropdown-item v-else-if="item.type !== 'header' && item.type !== 'divider' && item.visible !== false"
                         :data-keep-open="item.keepOpen ? 'true' : undefined"
                         :disabled="item.enabled === false"
                         :type="item.checkbox ? 'checkbox' : ''"
@@ -38,25 +38,36 @@
                             class="suffix"
                             :name="getItemProperty(item, 'suffix')"
                         ></app-icon>
-                        <wa-dropdown-item v-for="(subItem, _idz) in item.items"
+                        <template v-for="(subItem, _idz) in item.items"
                             :key="`epicv-${$store.state.APP.id}-menubar-menu-${idx}-submenu-${idy}-item-${_idz}`"
-                            :data-keep-open="subItem.keepOpen ? 'true' : undefined"
-                            :disabled="subItem.enabled === false"
-                            slot="submenu"
-                            :type="subItem.checkbox ? 'checkbox' : ''"
-                            @click="() => subItem.enabled ? subItem.onclick() : null"
                         >
-                            <app-icon v-if="subItem.icon"
-                                :empty="!getItemProperty(subItem, 'icon')"
-                                :name="getItemProperty(subItem, 'icon')"
-                                slot="icon"
-                            ></app-icon>
-                            {{ getItemProperty(subItem, 'label') }}
-                            <app-icon v-if="subItem.suffix"
-                                class="suffix"
-                                :name="getItemProperty(subItem, 'suffix')"
-                            ></app-icon>
-                        </wa-dropdown-item>
+                            <h2 v-if="subItem.type === 'header' && subItem.visible !== false"
+                                slot="submenu"
+                            >
+                                {{ subItem.label }}
+                            </h2>
+                            <wa-divider v-else-if="subItem.type === 'divider' && subItem.visible !== false"
+                                slot="submenu"
+                            ></wa-divider>
+                            <wa-dropdown-item v-else-if="subItem.type !== 'header' && subItem.type !== 'divider' && subItem.visible !== false"
+                                :data-keep-open="subItem.keepOpen ? 'true' : undefined"
+                                :disabled="subItem.enabled === false"
+                                slot="submenu"
+                                :type="subItem.checkbox ? 'checkbox' : ''"
+                                @click="() => subItem.enabled ? subItem.onclick() : null"
+                            >
+                                <app-icon v-if="subItem.icon"
+                                    :empty="!getItemProperty(subItem, 'icon')"
+                                    :name="getItemProperty(subItem, 'icon')"
+                                    slot="icon"
+                                ></app-icon>
+                                {{ getItemProperty(subItem, 'label') }}
+                                <app-icon v-if="subItem.suffix"
+                                    class="suffix"
+                                    :name="getItemProperty(subItem, 'suffix')"
+                                ></app-icon>
+                            </wa-dropdown-item>
+                        </template>
                     </wa-dropdown-item>
                 </template>
         </wa-dropdown>
@@ -107,7 +118,6 @@ import { T } from "#i18n"
 // Import this synchronously
 import { MenuItem, MenubarItem } from "#types/interface"
 import { EpiCStore } from "#store"
-import { applicationViews } from '#config'
 
 type FileContext = {
     modalities: string[],
@@ -361,30 +371,6 @@ export default defineComponent({
                 items: [
                     {
                         type: 'header',
-                        label: T('View', 'AppMenubar'),
-                    },
-                    ...applicationViews.entries()
-                                        // Only display views that are available for use.
-                                       .filter(([key, _context]) => APP.view.name === key)
-                                       .map(([key, context]) => {
-                        return {
-                            icon: ['', 'check'],
-                            id: key,
-                            enabled: false,
-                            label: T(context.label, 'AppMenubar'),
-                            selected: APP.view.name === key,
-                            reloadOn: [
-                                ['set-active-resource', 'set-view'],
-                                (item: MenuItem) => {
-                                    const viewName = applicationViews.entries()
-                                                                     .find(([k, _]) => k === APP.view.name)?.[1].label
-                                    item.label = T(viewName || 'Default', 'AppMenubar')
-                                }
-                            ],
-                        } as Partial<MenuItem>
-                    }),
-                    {
-                        type: 'header',
                         label: T('Components', 'AppMenubar'),
                     },
                     {
@@ -441,6 +427,77 @@ export default defineComponent({
                             }
                         ],
                     },
+                    // ── Biosignal — visible only when the biosignal view is active. ──────────
+                    // Header + items are toggled via `visible`; reloadOn flips them on `set-view`.
+                    {
+                        type: 'header',
+                        label: T('Biosignal', 'AppMenubar'),
+                        visible: APP.view.name === 'biosignal',
+                        reloadOn: [
+                            ['set-view'],
+                            (item: MenuItem) => {
+                                item.visible = APP.view.name === 'biosignal'
+                            }
+                        ],
+                    },
+                    {
+                        // Trends submenu. Top child toggles the strip's visibility; the rest is a
+                        // radio-style picker for the trend TYPE displayed inside it. Only `aeeg`
+                        // is implemented today; new types are added by appending entries below
+                        // and dispatching `eeg.set-selected-trend` with their id. The submenu
+                        // itself follows the standard reloadOn pattern to hide outside the
+                        // biosignal view.
+                        id: 'trends',
+                        type: 'menu',
+                        enabled: true,
+                        label: T('Trends', 'AppMenubar'),
+                        visible: APP.view.name === 'biosignal',
+                        reloadOn: [
+                            ['set-view'],
+                            (item: MenuItem) => {
+                                item.visible = APP.view.name === 'biosignal'
+                            }
+                        ],
+                        items: [
+                            {
+                                icon: ['', 'check'],
+                                id: 'trend-strip',
+                                enabled: true,
+                                keepOpen: true,
+                                label: T('Display trend', 'AppMenubar'),
+                                onclick: () => store.dispatch('eeg.toggle-trend-visible'),
+                                // `AppStore.addModule` forwards the runtime's `trendVisible` onto
+                                // `INTERFACE.modules.get('eeg')` as a live getter, so this read
+                                // always reflects the current state.
+                                selected: (store.state.INTERFACE as { modules: Map<string, { trendVisible?: boolean }> }).modules.get('eeg')?.trendVisible === true,
+                                reloadOn: [
+                                    ['eeg.set-trend-visible', 'eeg.toggle-trend-visible'],
+                                    (item: MenuItem) => {
+                                        item.selected = (store.state.INTERFACE as { modules: Map<string, { trendVisible?: boolean }> }).modules.get('eeg')?.trendVisible === true
+                                    }
+                                ],
+                            },
+                            {
+                                type: 'header',
+                                label: T('Trends', 'AppMenubar'),
+                            },
+                            {
+                                icon: ['', 'check'],
+                                id: 'trend-aeeg',
+                                enabled: true,
+                                keepOpen: true,
+                                label: T('aEEG', 'AppMenubar'),
+                                onclick: () => store.dispatch('eeg.set-selected-trend', 'aeeg'),
+                                selected: (store.state.INTERFACE as { modules: Map<string, { selectedTrend?: string }> }).modules.get('eeg')?.selectedTrend === 'aeeg',
+                                reloadOn: [
+                                    ['eeg.set-selected-trend'],
+                                    (item: MenuItem) => {
+                                        item.selected = (store.state.INTERFACE as { modules: Map<string, { selectedTrend?: string }> }).modules.get('eeg')?.selectedTrend === 'aeeg'
+                                    }
+                                ],
+                            },
+                        ],
+                    },
                 ] as Partial<MenuItem>[],
                 iteration: 0,
                 label: T('Display', 'AppMenubar'),
@@ -490,7 +547,8 @@ export default defineComponent({
                 open: false,
             },
         ] as MenubarItem[]
-            ////////////////      DOT MENU      /////////////////
+        console.log(store.state)
+        ////////////////      DOT MENU      /////////////////
         const options = reactive({
             anchor: 'right',
             enabled: true,
@@ -535,15 +593,24 @@ export default defineComponent({
         componentVisible: {
             deep: true,
             handler (value) {
-                // Update display menu item properties if visible elements change
+                // Update display menu item properties if visible elements change. Skip items
+                // whose id isn't a key in `componentVisible` (e.g. `trend-strip` manages its
+                // own `selected` state via the item's `reloadOn` callback against
+                // `INTERFACE.modules.get('eeg').trendVisible`) — otherwise this watcher would
+                // overwrite their `item.selected` with `undefined` whenever any other component
+                // visibility toggles.
                 for (const menu of this.menubarItems) {
-                    if (menu.id === 'display') {
-                        for (const item of menu.items as MenuItem[]) {
-                            // This requires a tiny timeout to work, $nextTick won't do!
-                            window.setTimeout((() =>
-                                item.selected = value[item.id]
-                            ), 1)
+                    if (menu.id !== 'display') {
+                        continue
+                    }
+                    for (const item of menu.items as MenuItem[]) {
+                        if (!(item.id in value)) {
+                            continue
                         }
+                        // This requires a tiny timeout to work, $nextTick won't do!
+                        window.setTimeout((() =>
+                            item.selected = value[item.id]
+                        ), 1)
                     }
                 }
             }
@@ -593,6 +660,29 @@ export default defineComponent({
                    ? prop[item.selected ? 1 : 0]
                    : prop
         },
+        /**
+         * Fire every menu item's `reloadOn` callback whose trigger list contains `triggerType`.
+         * Recurses into `item.items` so sub-menu items (e.g. the Trends → aEEG selection radio
+         * entry) react to broadcast actions/mutations even though only top-level items live
+         * directly under `visibleMenus`.
+         */
+        _dispatchReload (triggerType: string) {
+            const visit = (item: MenuItem) => {
+                if (item.reloadOn && item.reloadOn[0].includes(triggerType)) {
+                    item.reloadOn[1](item)
+                }
+                if (item.items?.length) {
+                    for (const sub of item.items as MenuItem[]) {
+                        visit(sub)
+                    }
+                }
+            }
+            for (const menu of this.visibleMenus) {
+                for (const item of menu.items) {
+                    visit(item as MenuItem)
+                }
+            }
+        },
         handleItemSelect (event: CustomEvent) {
             const selectedItem = event.detail.item as HTMLElement
             // Check if the selected item has a 'keepOpen' property.
@@ -639,28 +729,35 @@ export default defineComponent({
     },
     mounted () {
         // Subscribe to store actions
-        this.unsubscribeActions = this.$store.subscribeAction((action) => {
-            if (action.type === 'pointer-left-app' || action.type === 'overlay-clicked') {
-                // Close all open menus when pointer leaves the app area or the overlay is clicked
-                for (const menu of this.menubarItems) {
-                    if (menu.open) {
-                        menu.open = false
+        // Two-phase subscription: the menu-close handling runs BEFORE the action handler (its
+        // outcome is independent of state mutations), while the `reloadOn` dispatch runs AFTER
+        // so that callbacks reading the toggled state (e.g. `INTERFACE.modules.get('eeg').trendVisible`
+        // for the trend-strip tick) see the new value. Vuex's default `subscribeAction(handler)`
+        // fires `before`, which made the tick lag one click behind the actual state.
+        this.unsubscribeActions = this.$store.subscribeAction({
+            before: (action) => {
+                if (action.type === 'pointer-left-app' || action.type === 'overlay-clicked') {
+                    // Close all open menus when pointer leaves the app area or the overlay is clicked
+                    for (const menu of this.menubarItems) {
+                        if (menu.open) {
+                            menu.open = false
+                        }
                     }
+                    this.options.open = false
                 }
-                this.options.open = false
-            }
+            },
+            after: (action) => {
+                // Let menu items react to action types — some modules (e.g. EEG) toggle their
+                // runtime state via broadcast actions rather than mutations. Firing `after` the
+                // action handler ensures the reloadOn callback reads the post-toggle state.
+                this._dispatchReload(action.type)
+            },
         })
         // Subscribe to store mutations
         this.unsubscribeMutations = this.$store.subscribe((mutation) => {
             if (mutation.type === 'set-fullscreen' || mutation.type === 'toggle-expand-viewer') {
             } else {
-                for (const menu of this.visibleMenus) {
-                    for (const item of menu.items) {
-                        if (item.reloadOn && item.reloadOn[0].includes(mutation.type)) {
-                            item.reloadOn[1](item)
-                        }
-                    }
-                }
+                this._dispatchReload(mutation.type)
             }
         })
     },
@@ -709,11 +806,23 @@ export default defineComponent({
     .button::part(caret) {
         margin-inline-start: 0.5em;
     }
-    [data-component="app-menubar"] h2 {
+    [data-component="app-menubar"] :deep(h2) {
             height: 1.25rem;
             line-height: 1rem;
-            font-size: 0.8rem;
-            margin: 0;
+        }
+        /* Headers slotted into a wa-dropdown-item's submenu don't get the styling that
+           wa-dropdown applies to headers in its own #menu slot (its shadow CSS has
+           `#menu ::slotted(h1..h6) { ... }`, but wa-dropdown-item has no equivalent rule).
+           Replicate that ruleset here so submenu section headers look identical to the
+           top-level Display-menu headers ("Biosignal", "Components", etc.). */
+        [data-component="app-menubar"] :deep(wa-dropdown-item > h2) {
+            display: block !important;
+            margin: 0.25em 0 !important;
+            padding: 0.25em 0.75em !important;
+            color: var(--wa-color-text-quiet);
+            font-family: var(--wa-font-family-body) !important;
+            font-weight: var(--wa-font-weight-semibold) !important;
+            font-size: var(--wa-font-size-smaller) !important;
         }
         [data-component="app-menubar"] wa-dropdown-item {
             height: 1.75rem;
@@ -721,6 +830,10 @@ export default defineComponent({
             font-size: 0.8rem;
             padding: 0 0.7rem;
         }
+            [data-component="app-menubar"] wa-dropdown-item::part(submenu) {
+                /* Reset font size to preserve styles in submenus. */
+                font-size: 1rem;
+            }
         [data-component="app-menubar"] wa-dropdown-item::part(checked-icon) {
             width: 1.25rem;
         }

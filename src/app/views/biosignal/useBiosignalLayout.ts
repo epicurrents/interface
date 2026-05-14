@@ -117,9 +117,46 @@ export function useBiosignalLayout (
         }
     }
 
+    /**
+     * Timestamp (performance.now()) until which `handleNavigatorResize` should ignore incoming
+     * resize events. Used to suppress the wa-split-panel ↔ navigatorHeight feedback loop that
+     * happens around programmatic updates: setting `navigatorHeight` causes wa-split-panel to
+     * emit `wa-reposition` with intermediate / stale `offsetHeight` values during its layout
+     * transition, which would otherwise be written back into `navigatorHeight` and ping-pong.
+     */
+    let suppressResizeUntil = 0
+    function suppressResizeFor (durationMs: number) {
+        suppressResizeUntil = performance.now() + durationMs
+    }
     function handleNavigatorResize (value: { start: number, end: number }) {
+        const current = navigatorHeight?.value ?? 0
+        const next = value.end
+        // eslint-disable-next-line no-console
+        console.log(`[trend-debug] handleNavigatorResize end=${next} (was ${current}) suppressed=${performance.now() < suppressResizeUntil}`)
+        if (performance.now() < suppressResizeUntil) {
+            return
+        }
+        // Reject non-finite or non-positive values. wa-split-panel can transiently report
+        // NaN/Infinity (e.g. during initial connectedCallback before the host element is
+        // laid out and size=0) or 0/negative (user dragged the divider past the min clamp
+        // — the CSS clamp keeps the displayed slot at min, but the internal positionInPixels
+        // is unclamped). Letting either propagate into navigatorHeight breaks the plot
+        // dimensions computation (`plotDimensions[1] = viewerSize - navigatorHeight`).
+        if (!Number.isFinite(next) || next <= 0) {
+            return
+        }
+        // Ignore sub-pixel oscillations only. `SplitPanelView.handleDividerMove` reads the
+        // wa-split-panel's `positionInPixels` directly (authoritative live value, not the
+        // post-event-pre-render `offsetHeight`), so the value we receive matches what
+        // wa-split-panel actually stored. Float-precision round-trips (size → percentage →
+        // size) can still produce sub-pixel deltas, but real user drags move by at least one
+        // whole pixel per event, so a sub-pixel threshold filters echoes without blocking the
+        // smallest legitimate drag step.
+        if (Math.abs(next - current) < 0.5) {
+            return
+        }
         if (navigatorHeight) {
-            navigatorHeight.value = value.end
+            navigatorHeight.value = next
         }
         resizeElements()
     }
@@ -138,6 +175,7 @@ export function useBiosignalLayout (
         pxPerSecond,
         resizeElements,
         selectionStyles,
+        suppressResizeFor,
         visibleRange,
     }
 }

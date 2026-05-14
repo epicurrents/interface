@@ -1,6 +1,7 @@
 <template>
     <wa-split-panel
         class="split-panel-view"
+        :disabled="isPrimaryFixed"
         :orientation="orientation"
         :position-in-pixels="primarySize"
         :primary="primarySlot"
@@ -84,6 +85,20 @@ export default defineComponent({
                 this.handleDividerMove()
             })
         },
+        primaryStartSize (value: number) {
+            // Mirror prop → internal ref so wa-split-panel re-renders its position when the
+            // parent drives the divider programmatically (e.g. EegViewer expanding the bottom
+            // slot when the trend strip is toggled on). Echo filtering is handled in the parent
+            // (`handleNavigatorResize` in `useBiosignalLayout.ts`) rather than here: when
+            // wa-split-panel fires `wa-reposition` it dispatches the event SYNCHRONOUSLY inside
+            // its `handlePositionChange` watcher, before the LitElement render() runs — meaning
+            // `this.end.offsetHeight` in `handleDividerMove` can return the pre-render layout
+            // value. If we filtered against that stale value, a programmatic toggle on/off
+            // sequence would poison `lastEmittedSize` to the pre-toggle slot size and the next
+            // legitimate update would be rejected as an echo. Trusting the parent filter (which
+            // only blocks 1-pixel deltas against the live `navigatorHeight`) avoids the trap.
+            this.primarySize = value
+        },
         secondaryOpen () {
             this.$nextTick(() => {
                 this.handleDividerMove()
@@ -91,20 +106,25 @@ export default defineComponent({
         },
     },
     computed: {
+        /** Primary slot has equal min and max — the divider would be a visual no-op, so hide
+         *  it entirely and pass `disabled` through to wa-split-panel. */
+        isPrimaryFixed (): boolean {
+            return this.primarySizeBounds[0] === this.primarySizeBounds[1]
+        },
         dividerCursor (): string  {
-            if (!this.primaryOpen || !this.secondaryOpen) {
+            if (!this.primaryOpen || !this.secondaryOpen || this.isPrimaryFixed) {
                 return 'default'
             }
             return this.orientation === 'vertical' ? 'row-resize' : 'col-resize'
         },
         dividerOpacity (): string  {
-            if (!this.primaryOpen || !this.secondaryOpen) {
+            if (!this.primaryOpen || !this.secondaryOpen || this.isPrimaryFixed) {
                 return '0'
             }
             return '1'
         },
         dividerUserSelect (): string  {
-            if (!this.primaryOpen || !this.secondaryOpen) {
+            if (!this.primaryOpen || !this.secondaryOpen || this.isPrimaryFixed) {
                 return 'none'
             }
             return 'auto'
@@ -157,13 +177,29 @@ export default defineComponent({
                 // Components have not loaded yet.
                 return
             }
-            // Split panel keeps sending resize events even after resize limit has been reached, so we can't use the
-            // position from the event, we have to check the actual element sizes.
-            const dimensions = {
-                start: this.orientation === 'vertical' ? this.start.offsetHeight : this.start.offsetWidth,
-                end: this.orientation === 'vertical' ? this.end.offsetHeight : this.end.offsetWidth,
-            }
-            this.$emit('resize', dimensions)
+            // wa-split-panel emits `wa-reposition` SYNCHRONOUSLY inside `handlePositionChange`,
+            // before LitElement's render() applies the new grid-template style. Reading
+            // `offsetHeight`/`offsetWidth` at that moment returns the previous frame's layout,
+            // which leads to the 2-pixel oscillation during drag. Reading the wa-split-panel's
+            // own `positionInPixels` is live but unclamped — it stores the user's drag target
+            // even when the CSS `clamp(var(--min), …, var(--max))` keeps the displayed slot at
+            // a bounded value, so propagating it would let `navigatorHeight` grow past the
+            // configured maximum.
+            //
+            // The cleanest fix is to wait one animation frame: by then LitElement has rendered,
+            // CSS layout has applied the clamp, and `offsetHeight` reflects the actual
+            // displayed slot size. The 1-frame lag is below perceptible threshold for resize
+            // feedback.
+            requestAnimationFrame(() => {
+                if (!this.start || !this.end) {
+                    return
+                }
+                const dimensions = {
+                    start: this.orientation === 'vertical' ? this.start.offsetHeight : this.start.offsetWidth,
+                    end: this.orientation === 'vertical' ? this.end.offsetHeight : this.end.offsetWidth,
+                }
+                this.$emit('resize', dimensions)
+            })
         },
     },
     beforeMount () {

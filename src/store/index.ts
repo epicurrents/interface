@@ -302,6 +302,27 @@ export default class AppStore implements InterfaceStoreManager {
             schemas: module.schemas,
             settings: module.settings,
         })
+        // Forward the runtime's data fields (primitives, objects, arrays) onto `modConfig` so
+        // consumers can read module-specific runtime state via
+        // `state.INTERFACE.modules.get(name)` alongside its config and schemas. Methods are
+        // excluded — they stay on the runtime object itself. Properties are installed as live
+        // getters that read the runtime so primitives like a boolean toggle reflect later
+        // action-handler mutations rather than freezing at registration time. The existing
+        // keys (`schemas`/`settings`) take precedence over any runtime key with the same name.
+        const runtimeRecord = module.runtime as unknown as Record<string, unknown>
+        for (const key of Object.keys(runtimeRecord)) {
+            if (typeof runtimeRecord[key] === 'function') {
+                continue
+            }
+            if (key in modConfig) {
+                continue
+            }
+            Object.defineProperty(modConfig, key, {
+                get: () => runtimeRecord[key],
+                enumerable: true,
+                configurable: true,
+            })
+        }
         if (module.settings) {
             (state.INTERFACE as InterfaceSettings).modules.set(name, modConfig)
         }

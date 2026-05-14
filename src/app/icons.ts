@@ -34,6 +34,7 @@ import create_new_folder from '@material-symbols/svg-400/outlined/create_new_fol
 import dangerous from '@material-symbols/svg-400/outlined/dangerous.svg?raw'
 import delete_ from '@material-symbols/svg-400/outlined/delete.svg?raw'
 import description from '@material-symbols/svg-400/outlined/description.svg?raw'
+import directorySync from '@material-symbols/svg-400/outlined/directory_sync.svg?raw'
 import download from '@material-symbols/svg-400/outlined/download.svg?raw'
 import drag_indicator from '@material-symbols/svg-400/outlined/drag_indicator.svg?raw'
 import edit from '@material-symbols/svg-400/outlined/edit.svg?raw'
@@ -101,6 +102,7 @@ export const ICON_SVGS: Record<string, { outlined: string; filled?: string }> = 
     dangerous:                      { outlined: dangerous, filled: dangerous_filled },
     delete:                         { outlined: delete_ },
     description:                    { outlined: description },
+    directory_sync:                 { outlined: directorySync },
     download:                       { outlined: download },
     drag_indicator:                 { outlined: drag_indicator },
     edit:                           { outlined: edit },
@@ -156,6 +158,7 @@ const FA_TO_MATERIAL: Record<string, string> = {
     'arrows-from-dotted-line':          'unfold_more',
     'arrows-maximize':                  'fullscreen',
     'arrows-minimize':                  'fullscreen_exit',
+    'arrows-rotate':                    'directory_sync',
     'arrows-to-dotted-line':            'unfold_less',
     'backward-fast':                    'skip_previous',
     'bars':                             'menu',

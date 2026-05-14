@@ -66,6 +66,10 @@ export default defineConfig({
             keepNames: true,
         },
     },
+    // Classic worker format — see vite.config.ts for the rationale.
+    worker: {
+        format: 'iife',
+    },
     plugins: [
         tsconfigPaths(),
         vue({

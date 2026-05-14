@@ -29,10 +29,18 @@ enum EegActionTypes {
     SET_NOTCH_FILTER = 'eeg.set-notch-filter',
     SET_OPEN_SIDEBAR = 'eeg.set-open-sidebar',
     SET_REPORT_OPEN = 'eeg.set-report-open',
+    SET_SELECTED_TREND = 'eeg.set-selected-trend',
     SET_SENSITIVITY = 'eeg.set-sensitivity',
     SET_TIMEBASE = 'eeg.set-timebase',
+    SET_TREND_VISIBLE = 'eeg.set-trend-visible',
     TOGGLE_ANNOTATION_SIDEBAR = 'eeg.toggle-annotation-sidebar',
+    TOGGLE_TREND_VISIBLE = 'eeg.toggle-trend-visible',
 }
+
+/** Default trend type used when a new recording is opened. The set of available trend types is
+ *  hard-coded for now (aEEG is the only implementation); each new type adds an entry here and an
+ *  item to the Display → Trends submenu. */
+const DEFAULT_TREND = 'aeeg'
 
 export const actions = {
     [EegActionTypes.SET_ACTIVE_MONTAGE] (_injectee: ActionContext<State, State>, payload: number | string | null) {
@@ -56,6 +64,9 @@ export const actions = {
     [EegActionTypes.SET_REPORT_OPEN] (_injectee: ActionContext<State, State>, payload: boolean) {
         runtime.isReportOpen = payload
     },
+    [EegActionTypes.SET_SELECTED_TREND] (_injectee: ActionContext<State, State>, payload: string) {
+        runtime.selectedTrend = payload
+    },
     [EegActionTypes.SET_SENSITIVITY] (_injectee: ActionContext<State, State>, payload: number) {
         runtime.setPropertyValue('sensitivity', payload)
     },
@@ -63,8 +74,14 @@ export const actions = {
         runtime.setPropertyValue('timebase-unit', payload[0])
         runtime.setPropertyValue('timebase', payload[1])
     },
+    [EegActionTypes.SET_TREND_VISIBLE] (_injectee: ActionContext<State, State>, payload: boolean) {
+        runtime.trendVisible = payload
+    },
     [EegActionTypes.TOGGLE_ANNOTATION_SIDEBAR] (_injectee: ActionContext<State, State>, _payload: boolean | undefined ) {
         // This is merely a broadcast.
+    },
+    [EegActionTypes.TOGGLE_TREND_VISIBLE] (_injectee: ActionContext<State, State>, _payload: boolean | undefined ) {
+        runtime.trendVisible = !runtime.trendVisible
     },
 }
 
@@ -80,6 +97,8 @@ export const runtime = {
     cursorToolActive: null as string | null,
     isReportOpen: false,
     openSidebar: null as string | null,
+    selectedTrend: DEFAULT_TREND as string,
+    trendVisible: false,
     async applyConfiguration (config: EegModuleConfiguration) {
         // Epoch mode.
         if (config.epochMode?.enabled) {
@@ -162,6 +181,11 @@ export const runtime = {
 
         },
         created (resource: EegResource) {
+            // Reset per-resource UI state. The runtime is shared across recordings, so without
+            // this reset the trend-strip tick in the Display menu would persist from a previous
+            // recording even though the new recording hasn't had its trends set up yet.
+            runtime.trendVisible = false
+            runtime.selectedTrend = DEFAULT_TREND
             // Add extra setups to the resource.
             for (const setup of settings.extraSetups) {
                 resource.addSetup(setup)
@@ -188,6 +212,14 @@ export const runtime = {
     isReportOpen: boolean
     /** Name of the sidebar that is currently open, null if no sidebar is open. */
     openSidebar: string | null
+    /** Identifier of the currently selected trend type (e.g. `'aeeg'`). Single-selection — the
+     *  Display → Trends submenu enforces one-and-only-one. Reset to `DEFAULT_TREND` on new
+     *  recording. Currently only `'aeeg'` is implemented. */
+    selectedTrend: string
+    /** Whether the trend strip is currently shown. Toggled via `eeg.set-trend-visible` or
+     *  `eeg.toggle-trend-visible`. EegViewer also expands its split-panel bottom slot when this
+     *  flips on. */
+    trendVisible: boolean
 }
 
 /**
