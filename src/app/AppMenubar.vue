@@ -24,7 +24,7 @@
                         :data-keep-open="item.keepOpen ? 'true' : undefined"
                         :disabled="item.enabled === false"
                         :type="item.checkbox ? 'checkbox' : ''"
-                        @click="() => item.enabled ? item.onclick() : null"
+                        @click="() => item.enabled ? item.onclick?.() : null"
                         @wa-select="handleItemSelect"
                     >
                         <app-icon v-if="item.icon"
@@ -54,7 +54,7 @@
                                 :disabled="subItem.enabled === false"
                                 slot="submenu"
                                 :type="subItem.checkbox ? 'checkbox' : ''"
-                                @click="() => subItem.enabled ? subItem.onclick() : null"
+                                @click="() => subItem.enabled ? subItem.onclick?.() : null"
                             >
                                 <app-icon v-if="subItem.icon"
                                     :empty="!getItemProperty(subItem, 'icon')"
@@ -471,7 +471,7 @@ export default defineComponent({
                                 // always reflects the current state.
                                 selected: (store.state.INTERFACE as { modules: Map<string, { trendVisible?: boolean }> }).modules.get('eeg')?.trendVisible === true,
                                 reloadOn: [
-                                    ['eeg.set-trend-visible', 'eeg.toggle-trend-visible'],
+                                    ['eeg.set-trend-visible', 'eeg.toggle-trend-visible', 'set-active-resource'],
                                     (item: MenuItem) => {
                                         item.selected = (store.state.INTERFACE as { modules: Map<string, { trendVisible?: boolean }> }).modules.get('eeg')?.trendVisible === true
                                     }
@@ -493,6 +493,51 @@ export default defineComponent({
                                     ['eeg.set-selected-trend'],
                                     (item: MenuItem) => {
                                         item.selected = (store.state.INTERFACE as { modules: Map<string, { selectedTrend?: string }> }).modules.get('eeg')?.selectedTrend === 'aeeg'
+                                    }
+                                ],
+                            },
+                            {
+                                icon: ['', 'check'],
+                                id: 'trend-ratio',
+                                enabled: true,
+                                keepOpen: true,
+                                label: T('TAR / DAR / DTABR', 'AppMenubar'),
+                                onclick: () => store.dispatch('eeg.set-selected-trend', 'ratio'),
+                                selected: (store.state.INTERFACE as { modules: Map<string, { selectedTrend?: string }> }).modules.get('eeg')?.selectedTrend === 'ratio',
+                                reloadOn: [
+                                    ['eeg.set-selected-trend'],
+                                    (item: MenuItem) => {
+                                        item.selected = (store.state.INTERFACE as { modules: Map<string, { selectedTrend?: string }> }).modules.get('eeg')?.selectedTrend === 'ratio'
+                                    }
+                                ],
+                            },
+                            {
+                                icon: ['', 'check'],
+                                id: 'trend-pdbsi',
+                                enabled: true,
+                                keepOpen: true,
+                                label: T('pdBSI', 'AppMenubar'),
+                                onclick: () => store.dispatch('eeg.set-selected-trend', 'pdbsi'),
+                                selected: (store.state.INTERFACE as { modules: Map<string, { selectedTrend?: string }> }).modules.get('eeg')?.selectedTrend === 'pdbsi',
+                                reloadOn: [
+                                    ['eeg.set-selected-trend'],
+                                    (item: MenuItem) => {
+                                        item.selected = (store.state.INTERFACE as { modules: Map<string, { selectedTrend?: string }> }).modules.get('eeg')?.selectedTrend === 'pdbsi'
+                                    }
+                                ],
+                            },
+                            {
+                                icon: ['', 'check'],
+                                id: 'trend-spectrogram',
+                                enabled: true,
+                                keepOpen: true,
+                                label: T('Spectrogram', 'AppMenubar'),
+                                onclick: () => store.dispatch('eeg.set-selected-trend', 'spectrogram'),
+                                selected: (store.state.INTERFACE as { modules: Map<string, { selectedTrend?: string }> }).modules.get('eeg')?.selectedTrend === 'spectrogram',
+                                reloadOn: [
+                                    ['eeg.set-selected-trend'],
+                                    (item: MenuItem) => {
+                                        item.selected = (store.state.INTERFACE as { modules: Map<string, { selectedTrend?: string }> }).modules.get('eeg')?.selectedTrend === 'spectrogram'
                                     }
                                 ],
                             },

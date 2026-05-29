@@ -102,11 +102,27 @@ export function useBiosignalLayout (
         if (!readyRefs.plot.value || (readyRefs.navigator && !readyRefs.navigator.value)) {
             return
         }
-        plotDimensions.value = [
-            viewerSize.value[0] - resolvedXOffset.value,
-            viewerSize.value[1] - resolvedYOffset.value,
-        ]
+        // Bail until viewerSize is actually measured — otherwise plotDimensions
+        // becomes negative (subtracting xOffset/yOffset from 0) and the
+        // downstream `Math.max(0, plotDimensions[0])` clamps pxPerSecond to 0.
+        // The ResizeObserver on the host element will fire once it has a real
+        // size and trigger the viewerSize watcher, which calls back into here.
+        if (!viewerSize.value[0] || !viewerSize.value[1]) {
+            return
+        }
+        const newPlotW = viewerSize.value[0] - resolvedXOffset.value
+        const newPlotH = viewerSize.value[1] - resolvedYOffset.value
+        const horizontalChanged = plotDimensions.value[0] !== newPlotW
+        plotDimensions.value = [newPlotW, newPlotH]
         cursors.value?.updateCursors()
+        // Recompute pxPerSecond only when its actual dependency changed.
+        // In cmPerSec mode pxPerSecond is dimension-independent and is updated
+        // by separate triggers (cmPerSec / screenPPI mutations); calling it
+        // here would be misleading even though Vue would no-op the same-value
+        // write to the primitive ref.
+        if (secPerPage.value && horizontalChanged) {
+            calculatePxPerSecond()
+        }
     }
 
     function calculatePxPerSecond () {

@@ -158,8 +158,9 @@
             v-on:close="toggleDialog('reload', false)"
             v-on:wa-after-hide="toggleDialog('reload', false)"
         ></reload-dialog>
-        <log-dialog :class="applicationTheme"
-            :open="dialogs.log.open"
+        <log-dialog v-if="dialogs.log.open"
+            :class="applicationTheme"
+            open
             v-on:close="toggleDialog('log', false)"
             v-on:wa-after-hide="toggleDialog('log', false)"
         ></log-dialog>
@@ -784,8 +785,12 @@ export default defineComponent({
         window.addEventListener('blur', this.cancelHotkeyEvents, false)
         Log.addEventListener(['ERROR', 'WARN'], (level, event) => {
             if (event?.announce) {
+                // announce === true → use the log message verbatim; a string
+                // value provides a separate user-facing message so the log
+                // line can stay technical.
+                const text = typeof event.announce === 'string' ? event.announce : event.message
                 this.addCallout(
-                    Array.isArray(event.message) ? event.message : [event.message],
+                    Array.isArray(text) ? text : [text],
                     level === 'ERROR' ? 'error' : 'warning'
                 )
             }

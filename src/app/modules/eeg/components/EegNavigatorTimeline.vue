@@ -133,7 +133,7 @@ export default defineComponent({
 <style scoped>
 [data-component="eeg-navigator-timeline"] {
     position: absolute;
-    left: 80px;
+    left: 0;
     bottom: 0;
     z-index: 1;
     height: 20px;

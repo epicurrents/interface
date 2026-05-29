@@ -5,7 +5,10 @@
         library="epicurrents"
         :name="name"
         :style="{
-            transform: rotate ? `rotate(${rotate})` : undefined,
+            transform: [
+                rotate ? `rotate(${rotate})` : null,
+                scale !== null ? `scale(${scale})` : null,
+            ].filter(Boolean).join(' ') || undefined,
             opacity: empty ? '0' : '1',
         }"
         :variant="variant"
@@ -46,6 +49,11 @@ export default defineComponent({
             type: String,
             default: null,
         },
+        /** CSS transform scale to apply to the icon (e.g., 0.5, 1.25). */
+        scale: {
+            type: Number,
+            default: null,
+        },
         /** Icon style variant. "solid" maps to the Material filled set; all others use outlined. */
         variant: {
             type: String,
@@ -57,6 +65,6 @@ export default defineComponent({
 
 <style scoped>
 [data-component="app-icon"] {
-    font-size: 1.2em;
+    font-size: inherit;
 }
 </style>

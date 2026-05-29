@@ -49,7 +49,7 @@ import { registerIcons } from "#app/icons"
 
 // Application.
 import { Log } from "scoped-event-log"
-import SETTINGS, { useActiveContext } from './config'
+import SETTINGS from './config'
 import VueApp from "./app/App.vue"
 
 import type {
@@ -195,22 +195,14 @@ export const DefaultInterface: DefaultInterfaceModuleConstructor = class Epicurr
         })
         // Handle new biosignal resources.
         epicApp.eventBus.subscribe('add-resource', event => {
-            const resource = event.detail.payload as DataResource
+            const context = event.detail.payload as { resource: BiosignalResource }
+            const resource = context.resource
             const pyodide = window.__EPICURRENTS__.RUNTIME.SERVICES.get('pyodide') as PythonInterpreterService | null
             const memoryManager = window.__EPICURRENTS__.RUNTIME.SETTINGS.app.useMemoryManager
             if (pyodide && memoryManager && Object.hasOwn(resource, '_signalCacheStatus')) {
-                // Inform the service of data cache updates, so that the input data arrays within the Pyodide
-                // interpreter will be updated as well.
-                (resource as BiosignalResource).onPropertyChange('signalCacheStatus', () => {
-                    // Update the input signals in the Pyodide interpreter if currently active resource supports
-                    // memory manager.
-                    if (
-                        this.store?.instance &&
-                        useActiveContext(this.store.instance).SETTINGS.useMemoryManager
-                    ) {
-                        pyodide.updateInputSignals()
-                    }
-                }, 'ViteInterface')
+                // Refresh of the Pyodide-side input arrays is demand-driven inside
+                // `biosignal_get_signals` (and the batched `biosignal_refresh_channels`
+                // primitive), so no per-signalCacheStatus push is needed here.
                 // Add the core and biosignal scripts as dependencies for biosignal resources.
                 resource.addDependencies('pyodide-core', 'pyodide-biosignal')
                 pyodide.initialSetup.then(async (setupResult) => {

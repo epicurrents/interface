@@ -35,7 +35,7 @@
         </div>
         <div :class="{
                 controls: true,
-                open: isControlsOpen,
+                open: controlsOpen,
             }"
         >
             <div class="toggle">
@@ -49,7 +49,7 @@
                     for="epicv-eeg-navigation-toggle"
                     placement="bottom"
                 >
-                    {{ isControlsOpen ? $t('Hide controls') : $t('Show controls') }}
+                    {{ controlsOpen ? $t('Hide controls') : $t('Show controls') }}
                 </wa-tooltip>
             </div>
             <wa-button
@@ -130,6 +130,12 @@ export default defineComponent({
         NavigatorTimeline,
     },
     props: {
+        /** Whether the controls bar is open — owned by the parent to stay in sync with the
+         *  trend controls and survive view switches. */
+        controlsOpen: {
+            type: Boolean,
+            required: true,
+        },
         cursorPos: {
             type: Number,
             required: true,
@@ -153,15 +159,12 @@ export default defineComponent({
     },
     setup () {
         const highlights = ref([] as { color: SettingsColor, highlights: [number, number][], interval: number }[])
-        const isTouchScreen = 'ontouchstart' in window || window.navigator.maxTouchPoints > 0
-        const isControlsOpen = ref(isTouchScreen) // Controls are open by default on touch devices.
         const navigator = ref<HTMLCanvasElement>() as Ref<HTMLCanvasElement>
         const viewbox = ref<HTMLCanvasElement>() as Ref<HTMLCanvasElement>
         const timeValue = reactive([] as string[])
         const unsubscribe = ref(null as (() => void) | null)
         return {
             highlights,
-            isControlsOpen,
             navigator,
             timeValue,
             viewbox,
@@ -176,7 +179,7 @@ export default defineComponent({
         },
         /** Width available for the timeline in pixels. */
         canvasWidth (): number {
-            return this.isControlsOpen
+            return this.controlsOpen
                 ? this.width - 290
                 : this.width - 110
         },
@@ -208,6 +211,9 @@ export default defineComponent({
         },
     },
     watch: {
+        controlsOpen () {
+            this.$nextTick(() => this.drawNavigator())
+        },
         cursorPos () {
             this.parseCursorTime()
         },
@@ -370,10 +376,15 @@ export default defineComponent({
                 context.fillStyle = settingsColorToRgba(this.SETTINGS.selectionBound.color)
                 context.fillRect(Math.floor(this.selectionBound.position*durWidth), 0, 1, this.canvasHeight)
             }
-            // Draw loading progress bar
-            const loadedLen = this.RESOURCE.signalCacheStatus[1] - this.RESOURCE.signalCacheStatus[0]
+            // Draw loading progress bar. With the rolling-window cache (PSG-class recordings), the
+            // cached range can start at non-zero recording time and slide forward as the view moves.
+            // Always draw at the actual `signalCacheStatus[0]` offset so the bar reflects the
+            // currently-cached window. For full-cache recordings `signalCacheStatus[0]` stays at 0
+            // and the bar grows from x=0 as before.
+            const loadedStart = this.RESOURCE.signalCacheStatus[0]
+            const loadedLen = this.RESOURCE.signalCacheStatus[1] - loadedStart
             context.fillStyle = settingsColorToRgba(this.SETTINGS.navigator.loadedColor)
-            context.fillRect(0, contentHeight, Math.round(loadedLen*durWidth), 2)
+            context.fillRect(Math.round(loadedStart*durWidth), contentHeight, Math.round(loadedLen*durWidth), 2)
             // Draw cached progress bar
             if (this.RESOURCE.activeMontage?.cacheStatus) {
                 const cacheLen = this.RESOURCE.activeMontage?.cacheStatus.end
@@ -384,10 +395,10 @@ export default defineComponent({
             // Clear everything from interruptions and fill with the proper color.
             for (const {start, duration} of this.RESOURCE.getInterruptions()) {
                 const xPos = Math.floor(start*durWidth)
-                const xLen = Math.floor(duration*durWidth)
-                context.clearRect(xPos, 0, xLen || 1, this.navigator.height)
+                const xLen = Math.max(Math.ceil(duration*durWidth), 1)
+                context.clearRect(xPos, 0, xLen, this.navigator.height)
                 context.fillStyle = settingsColorToRgba(this.SETTINGS.navigator.interruptionColor)
-                context.fillRect(xPos, 0, xLen || 1, this.navigator.height)
+                context.fillRect(xPos, 0, xLen, this.navigator.height)
             }
             // Viewbox is drawn on a separate overlay canvas via drawViewbox().
             this.drawViewbox()
@@ -475,11 +486,7 @@ export default defineComponent({
             this.timeValue.push(fraction, ...time)
         },
         toggleControls () {
-            this.isControlsOpen = !this.isControlsOpen
-            this.$nextTick(() => {
-                // Redraw navigator after controls are toggled.
-                this.drawNavigator()
-            })
+            this.$emit('toggle-controls', !this.controlsOpen)
         },
         updateHighlights () {
             this.highlights.splice(0)

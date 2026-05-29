@@ -363,7 +363,7 @@ export default defineComponent({
 
 <style scoped>
 [data-component="fft-tool"] {
-    flex: 7 7 0px;
+    flex: 3 3 0px;
     display: flex;
     flex-wrap: nowrap;
     position: relative;

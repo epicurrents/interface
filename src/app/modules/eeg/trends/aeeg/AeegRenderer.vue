@@ -16,7 +16,35 @@
                 ref="trendCanvas"
                 :height="canvasHeight"
                 :width="canvasWidth"
+                @dblclick="handleDblClick"
             ></canvas>
+            <svg
+                class="guidelines"
+                :width="canvasWidth"
+                :height="canvasHeight"
+            >
+                <rect
+                    v-for="r in gapRects"
+                    :key="r.key"
+                    :x="r.x"
+                    :y="r.y"
+                    :width="r.w"
+                    :height="r.h"
+                    :fill="gapFill"
+                />
+                <line
+                    v-if="showGuidelines"
+                    v-for="seg in guidelineSegments"
+                    :key="seg.key"
+                    :x1="seg.x1"
+                    :x2="seg.x2"
+                    :y1="seg.y"
+                    :y2="seg.y"
+                    :stroke="guidelineStroke"
+                    stroke-width="1"
+                    shape-rendering="crispEdges"
+                />
+            </svg>
             <canvas
                 ref="viewboxCanvas"
                 class="viewbox"
@@ -63,11 +91,12 @@
  * the `useTrendController` composable.
  */
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { useStore } from 'vuex'
 import { T } from '#i18n'
 import { settingsColorToRgba } from '@epicurrents/core/util'
 import { useTrendController } from '../useTrendController'
 import type { BiosignalTrend, SettingsColor } from '@epicurrents/core/types'
-import type { EegAmplitudeIntegratedTrend } from '@epicurrents/eeg-module'
+
 
 const SCOPE = 'AeegRenderer'
 
@@ -79,14 +108,16 @@ const props = defineProps<{
     width: number
 }>()
 
+const emit = defineEmits<{ navigation: [position: number] }>()
+
 const t = (key: string, params: Record<string, unknown> = {}) => T(key, SCOPE, params)
 
 /**
- * Amplitude scale ceiling (on the Hellström-Westas semi-log scale) used to size the y-axis of
- * the aEEG band. The standard scale runs 0 → ~30 (covers 0–100 µV linearly + log compression
- * above).
+ * Amplitude scale ceiling in µV, and its compressed display-unit equivalent.
+ * `compressMicrovolts(200) = 10 * (1 + log10(20)) ≈ 23.01`.
  */
-const AEEG_DISPLAY_MAX = 30
+const AEEG_CEILING_UV = 200
+const AEEG_DISPLAY_MAX = 10 * (1 + Math.log10(AEEG_CEILING_UV / 10))
 /**
  * The viewbox is a solid vertical rectangle whose drawing only depends on the x-axis
  * (viewStart and visibleRange). Keeping its bitmap at a fixed 1 px tall lets the browser
@@ -97,16 +128,18 @@ const VIEWBOX_BITMAP_HEIGHT = 1
 /**
  * Amplitude scale markers, in physical units (µV). Each entry has a tick line drawn inside
  * the canvas at its right edge; only entries with a `label` get a numeric label in the right
- * padding area. Six points cover the clinically relevant range (10–500 µV).
+ * padding area.
  */
 const SCALE_ENTRIES: { value: number, label: string | null }[] = [
-    { value: 10, label: '10' },
-    { value: 20, label: null },
-    { value: 50, label: null },
+    { value: 5,   label: '5'   },
+    { value: 10,  label: '10'  },
+    { value: 20,  label: null  },
+    { value: 50,  label: null  },
     { value: 100, label: '100' },
-    { value: 200, label: null },
-    { value: 500, label: null },
+    { value: 200, label: null  },
 ]
+/** When true, a faint horizontal guideline is drawn at each scale tick. */
+const showGuidelines = true
 /** Hellström-Westas semi-log compression in µV → display units. Mirrors `compressAmplitudeValue`
  *  in `core/src/util/signal.ts` so the scale markers line up with the rendered band. */
 const compressMicrovolts = (v: number) => v <= 10 ? v : 10*(1 + Math.log10(v/10))
@@ -122,8 +155,23 @@ type RenderedTrend = {
 const trendCanvas = ref<HTMLCanvasElement | null>(null)
 const viewboxCanvas = ref<HTMLCanvasElement | null>(null)
 
+const store = useStore()
 const controller = useTrendController(SCOPE, 'amplitude', () => drawTrends())
 const { ID, RESOURCE, SETTINGS, trends } = controller
+
+// Local reactive mirror of SETTINGS.trends.aeeg.displayMode. SETTINGS is a non-reactive proxy
+// so Vue computed can't track mutations; sync via a store action subscription instead.
+const settingsDisplayMode = ref<'separate' | 'superimposed'>(
+    SETTINGS.trends?.aeeg?.displayMode || 'separate'
+)
+const unsubscribeAction = store.subscribeAction({
+    after: (action) => {
+        if (action.type === 'set-settings-value'
+            && action.payload?.field === 'eeg.trends.aeeg.displayMode') {
+            settingsDisplayMode.value = SETTINGS.trends?.aeeg?.displayMode || 'separate'
+        }
+    },
+})
 
 const labelGutterWidth = 80
 const topPadding = 8
@@ -132,15 +180,21 @@ const canvasHeight = computed(() => Math.max(0, props.height - topPadding))
 const canvasWidth = computed(() =>
     Math.max(0, props.width - labelGutterWidth - rightReservedWidth.value))
 
-const aeegSettings = computed(() => SETTINGS.aeeg)
 const labelMode = computed<'separate' | 'superimposed'>(() =>
-    props.displayMode ?? (aeegSettings.value?.displayMode || 'separate'))
+    props.displayMode ?? settingsDisplayMode.value)
 
 const sideColorForTrend = (name: string): SettingsColor | null => {
     if (!name.startsWith('aeeg-')) {
         return null
     }
     const id = name.slice('aeeg-'.length)
+    // Check interface derivation-color overrides first — these apply to any id.
+    const override = (SETTINGS?.trends?.aeeg as { derivationColors?: { [k: string]: SettingsColor } } | undefined)
+        ?.derivationColors?.[id]
+    if (override) {
+        return override
+    }
+    // Fall back to the standard hemispheric trace-color palette.
     const palette = SETTINGS?.trace?.color
     if (!palette) {
         return null
@@ -159,7 +213,6 @@ const sideColorForTrend = (name: string): SettingsColor | null => {
 
 const renderedTrends = computed<RenderedTrend[]>(() => trends.value.map((t) => {
     const color = sideColorForTrend(t.name)
-        ?? (t as EegAmplitudeIntegratedTrend).color
         ?? FALLBACK_COLOR
     return {
         name: t.name,
@@ -222,6 +275,61 @@ const scaleMarkers = computed<{ key: string, y: number, label: string | null }[]
     return markers
 })
 
+/** Reactive mirror of RESOURCE.interruptions — updated via onPropertyChange so the SVG overlay
+ *  re-renders when interruptions arrive after signal caching completes. */
+const interruptions = ref<{ start: number, duration: number }[]>([])
+
+const pxPerSecond = computed(() =>
+    canvasWidth.value / (RESOURCE.totalDuration || 1)
+)
+
+/** Gap rectangles for the SVG overlay — one rect per interruption × slot. */
+const gapRects = computed(() => {
+    const rects: { key: string, x: number, y: number, w: number, h: number }[] = []
+    const pps = pxPerSecond.value
+    for (const { start, duration } of interruptions.value) {
+        const x = Math.floor(start * pps)
+        const w = Math.max(Math.ceil(duration * pps), 1)
+        for (let i = 0; i < scaleSlots.value.length; i++) {
+            const slot = scaleSlots.value[i]
+            rects.push({ key: `${start}-${i}`, x, y: slot.top, w, h: slot.bottom - slot.top })
+        }
+    }
+    return rects
+})
+
+/** Guideline segments split at gap boundaries so they don't traverse gap areas. */
+const guidelineSegments = computed(() => {
+    const segs: { key: string, x1: number, x2: number, y: number }[] = []
+    const w = canvasWidth.value
+    const pps = pxPerSecond.value
+    const gaps = interruptions.value
+        .map(({ start, duration }) => [Math.floor(start * pps), Math.ceil((start + duration) * pps)] as [number, number])
+        .sort((a, b) => a[0] - b[0])
+    for (const m of scaleMarkers.value) {
+        let cursor = 1
+        for (const [gx1, gx2] of gaps) {
+            if (cursor < gx1) {
+                segs.push({ key: `${m.key}-${cursor}`, x1: cursor, x2: gx1, y: m.y })
+            }
+            cursor = Math.max(cursor, gx2)
+        }
+        if (cursor < w - 1) {
+            segs.push({ key: `${m.key}-end`, x1: cursor, x2: w - 1, y: m.y })
+        }
+    }
+    return segs
+})
+
+/** Fill colour for gap overlay rectangles, read from navigator settings. */
+const gapFill = computed(() => {
+    const c = SETTINGS.navigator?.interruptionColor as SettingsColor | undefined
+    return c ? settingsColorToRgba(c) : 'rgba(180,180,180,1)'
+})
+
+/** Stroke colour for guidelines: black at 25 % opacity. */
+const guidelineStroke = 'rgba(0,0,0,0.25)'
+
 /** Compute a [top, bottom] vertical pixel range for a trend in `'separate'` mode. */
 const slotForTrend = (index: number, count: number, height: number) => {
     const usableHeight = height - 2
@@ -252,7 +360,8 @@ const drawAmplitudeBand = (
     width: number,
     totalDuration: number,
     color: SettingsColor,
-    displayMode: 'separate' | 'superimposed'
+    displayMode: 'separate' | 'superimposed',
+    bandInterruptions: { start: number, duration: number }[]
 ) => {
     const signal = trend.signal
     if (!signal.length) {
@@ -271,59 +380,93 @@ const drawAmplitudeBand = (
         return slot.bottom - (clamped/AEEG_DISPLAY_MAX)*slotHeight
     }
     const epochX = (i: number) => i*pxPerEpoch + pxPerEpoch/2
+    const isGapEpoch = (i: number) => {
+        const v = signal[i*2 + 1]
+        return v === undefined || isNaN(v)
+    }
     const isSparse = pxPerEpoch > 1.5
+    // Local alias so the gap-for-epoch lookup uses the parameter name.
+    const bandGaps = bandInterruptions
     const baseAlpha = color[3] ?? 1
     const blendAlpha = displayMode === 'superimposed' ? 0.75 : baseAlpha
+
+    // ── Fill envelope ────────────────────────────────────────────────────────
+    // Split into contiguous non-gap runs, draw a separate closed polygon for each.
+    // A single shared path can't handle mid-path gaps — resetting `moveTo` inside an
+    // open path just extends it, so the backward (lower-envelope) loop would add stray
+    // lines through every gap. Per-run polygons avoid that entirely.
     if (isSparse) {
-        ctx.beginPath()
-        let started = false
-        // Remember the first bar's lower-envelope y so the polygon can return to the canvas's
-        // left edge along the bottom — without this the polygon would close diagonally from
-        // the last bar's min straight back to (0, firstMaxY) and the left-edge fill would
-        // look like a triangle wedge instead of a flat extension.
-        let firstMinY = 0
-        for (let i = 0; i < epochCount; i++) {
-            const max = signal[i*2 + 1]
-            if (max === undefined) {
-                continue
-            }
-            const x = epochX(i)
-            const y = valueToY(max)
-            if (!started) {
-                ctx.moveTo(0, y)
-                ctx.lineTo(x, y)
-                firstMinY = valueToY(signal[i*2] ?? 0)
-                started = true
-            } else {
-                ctx.lineTo(x, y)
+        // Find the interruption (in recording-time seconds) that covers a given
+        // gap epoch. Used to extend fill polygon edges flush to the exact gap boundary
+        // so there is no empty sliver between the fill and the gray overlay.
+        const gapForEpoch = (epochIdx: number) => {
+            const t = epochIdx * epochLength
+            return bandGaps.find(
+                ({ start, duration }) => start <= t + epochLength && start + duration > t
+            ) ?? null
+        }
+
+        const fillStyle = settingsColorToRgba([color[0], color[1], color[2], blendAlpha*0.4])
+        let runFrom = -1
+        for (let i = 0; i <= epochCount; i++) {
+            const gap = i === epochCount || isGapEpoch(i)
+            if (!gap && runFrom === -1) {
+                runFrom = i
+            } else if (gap && runFrom !== -1) {
+                const runTo = i - 1
+                // Default: extend to epoch half-width edges.
+                // Override with the exact gap boundary when abutting an interruption
+                // to eliminate the empty sliver between the fill and the gray overlay.
+                let firstX = epochX(runFrom) - pxPerEpoch/2
+                let lastX  = epochX(runTo)   + pxPerEpoch/2
+                if (runFrom > 0 && isGapEpoch(runFrom - 1)) {
+                    const adj = gapForEpoch(runFrom - 1)
+                    if (adj) {
+                        firstX = Math.ceil((adj.start + adj.duration) * pxPerSecond)
+                    }
+                }
+                if (i < epochCount && isGapEpoch(i)) {
+                    const adj = gapForEpoch(i)
+                    if (adj) {
+                        lastX = Math.floor(adj.start * pxPerSecond)
+                    }
+                }
+                ctx.beginPath()
+                // Upper envelope left → right
+                ctx.moveTo(firstX, valueToY(signal[runFrom*2 + 1]))
+                for (let j = runFrom; j <= runTo; j++) {
+                    ctx.lineTo(epochX(j), valueToY(signal[j*2 + 1]))
+                }
+                ctx.lineTo(lastX, valueToY(signal[runTo*2 + 1]))
+                // Lower envelope right → left
+                ctx.lineTo(lastX, valueToY(signal[runTo*2]))
+                for (let j = runTo; j >= runFrom; j--) {
+                    ctx.lineTo(epochX(j), valueToY(signal[j*2]))
+                }
+                ctx.lineTo(firstX, valueToY(signal[runFrom*2]))
+                ctx.closePath()
+                ctx.fillStyle = fillStyle
+                ctx.fill()
+                runFrom = -1
             }
         }
-        for (let i = epochCount - 1; i >= 0; i--) {
-            const min = signal[i*2]
-            if (min === undefined) {
-                continue
-            }
-            const x = epochX(i)
-            const y = valueToY(min)
-            ctx.lineTo(x, y)
-        }
-        ctx.lineTo(0, firstMinY)
-        ctx.closePath()
-        const fillColor: SettingsColor = [color[0], color[1], color[2], blendAlpha*0.4]
-        ctx.fillStyle = settingsColorToRgba(fillColor)
-        ctx.fill()
     }
+
+    // ── Per-epoch bars ───────────────────────────────────────────────────────
+    // Bar width: ceil(pxPerEpoch) when epochs are dense so adjacent bars touch with
+    // no anti-aliasing gaps; capped at 3 px once epochs are sparse enough that
+    // visible gaps between bars are intentional.
     ctx.strokeStyle = settingsColorToRgba([color[0], color[1], color[2], blendAlpha])
-    ctx.lineWidth = Math.max(1, Math.min(pxPerEpoch*0.8, 3))
+    ctx.lineWidth = Math.max(1, Math.min(Math.ceil(pxPerEpoch), 3))
     for (let i = 0; i < epochCount; i++) {
-        const min = signal[i*2]
-        const max = signal[i*2 + 1]
-        if (min === undefined || max === undefined) {
+        if (isGapEpoch(i)) {
             continue
         }
+        const min = signal[i*2]
+        const max = signal[i*2 + 1]
         const x = epochX(i)
         const yTop = valueToY(max)
-        const yBottom = valueToY(min)
+        const yBottom = valueToY(min ?? 0)
         if (Math.abs(yBottom - yTop) < 0.5) {
             ctx.fillStyle = settingsColorToRgba([color[0], color[1], color[2], blendAlpha])
             ctx.fillRect(x - 0.5, yTop - 0.5, 1, 1)
@@ -334,6 +477,7 @@ const drawAmplitudeBand = (
         ctx.lineTo(x, yBottom)
         ctx.stroke()
     }
+
 }
 
 const drawTrends = () => {
@@ -368,7 +512,7 @@ const drawTrends = () => {
         const slot = mode === 'superimposed'
             ? { top: 1, bottom: h - 1 }
             : slotForTrend(i, trendList.length, h)
-        drawAmplitudeBand(ctx, trend, slot, w, totalDuration, rendered.color, mode)
+        drawAmplitudeBand(ctx, trend, slot, w, totalDuration, rendered.color, mode, interruptions.value)
     }
     // Zero-line separators between stacked trends — the bottom of slot i and top of slot i+1
     // share this y-coordinate, corresponding to value 0 for the trend above. Drawn last so
@@ -387,8 +531,8 @@ const drawTrends = () => {
  * Draw the view-position marker (red bar) on its own canvas. The bitmap is intentionally only
  * `VIEWBOX_BITMAP_HEIGHT` (1 px) tall — the canvas is stretched to fit the strip vertically
  * via CSS, so height changes don't clear the bitmap and don't require a redraw. Only changes
- * to `viewStart`, `visibleRange`, `totalDuration`, or the canvas `:width` (which auto-clears
- * the bitmap) need to retrigger this method.
+ * to `displayViewStart`, `visibleRange`, `totalDuration`, or the canvas `:width` (which
+ * auto-clears the bitmap) need to retrigger this method.
  */
 const drawViewbox = () => {
     const canvas = viewboxCanvas.value
@@ -407,7 +551,7 @@ const drawViewbox = () => {
         return
     }
     const pxPerSecond = w/totalDuration
-    const viewStart = RESOURCE.viewStart || 0
+    const viewStart = RESOURCE.displayViewStart || 0
     const viewLen = Math.min(props.visibleRange, totalDuration - viewStart)
     if (viewLen <= 0) {
         return
@@ -427,15 +571,35 @@ watch(canvasWidth, () => {
     drawViewbox()
 }, { flush: 'post' })
 watch(() => props.visibleRange, () => drawViewbox())
-watch(() => props.displayMode, () => drawTrends())
+watch(labelMode, () => drawTrends())
+
+const handleDblClick = (event: MouseEvent) => {
+    const canvas = trendCanvas.value
+    if (!canvas || !RESOURCE.totalDuration) {
+        return
+    }
+    const xPos = event.clientX - canvas.getBoundingClientRect().left
+    emit('navigation', RESOURCE.totalDuration * xPos / canvas.width)
+}
+
+const refreshInterruptions = () => {
+    interruptions.value = (RESOURCE as unknown as { getInterruptions?: () => { start: number, duration: number }[] })
+        .getInterruptions?.() ?? []
+}
 
 onMounted(() => {
-    RESOURCE.onPropertyChange('viewStart', drawViewbox, ID)
     RESOURCE.onPropertyChange('displayViewStart', drawViewbox, ID)
+    // Sync the reactive interruptions ref and redraw when interruptions arrive.
+    RESOURCE.onPropertyChange('interruptions', () => {
+        refreshInterruptions()
+        drawTrends()
+    }, ID)
+    refreshInterruptions()
     drawViewbox()
 })
 
 onBeforeUnmount(() => {
+    unsubscribeAction()
     // Trend-list and per-trend listeners are torn down by useTrendController; only the
     // viewbox-related subscriptions are owned here.
     RESOURCE.removeAllEventListeners(ID)
@@ -494,8 +658,11 @@ onBeforeUnmount(() => {
         .plot > canvas {
             display: block;
         }
-        .plot > canvas + canvas {
+        .plot > canvas + canvas,
+        .plot > canvas + svg.guidelines,
+        .plot > svg.guidelines + canvas {
             left: 0;
+            pointer-events: none;
             position: absolute;
             top: 0;
         }

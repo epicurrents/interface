@@ -55,6 +55,17 @@ type Cursors = {
     setCursorPos: (pos: number) => void
 }
 
+type PlotPointerUpDetail = {
+    channelProps: ChannelPositionProperties | null,
+    pointerButton: 0 | 2 | typeof NO_POINTER_BUTTON_DOWN,
+    pointerPosition: [number, number],
+    position: number,
+    startPos: number,
+    // Event properties.
+    ctrlKey: boolean,
+    shiftKey: boolean,
+}
+
 export type PointerComposableOptions = {
     resource: BiosignalResource
     settings: PointerSettings
@@ -452,14 +463,18 @@ export function useBiosignalPointer ({
         }
     }
 
-    function handlePlotDoubleClick (event: CustomEvent) {
+    function handlePlotDoubleClick (event: CustomEvent<PlotPointerUpDetail>) {
         if (activeSelection.value || plotSelections.length) {
             return
         }
         const { detail } = event
         const startPos = Math.max(resource.viewStart, detail.startPos - 0.5)
         const endPos = Math.min(resource.viewStart + visibleRange.value, detail.startPos + 0.5)
-        createSignalSelection(startPos, endPos, detail.channelProps)
+        if (event.detail.ctrlKey && detail.channelProps) {
+            createSignalSelection(startPos, endPos, detail.channelProps)
+        } else if (event.detail.shiftKey) {
+            createSignalSelection(startPos, endPos, null)
+        }
         if (activeCursorTool.value === 'inspect') {
             onOpenAnalysis()
         }

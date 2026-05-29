@@ -215,24 +215,30 @@
                 <eeg-trend v-if="trendVisible"
                     v-show="effectiveTrendVisible"
                     class="trend"
+                    :controlsOpen="controlsOpen"
                     :displayMode="effectiveTrendDisplayMode"
                     :height="effectiveTrendVisible ? trendHeight : 0"
                     :style="{ flex: `0 0 ${effectiveTrendVisible ? trendHeight : 0}px` }"
                     :visibleRange="visibleRange"
                     :width="viewerSize[0]"
+                    ref="trend"
+                    v-on:navigation="handlePlotNavigation"
+                    v-on:toggle-controls="handleTrendToggleControls"
                 />
                 <eeg-navigator ref="navigator"
                     class="navigator"
+                    :controlsOpen="controlsOpen"
                     :cursorPos="cursors?.mainCursorPos || 0"
                     :height="actualNavigatorHeight"
                     :selectionBound="selectionBound"
                     :style="{ flex: `0 0 ${actualNavigatorHeight}px` }"
                     :visibleRange="visibleRange"
                     :width="viewerSize[0]"
-                    v-on:loaded="resizeElements"
                     v-on:backward="goBackward"
                     v-on:forward="goForward"
+                    v-on:loaded="resizeElements"
                     v-on:navigation="handlePlotNavigation"
+                    v-on:toggle-controls="handleNavigatorToggleControls"
                 />
             </div>
         </template>
@@ -262,10 +268,16 @@ import { useBiosignalAnnotationEditor } from '#app/views/biosignal/useBiosignalA
 import { useBiosignalKeyboard } from '#app/views/biosignal/useBiosignalKeyboard'
 import { useBiosignalLayout } from '#app/views/biosignal/useBiosignalLayout'
 import { useBiosignalNavigation } from '#app/views/biosignal/useBiosignalNavigation'
+import { TREND_REGISTRY } from '../trends'
 import { useBiosignalPointer } from '#app/views/biosignal/useBiosignalPointer'
 import type { ContextMenuContext } from '#types/interface'
 import { EegEvent } from '@epicurrents/eeg-module'
 import type { PlotSelection } from '#app/views/biosignal/types'
+
+// Persists the user's last explicit trend-strip state per resource across remounts.
+// Keyed by resource id; only populated after the first unmount so a first-ever visit
+// falls back to the hasTrends auto-restore heuristic.
+const trendVisibilityByResource = new Map<string, boolean>()
 import type { SignalHighlight } from '#types/plot'
 
 // Child components
@@ -290,6 +302,10 @@ import { deepEqual } from '@epicurrents/core/util'
 import type { default as WaSplitPanel } from '@awesome.me/webawesome/dist/components/split-panel/split-panel.js'
 import { SchemaManager } from '#root/src/components/report'
 
+const NAVIGATOR_MIN_HEIGHT = 75   // natural navigator strip height (px)
+const TREND_MIN_HEIGHT = 40       // below this the strip auto-hides; navigator takes full slot
+const TREND_SUPERIMPOSE_HEIGHT = 80  // below this the strip forces 'superimposed' display
+const TREND_DEFAULT_HEIGHT = 110  // extra space added to the bottom slot when trend toggles on
 
 export default defineComponent({
     name: 'EegViewer',
@@ -354,14 +370,12 @@ export default defineComponent({
         const menuChannel = ref(null as MontageChannel | null)
         const montageSetupDone = ref(false)
         const pointerDownPoint = reactive({ x: NUMERIC_ERROR_VALUE, y: NUMERIC_ERROR_VALUE })
-        const navigatorHeight = ref(75)
-        // Trend strip lives stacked above the navigator inside the same split-panel end slot.
-        // Sizes are coordinated by a few breakpoint constants:
-        //   - NAVIGATOR_MIN_HEIGHT (75): natural navigator strip height
-        //   - TREND_MIN_HEIGHT (40): below this, trend auto-hides; navigator takes full slot
-        //   - TREND_SUPERIMPOSE_HEIGHT (80): below this, trend forces 'superimposed' display
-        //   - TREND_DEFAULT_HEIGHT (150): extra space added to bottom slot when trend toggles on
+        const navigatorHeight = ref(NAVIGATOR_MIN_HEIGHT)
         const trendVisible = ref(false)
+        // Controls-bar open state shared between navigator and trend. Initialised open on touch
+        // devices (where controls are harder to discover) and closed otherwise.
+        const isTouchScreen = 'ontouchstart' in window || window.navigator.maxTouchPoints > 0
+        const controlsOpen = ref(isTouchScreen)
         const nextAnimationFrame = 0
         const onnxContinue = ref(false)
         const onnxHighlights = reactive([] as SignalHighlight[])
@@ -394,6 +408,7 @@ export default defineComponent({
         const component = ref<HTMLDivElement>() as Ref<HTMLDivElement>
         const cursors = ref<InstanceType<typeof VerticalCursors>>() as Ref<InstanceType<typeof VerticalCursors>>
         const navigator = ref<InstanceType<typeof EegNavigator>>() as Ref<InstanceType<typeof EegNavigator>>
+        const trend = ref<InstanceType<typeof EegTrend>>() as Ref<InstanceType<typeof EegTrend>>
         const overlay = ref<PointerEventOverlay>() as Ref<PointerEventOverlay>
         const panel = ref<WaSplitPanel>() as Ref<WaSplitPanel>
         const plot = ref<InstanceType<typeof EegPlot>>() as Ref<InstanceType<typeof EegPlot>>
@@ -525,10 +540,12 @@ export default defineComponent({
             viewRange,
             viewReady,
             yAxisWidth,
+            controlsOpen,
             // Template refs
             component,
             cursors,
             navigator,
+            trend,
             overlay,
             panel,
             plot,
@@ -571,12 +588,9 @@ export default defineComponent({
             if (!value || !value[0] || !value[1]) {
                 return
             }
+            // resizeElements updates plotDimensions and recomputes pxPerSecond
+            // atomically; see useBiosignalLayout.ts.
             this.resizeElements()
-            if (this.secPerPage) {
-                this.$nextTick(() => {
-                    this.calculatePxPerSecond()
-                })
-            }
         },
     },
     computed: {
@@ -586,8 +600,8 @@ export default defineComponent({
          *  `SplitPanelView` via wa-split-panel's `disabled` and a hidden divider). */
         bottomSlotBounds (): [string, string] {
             return this.trendVisible
-                ? ['75px', '40%']
-                : ['75px', '75px']
+                ? [`${NAVIGATOR_MIN_HEIGHT}px`, '40%']
+                : [`${NAVIGATOR_MIN_HEIGHT}px`, `${NAVIGATOR_MIN_HEIGHT}px`]
         },
         isOnlyMenuChannelActive (): boolean {
             if (this.menuChannel) {
@@ -609,29 +623,29 @@ export default defineComponent({
         },
         /** Height the trend strip would receive given the current bottom-slot size. */
         trendHeight (): number {
-            return Math.max(0, this.navigatorHeight - 75)
+            return Math.max(0, this.navigatorHeight - NAVIGATOR_MIN_HEIGHT)
         },
         /** Whether the trend strip is shown right now. Even when `trendVisible` is true, the strip
          *  collapses when the user drags the bottom slot below the navigator + min trend height. */
         effectiveTrendVisible (): boolean {
-            return this.trendVisible && this.trendHeight >= 40
+            return this.trendVisible && this.trendHeight >= TREND_MIN_HEIGHT
         },
-        /** When the user compresses the strip below 2× the minimum (80 px), force the
+        /** When the user compresses the strip below the superimpose threshold, force the
          *  superimposed mode regardless of the configured display mode so all bands stay visible. */
         effectiveTrendDisplayMode (): 'separate' | 'superimposed' | null {
             if (!this.effectiveTrendVisible) {
                 return null
             }
-            if (this.trendHeight < 80) {
+            if (this.trendHeight < TREND_SUPERIMPOSE_HEIGHT) {
                 return 'superimposed'
             }
             return null
         },
         /** Height to pass to the navigator. When the trend is hidden, the navigator owns the full
-         *  bottom slot; when the trend is visible, the navigator stays at its 75 px minimum and
+         *  bottom slot; when the trend is visible, the navigator stays at its minimum height and
          *  the trend takes the rest. */
         actualNavigatorHeight (): number {
-            return this.effectiveTrendVisible ? 75 : this.navigatorHeight
+            return this.effectiveTrendVisible ? NAVIGATOR_MIN_HEIGHT : this.navigatorHeight
         },
     },
     methods: {
@@ -918,7 +932,7 @@ export default defineComponent({
                 const quickCode = event.code.match(/Digit(\d)/)
                 if (quickCode) {
                     // Execute a quick code action depending on the active hotkey.
-                    if (this.hotkeyEvents.annotation && this.plotSelections.length) {
+                    if (this.hotkeyEvents.annotation) {
                         if (this.RESOURCE.annotationsLocked) {
                             Log.warn(
                                 [
@@ -931,10 +945,15 @@ export default defineComponent({
                             this.hotkeyEvents.annotation = false
                             return
                         }
-                        for (const props of Object.values(this.SETTINGS.annotations.classes)) {
+                        for (const classProps of Object.values(this.SETTINGS.annotations.classes)) {
                             const code = parseInt(quickCode[1])
-                            if (props.quickCode === code) {
-                                this.createEvents(props)
+                            if (classProps.quickCode === code) {
+                                const eventProps = { ...classProps } as typeof classProps & { start?: number }
+                                if (!this.plotSelections.length) {
+                                    // If no segments are selected, create the event at cursor position.
+                                    eventProps.start = this.RESOURCE.viewStart + (this.cursors?.mainCursorPos || 0)
+                                }
+                                this.createEvents(eventProps)
                                 this.hotkeyEvents.annotation = false
                                 return
                             }
@@ -1170,10 +1189,16 @@ export default defineComponent({
         },
         /**
          * Toggle the trend strip and resize the bottom split-panel slot accordingly. Toggling on
-         * expands the slot by `TREND_DEFAULT_HEIGHT` (150 px) so the trend has room; toggling off
-         * snaps the slot back to the navigator's natural 75 px (per user preference — simpler
+         * expands the slot by `TREND_DEFAULT_HEIGHT` so the trend has room; toggling off snaps
+         * the slot back to `NAVIGATOR_MIN_HEIGHT` (per user preference — simpler
          * model than remembering the dragged size).
          */
+        handleNavigatorToggleControls (open: boolean) {
+            this.controlsOpen = open
+        },
+        handleTrendToggleControls (open: boolean) {
+            this.controlsOpen = open
+        },
         setTrendVisible (visible: boolean) {
             if (this.trendVisible === visible) {
                 return
@@ -1187,20 +1212,37 @@ export default defineComponent({
             // accumulated trend signal). 400 ms is generous for the transition to settle.
             this.suppressResizeFor(400)
             if (visible) {
-                // Default to 75 + 150 = 225 unless the user has already dragged the slot wider.
-                if (this.navigatorHeight < 75 + 150) {
-                    this.navigatorHeight = 75 + 150
+                // Default to NAVIGATOR_MIN_HEIGHT + TREND_DEFAULT_HEIGHT unless the user has already dragged wider.
+                if (this.navigatorHeight < NAVIGATOR_MIN_HEIGHT + TREND_DEFAULT_HEIGHT) {
+                    this.navigatorHeight = NAVIGATOR_MIN_HEIGHT + TREND_DEFAULT_HEIGHT
                 }
                 // On-demand trend setup: when `aeeg.autoCompute` is false (the default), the
                 // recording defers trend instantiation until something asks for it. Toggling
-                // the strip visible IS that ask. `ensureAeegTrendSetup` is a no-op when the
+                // the strip visible IS that ask. `ensureTrendSetup` is a no-op when the
                 // trend already exists for the active montage, so repeated toggles are cheap;
                 // it also handles the case of caching not yet complete by queueing the request
                 // for the `SIGNAL_CACHING_COMPLETE` event.
-                const resource = this.RESOURCE as unknown as { ensureAeegTrendSetup?: () => void }
-                resource.ensureAeegTrendSetup?.()
+                const resource = this.RESOURCE as unknown as {
+                    ensureTrendSetup?: (type?: string) => void
+                    removeAllTrends?: () => void
+                    clearTrendTypes?: () => void
+                    trends?: Record<string, { derivation: { type: string } }>
+                }
+                const selectedTrend = (this.$store.state.INTERFACE as { modules?: Map<string, { selectedTrend?: string }> })
+                    .modules?.get('eeg')?.selectedTrend ?? 'aeeg'
+                const trendType = TREND_REGISTRY[selectedTrend]?.derivationType ?? selectedTrend
+                // If the strip was hidden while the user switched trend types, existing
+                // trends are the wrong type. Remove them before building the new type.
+                const existingTypes = new Set(
+                    Object.values(resource.trends ?? {}).map(t => t.derivation.type)
+                )
+                if (existingTypes.size > 0 && !existingTypes.has(trendType)) {
+                    resource.removeAllTrends?.()
+                    resource.clearTrendTypes?.()
+                }
+                resource.ensureTrendSetup?.(trendType)
             } else {
-                this.navigatorHeight = 75
+                this.navigatorHeight = NAVIGATOR_MIN_HEIGHT
             }
             this.$nextTick(() => this.resizeElements())
         },
@@ -1378,6 +1420,13 @@ export default defineComponent({
                 this.undoAction()
             }
         })
+        // Restore trend-strip visibility for this resource. If the user has previously
+        // visited this resource, honour their last explicit choice (hide stays hidden
+        // even if trend data exists). On a first visit, fall back to showing the strip
+        // when the resource already has computed trend data.
+        const lastKnown = trendVisibilityByResource.get(this.RESOURCE.id)
+        const hasTrends = Object.keys(this.RESOURCE.trends || {}).length > 0
+        this.$store.dispatch('eeg.set-trend-visible', lastKnown ?? hasTrends)
         if (this.video) {
             this.video.addEventListener('canplay', this.videoReady)
             this.video.addEventListener('enterpictureinpicture', this.videoEnteredPnP)
@@ -1413,6 +1462,10 @@ export default defineComponent({
         }
     },
     beforeUnmount () {
+        // Remember the user's current trend-strip choice so the next mount can restore it.
+        if (this.RESOURCE?.id) {
+            trendVisibilityByResource.set(this.RESOURCE.id, this.trendVisible)
+        }
         // Clear possible undo and redo state.
         this.$store.commit('set-redoable-action', false)
         this.$store.commit('set-undoable-action', false)

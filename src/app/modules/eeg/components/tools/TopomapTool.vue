@@ -98,7 +98,7 @@ export default defineComponent({
         const { RESOURCE, SETTINGS } = useEegContext(store)
         const dataSampleLen = 0.2
         const width = 420
-        const height = 350
+        const height = 330
         const initialLoadDone = ref(false)
         const loadingTopo = ref(0)
         const loadingSeries = ref(0)
@@ -181,10 +181,10 @@ export default defineComponent({
     },
     computed: {
         seriesCanvasHeight () {
-            return this.height - 24
+            return this.height - 20
         },
         seriesCanvasWidth () {
-            return 680 - this.width
+            return 660 - this.width
         },
         topoCanvasHeight () {
             return this.height
@@ -364,10 +364,10 @@ export default defineComponent({
 
 <style scoped>
 [data-component="topomap-tool"] {
-    flex: 7 7 0px;
+    flex: 3 3 0px;
     position: relative;
     width: 100%;
-    overflow: hidden;
+    overflow: visible;
 }
 .topo-header {
     position: absolute;
@@ -410,6 +410,7 @@ export default defineComponent({
 .series-header wa-select {
     display: inline-block;
     height: 1.5rem;
+    margin-left: 0.25em;
     vertical-align: middle;
 }
 .series-header wa-select::part(start),
@@ -418,10 +419,10 @@ export default defineComponent({
     height: 1.5rem;
 }
 .series-header wa-select.type {
-    width: 8.75rem;
+    width: 7.5rem;
 }
 .series-header wa-select.span {
-    width: 6.5rem;
+    width: 5rem;
 }
 .series-header wa-select::part(combobox) {
     border: none;

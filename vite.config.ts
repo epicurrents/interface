@@ -20,8 +20,23 @@ const EXCLUDE_MODULES = (process.env.EXCLUDE_MODULES || '').split(',')
 // Only display each excluded module once in the console, even if it is imported multiple times.
 const excludedModules = new Set<string>()
 // https://vitejs.dev/config/
+const backend = process.env.VITE_BACKEND_URL
+
 export default defineConfig({
     base: process.env.ASSET_PATH,
+    // Dev server: proxy backend API routes to Django so HMR works without
+    // CORS issues.  Set VITE_BACKEND_URL=http://localhost:8000 in .env.
+    ...(backend ? {
+        server: {
+            proxy: {
+                '/api/':       { target: backend, changeOrigin: true },
+                '/annotations/': { target: backend, changeOrigin: true },
+                '/compute/':   { target: backend, changeOrigin: true },
+                '/recordings/': { target: backend, changeOrigin: true },
+                '/project/':   { target: backend, changeOrigin: true },
+            },
+        },
+    } : {}),
     build: {
         lib: {
             // Could also be a dictionary or array of multiple entry points

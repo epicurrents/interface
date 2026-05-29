@@ -77,6 +77,13 @@
                     :width="panelWidth"
                 />
             </wa-tab-panel>
+            <wa-tab-panel name="source-loc">
+                <source-localization-tool v-if="shouldShowPanel('source-loc')"
+                    :cursorPos="cursorPos"
+                    :height="panelHeight"
+                    :width="panelWidth"
+                />
+            </wa-tab-panel>
         </wa-tab-group>
         <!-- Legend after the main content, so it is placed on top of it -->
         <div v-if="showLegend" ref="legend" class="legend">
@@ -129,6 +136,7 @@ import SignalCropTool from '../tools/SignalCropTool.vue'
 import SignalCursorTool from '../tools/SignalCursorTool.vue'
 import SignalPropertiesTool from '../tools/SignalPropertiesTool.vue'
 import TopomapTool from '../tools/TopomapTool.vue'
+import SourceLocalizationTool from '../tools/SourceLocalizationTool.vue'
 import { PlotSelection } from '#app/views/biosignal/types'
 
 // Too many signals can become confusing and may not fit on the legend row,
@@ -183,6 +191,7 @@ export default defineComponent({
         SignalCropTool,
         SignalCursorTool,
         SignalPropertiesTool,
+        SourceLocalizationTool,
         TopomapTool,
     },
     setup (props/*, { attrs, slots, emit }*/) {
@@ -199,6 +208,7 @@ export default defineComponent({
         if (store.state.SERVICES.get('pyodide')) {
             tabs.push({ code: 'topo', label: 'Topogram', requireChannel: true, requireSignal: true, showLegend: true })
             tabs.push({ code: 'power', label: 'Power', requireChannel: false, requireSignal: false, showLegend: false })
+            tabs.push({ code: 'source-loc', label: 'Source', requireChannel: false, requireSignal: false, showLegend: false })
         }
         const bottomPanelHeight = ref(0)
         const panelHeight = ref(0)
@@ -309,8 +319,8 @@ export default defineComponent({
             }
             // Reduce bottom panel header and margins.
             const splitContentHeight = this.panelHeight - 45 - 10
-            this.topPanelHeight = splitContentHeight*0.7
-            this.bottomPanelHeight = splitContentHeight*0.3
+            this.topPanelHeight = splitContentHeight*0.75
+            this.bottomPanelHeight = splitContentHeight*0.25
         },
         selectSignal (idx: number) {
             if (idx < 0 || idx >= this.compareSelections.length) {

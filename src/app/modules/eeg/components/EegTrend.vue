@@ -2,38 +2,48 @@
     <div data-component="eeg-trend">
         <component v-if="rendererComponent"
             :is="rendererComponent"
-            :controls-open="isControlsOpen"
+            :controls-open="controlsOpen"
             :display-mode="displayMode"
             :height="height"
             :visible-range="visibleRange"
             :width="width"
+            @navigation="$emit('navigation', $event)"
         />
-        <div :class="{ controls: true, open: isControlsOpen }">
+        <div :class="{ controls: true, open: controlsOpen }">
             <div class="toggle">
-                <app-icon
-                    id="epicv-trend-controls-toggle"
-                    name="settings"
-                    @click="toggleControls"
-                ></app-icon>
+                <wa-dropdown>
+                    <app-icon
+                        id="epicv-trend-controls-toggle"
+                        name="settings"
+                        :scale="controlsOpen ? null : 0.5"
+                        slot="trigger"
+                    ></app-icon>
+                    <wa-dropdown-item @click="recomputeTrends">
+                        <app-icon
+                            name="arrows-rotate"
+                            slot="icon"
+                        ></app-icon>
+                        {{ $t('Recompute') }}
+                    </wa-dropdown-item>
+                    <wa-dropdown-item @click="$emit('toggle-controls', !controlsOpen)">
+                        <app-icon
+                            :name="controlsOpen ? 'arrow-right-to-line' : 'arrow-left-to-line'"
+                            slot="icon"
+                        ></app-icon>
+                        {{ controlsOpen ? $t('Hide options') : $t('Show options') }}
+                    </wa-dropdown-item>
+                </wa-dropdown>
                 <wa-tooltip
                     for="epicv-trend-controls-toggle"
                     placement="left"
                 >
-                    {{ isControlsOpen ? $t('Hide trend controls') : $t('Show trend controls') }}
+                    {{ $t('Trend options') }}
                 </wa-tooltip>
             </div>
-            <div v-if="isControlsOpen" class="panel">
-                <component v-if="settingsComponent" :is="settingsComponent" />
-                <wa-button
-                    appearance="plain"
-                    id="epicv-trend-recompute"
-                    size="small"
-                    variant="brand"
-                    @click="recomputeTrends"
-                >
-                    <app-icon name="arrows-rotate"></app-icon>
-                    {{ $t('Recompute') }}
-                </wa-button>
+            <div v-if="controlsOpen" class="panel">
+                <component v-if="settingsComponent"
+                    :is="settingsComponent"
+                />
             </div>
         </div>
     </div>
@@ -64,6 +74,12 @@ import { TREND_REGISTRY } from '../trends'
 export default defineComponent({
     name: 'EegTrend',
     props: {
+        /** Whether the controls panel is open — owned by the parent to stay in sync with the
+         *  navigator controls and survive the trend strip being hidden and reshown. */
+        controlsOpen: {
+            type: Boolean,
+            required: true,
+        },
         /**
          * Display mode for multi-trend layout. Overrides per-trend setting so the parent can
          * force `'superimposed'` mode when the available height drops below the threshold.
@@ -89,10 +105,6 @@ export default defineComponent({
     },
     setup () {
         const store = useStore()
-        // Controls drawer state. Closed by default; opening reserves additional right-side
-        // width via the renderer's `controlsOpen` prop so the trend canvas's right edge stays
-        // aligned with the navigator's when both controls panels are open.
-        const isControlsOpen = ref(false)
         // Local reactive mirror of `INTERFACE.modules.get('eeg').selectedTrend`. The runtime
         // field is exposed via a non-reactive getter, so Vue can't track changes through the
         // INTERFACE singleton — the value is refreshed on `eeg.set-selected-trend` and on
@@ -102,7 +114,6 @@ export default defineComponent({
                 .modules.get('eeg')?.selectedTrend || 'aeeg'
         const selectedTrend = ref(readSelectedTrend())
         return {
-            isControlsOpen,
             readSelectedTrend,
             selectedTrend,
             ...useEegContext(store, 'EegTrend'),
@@ -116,15 +127,12 @@ export default defineComponent({
             return this.registryEntry?.getRendererComponent() ?? null
         },
         settingsComponent (): Component | null {
-            return this.registryEntry?.getSettingsComponent() ?? null
+            return this.registryEntry?.getSettingsComponent?.() ?? null
         },
     },
     methods: {
         $t (key: string, params = {}, capitalized = false) {
             return T(key, this.$options.name, params, capitalized)
-        },
-        toggleControls () {
-            this.isControlsOpen = !this.isControlsOpen
         },
         /**
          * Re-run trend setup on the current active resource. Today only the aEEG hook is
@@ -132,8 +140,20 @@ export default defineComponent({
          * `selectedTrend` (or move the hook resolution into the registry entry).
          */
         recomputeTrends () {
-            const resource = this.RESOURCE as unknown as { ensureAeegTrendSetup?: () => void }
-            resource.ensureAeegTrendSetup?.()
+            const resource = this.RESOURCE as unknown as {
+                clearTrendTypes?: () => void
+                ensureTrendSetup?: (type?: string) => void
+                removeAllTrends?: () => void
+            }
+            const selectedTrend = (this.$store.state.INTERFACE as { modules?: Map<string, { selectedTrend?: string }> })
+                .modules?.get('eeg')?.selectedTrend ?? 'aeeg'
+            const trendType = TREND_REGISTRY[selectedTrend]?.derivationType ?? selectedTrend
+            // Remove trend objects, then clear the enabled-types set so stale types
+            // (e.g. 'spectrogram' when switching to 'amplitude') don't cause both
+            // trend types to be built in the same setup pass.
+            resource.removeAllTrends?.()
+            resource.clearTrendTypes?.()
+            resource.ensureTrendSetup?.(trendType)
         },
     },
     beforeMount () {
@@ -147,6 +167,14 @@ export default defineComponent({
             after: (action) => {
                 if (action.type === 'eeg.set-selected-trend') {
                     this.selectedTrend = this.readSelectedTrend()
+                    // Auto-recompute immediately when the strip is visible so the
+                    // user never has to hit Recompute after changing the trend type.
+                    const trendVisible = (this.$store.state.INTERFACE as {
+                        modules?: Map<string, { trendVisible?: boolean }>
+                    }).modules?.get('eeg')?.trendVisible
+                    if (trendVisible) {
+                        this.recomputeTrends()
+                    }
                 }
             },
         })
@@ -191,17 +219,19 @@ export default defineComponent({
     }
     .controls.open {
         flex: 0 0 200px;
-        overflow: visible;
+        overflow: hidden;
     }
     .controls > .toggle {
         cursor: pointer;
         flex: 0 0 20px;
-        font-size: 0.625rem;
         line-height: 1;
         position: absolute;
         right: 0.1rem;
         text-align: center;
         top: 0.1rem;
+    }
+    .controls:not(.open) > .toggle {
+        opacity: 0.5;
     }
     .controls > .panel {
         box-sizing: border-box;
@@ -210,7 +240,7 @@ export default defineComponent({
         flex-direction: column;
         gap: 0.5rem;
         height: 100%;
-        padding: 1.5rem 0 0.5rem 0;
+        padding-top: 0.25rem;
         width: 100%;
     }
 </style>

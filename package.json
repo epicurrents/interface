@@ -50,8 +50,8 @@
   "author": "Sampsa Lohi",
   "license": "Apache-2.0",
   "dependencies": {
-    "@awesome.me/webawesome": "3.6.0",
-    "@material-symbols/svg-400": "^0.44.0",
+    "@awesome.me/webawesome": "^3.7.0",
+    "@material-symbols/svg-400": "^0.44.7",
     "dompurify": "^3.2.3",
     "lodash": "^4.17.23",
     "scoped-event-bus": "^0.2.4",

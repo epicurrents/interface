@@ -14,6 +14,48 @@ import type {
 export type EegInterfaceSchemas = InterfaceSchema
 
 export type EegInterfaceSettings = CommonBiosignalInterfaceSettings & {
+    /** Per-trend display settings — keyed by trend id (`aeeg`, `ratio`, `pdbsi`,
+     *  future trend types). Display-only knobs live here, not in
+     *  `CommonBiosignalSettings.trends`, so the trend worker / processor never
+     *  has to know about render flags. */
+    trends: {
+        aeeg: {
+            /**
+             * Per-derivation band colours, keyed by the derivation id from
+             * `settings.aeeg.derivations[i].id` (e.g. `'left'`, `'right'`).
+             * Standard hemispheric ids (`left`, `right`, `central`) automatically
+             * inherit from `trace.color.sin/dex/mid`; add an entry here to override
+             * or to colour custom derivation ids.
+             */
+            derivationColors: { [derivationId: string]: SettingsColor }
+            /** How multiple aEEG derivations are laid out: stacked slots or overlaid in one band. */
+            displayMode: 'separate' | 'superimposed'
+        }
+        ratio: {
+            /** Layout when two hemisphere traces are shown. */
+            displayMode: 'separate' | 'superimposed'
+            /** Highlight epochs that exceed the threshold with a distinct fill. */
+            markCrossing: boolean
+            /** Invert the R-hemisphere axis in separate mode. */
+            mirrorMode: boolean
+            /** Fill the area between the threshold line and the trace for above-threshold epochs. */
+            showFill: boolean
+            /** Draw the published abnormality threshold reference line. */
+            showThreshold: boolean
+            /** Threshold on the [−1, +1] scale (default 0.26 = TAR, van Stigt 2023). */
+            threshold: number
+        }
+        pdbsi: {
+            /** Highlight epochs that exceed the threshold with a distinct fill. */
+            markCrossing: boolean
+            /** Fill the area between the threshold line and the trace for above-threshold epochs. */
+            showFill: boolean
+            /** Draw the published abnormality threshold reference line. */
+            showThreshold: boolean
+            /** Threshold on the [0, 1] scale (default 0.52 = delta band, ELECTRA-STROKE). */
+            threshold: number
+        }
+    }
     /** Delay in milliseconds before starting continuous browsing. */
     continuousBrowseDelay: number
     /** Interval in milliseconds between updates when continuously browsing. */

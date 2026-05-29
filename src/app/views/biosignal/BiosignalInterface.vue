@@ -21,7 +21,7 @@
         >
             <!-- Scoped view -->
             <template v-for="resource in activeResources" :key="`viewer-${resource.id}`">
-                <component :is="VIEWERS[resource.modality]" ref="viewer"
+                <component :is="VIEWERS[resource.modality]"
                     :viewerSize="singleViewerSize"
                 />
             </template>

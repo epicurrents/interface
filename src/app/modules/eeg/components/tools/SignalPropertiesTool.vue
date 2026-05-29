@@ -272,7 +272,7 @@ export default defineComponent({
 
 <style scoped>
 [data-component="signal-properties-tool"] {
-    flex: 3 3 0px;
+    flex: 1 1 0px;
     display: flex;
     flex-wrap: nowrap;
     overflow: hidden;

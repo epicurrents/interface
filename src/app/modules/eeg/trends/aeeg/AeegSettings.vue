@@ -1,16 +1,9 @@
 <template>
     <div data-component="aeeg-settings">
-        <wa-switch
-            :checked="isSuperimposed || undefined"
-            id="epicv-aeeg-superimpose"
-            size="small"
-            @input="onSuperimposeChanged($event)"
-        >
-            {{ $t('Superimpose') }}
-        </wa-switch>
         <label class="field">
-            <span class="label">{{ $t('Epoch length (s)') }}</span>
+            <span class="label">{{ $t('Epoch length') }}</span>
             <wa-input
+                class="epoch-length"
                 :id="`epicv-aeeg-epoch-length`"
                 :min="1"
                 :step="1"
@@ -18,9 +11,21 @@
                 type="number"
                 :value="String(epochLength)"
                 @change="onEpochLengthChanged($event)"
-            ></wa-input>
+            >
+                <span slot="end">s</span>
+            </wa-input>
         </label>
-        <p class="hint">{{ $t('Click {recompute} after changing epoch length.', { recompute: '↻' }) }}</p>
+        <label class="field">
+            <wa-switch
+                :checked="isSuperimposed || undefined"
+                id="epicv-aeeg-superimpose"
+                size="small"
+                @input="onSuperimposeChanged($event)"
+            >
+                {{ $t('Superimpose') }}
+            </wa-switch>
+        </label>
+        <p class="hint">{{ $t('Recompute after changes.') }}</p>
     </div>
 </template>
 
@@ -49,7 +54,7 @@ export default defineComponent({
     },
     computed: {
         isSuperimposed (): boolean {
-            return this.SETTINGS.aeeg?.displayMode === 'superimposed'
+            return this.SETTINGS.trends?.aeeg?.displayMode === 'superimposed'
         },
         epochLength (): number {
             return this.SETTINGS.trends?.amplitude?.epochLength ?? 15
@@ -62,7 +67,7 @@ export default defineComponent({
         onSuperimposeChanged (event: Event) {
             const checked = (event.target as HTMLInputElement).checked
             this.$store.dispatch('set-settings-value', {
-                field: 'eeg.aeeg.displayMode',
+                field: 'eeg.trends.aeeg.displayMode',
                 value: checked ? 'superimposed' : 'separate',
             })
         },
@@ -90,17 +95,23 @@ export default defineComponent({
 [data-component="aeeg-settings"] {
     box-sizing: border-box;
     display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
     font-size: 0.75rem;
-    gap: 0.5rem;
+    gap: 0;
+    min-height: 0;
+    overflow: hidden;
     padding: 0.25rem 0.5rem;
     width: 100%;
 }
     .field {
         align-items: center;
         display: flex;
+        flex: 1;
         gap: 0.5rem;
         justify-content: space-between;
+        max-height: 2.5rem;
+        min-height: 2rem;
         width: 100%;
     }
         .field > .label {
@@ -108,8 +119,15 @@ export default defineComponent({
         }
         .field > wa-input {
             flex: 0 0 5rem;
+            height: 2rem;
+            max-width: 5rem;
+        }
+        [data-component="aeeg-settings"] wa-switch {
+            flex-shrink: 0;
+            padding-top: 0;
         }
     .hint {
+        flex-shrink: 0;
         font-style: italic;
         margin: 0;
         opacity: 0.65;

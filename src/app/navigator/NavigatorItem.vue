@@ -132,9 +132,21 @@ export default defineComponent({
                         strParams.text = value.toString()
                         strParams.tooltip = this.$t('{n} signals', { n: value })
                         props.unshift(strParams) // Show signals count first.
+                    } else {
+                        // State / dependency messages from `getMainProperties()` come back with the
+                        // message text as the map key and a placeholder object as the value, e.g.
+                        // `'Loading dependency {n}/{t}...'` → `{ n: 1, t: 2 }`. The return type
+                        // claims string | number for value, but state messages put an object
+                        // there — hence the cast through unknown.
+                        props.push({ text: this.$t(name, value as unknown as Record<string, unknown>) })
                     }
                 } else if (name === 'pages') {
                     props.push({ text: this.$t('Not loaded yet') })
+                } else {
+                    // Plain state messages with no placeholders — `'Waiting to load...'`,
+                    // `'Loading details...'`, `'Initializing...'`, or an error reason. The map
+                    // key is the message itself.
+                    props.push({ text: this.$t(name) })
                 }
             }
             this.isReady = this.resource.isReady

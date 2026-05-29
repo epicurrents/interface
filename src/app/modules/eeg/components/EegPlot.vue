@@ -493,7 +493,7 @@ export default defineComponent({
             if (handleTouch && !this.start.touch) {
                 return
             }
-            if (!event.button && !event.altKey && !event.shiftKey && !event.ctrlKey) {
+            if (!event.button) {
                 if (this.clickCountResetTimer) {
                     window.clearTimeout(this.clickCountResetTimer)
                 }

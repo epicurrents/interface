@@ -360,48 +360,60 @@ export const useBiosignalContext = (store: EpiCStore, component?: string) => {
  * @returns Component properties for the given context.
  */
 export const useContext = (store: Pick<EpiCStore, "state">, context: string, component?: string) => {
-    const modMemoryManager = store.state.SETTINGS.modules[context]?.useMemoryManager
-    const activeSettings = context === 'app' ? {
-        ...store.state.SETTINGS.app,
-        ...INTERFACE.app,
-    } : {
-        ...store.state.SETTINGS.modules[context],
-        ...INTERFACE.modules.get(context)?.settings,
-        useMemoryManager: modMemoryManager && store.state.SETTINGS.app.useMemoryManager,
-    }
     const activeSchemas = context === 'app'
                         ? undefined
                         : INTERFACE.modules.get(context)?.schemas
-    const settingsProxy = new Proxy(activeSettings, {
-        get (_target, name, receiver) {
-            // Overwrite property values with up-to-date values from the settings.
-            const intfSettings = context === 'app'
-                               ? INTERFACE.app
-                               : INTERFACE.modules.get(context)?.settings
-            if (intfSettings && Reflect.has(intfSettings, name)) {
-                return Reflect.get(intfSettings, name, receiver)
-            }
-            const mainSettings = context === 'app'
-                               ? store.state.SETTINGS.app
-                               : store.state.SETTINGS.modules[context]
-            if (mainSettings && Reflect.has(mainSettings, name)) {
-                return Reflect.get(mainSettings, name, receiver)
-            }
-            return undefined
-        },
-        set (_target, name, value, receiver) {
-            const mainSettings = store.state.SETTINGS.modules[context]
-            if (mainSettings && Reflect.has(mainSettings, name)) {
-                return Reflect.set(mainSettings, name, value, receiver)
-            }
-            const intfSettings = INTERFACE.modules.get(context)
-            if (intfSettings) {
-                // Set new values to interface settings by default.
-                return Reflect.set(intfSettings, name, value, receiver)
-            }
-            return false
-        },
-    })
+    /**
+     * Build a Proxy that reads and writes two settings objects without merging them.
+     * When both objects carry the same key with plain-object values, the returned value
+     * is itself a Proxy that recursively applies the same two-source resolution — so
+     * nested keys can live in either source without one shadowing the other.
+     * Interface values take precedence over module values on conflict.
+     */
+    const makeSettingsProxy = (intfObj: Record<string, unknown> | null | undefined,
+                               mainObj: Record<string, unknown> | null | undefined): unknown => {
+        return new Proxy({} as Record<string | symbol, unknown>, {
+            get (_, name, receiver) {
+                const intfVal = intfObj && Reflect.has(intfObj, name)
+                              ? Reflect.get(intfObj, name, receiver) : undefined
+                const mainVal = mainObj && Reflect.has(mainObj, name)
+                              ? Reflect.get(mainObj, name, receiver) : undefined
+                // Both values are plain objects — recurse rather than merge.
+                if (intfVal !== undefined && mainVal !== undefined
+                    && typeof intfVal === 'object' && !Array.isArray(intfVal)
+                    && typeof mainVal === 'object' && !Array.isArray(mainVal)) {
+                    return makeSettingsProxy(
+                        intfVal as Record<string, unknown>,
+                        mainVal as Record<string, unknown>
+                    )
+                }
+                if (intfVal !== undefined) return intfVal
+                return mainVal
+            },
+            set (_, name, value, receiver) {
+                // Write to whichever source declares the field; interface wins on conflict.
+                if (intfObj && Reflect.has(intfObj, name)) {
+                    return Reflect.set(intfObj, name, value, receiver)
+                }
+                if (mainObj && Reflect.has(mainObj, name)) {
+                    return Reflect.set(mainObj, name, value, receiver)
+                }
+                // New field: default to interface settings.
+                if (intfObj) return Reflect.set(intfObj, name, value, receiver)
+                return false
+            },
+            has (_, name) {
+                return Boolean((intfObj && Reflect.has(intfObj, name))
+                            || (mainObj && Reflect.has(mainObj, name)))
+            },
+        })
+    }
+    const intfSettingsRoot = context === 'app' ? INTERFACE.app : INTERFACE.modules.get(context)?.settings
+    const mainSettingsRoot = context === 'app' ? store.state.SETTINGS.app : store.state.SETTINGS.modules[context]
+    const settingsProxy = makeSettingsProxy(
+        intfSettingsRoot as Record<string, unknown> | undefined,
+        mainSettingsRoot as Record<string, unknown> | undefined
+    )
     // Include reference to possible Pyodide service and information about SharedArrayBuffer support.
     const pyodide = {
         /** Pyodide service or null if not available. */

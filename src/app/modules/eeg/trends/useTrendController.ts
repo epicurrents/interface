@@ -41,13 +41,7 @@ export function useTrendController (
         for (const trend of trends.value) {
             trend.removeAllEventListeners(context.ID)
         }
-        const montage = context.RESOURCE?.activeMontage
-        if (!montage) {
-            trends.value = []
-            redraw()
-            return
-        }
-        trends.value = (Object.values(montage.trends) as BiosignalTrend[])
+        trends.value = (Object.values(context.RESOURCE?.trends ?? {}) as BiosignalTrend[])
             .filter((t) => t.derivation.type === derivationType)
         for (const trend of trends.value) {
             trend.addEventListener('trend-epoch', scheduleRedraw, context.ID)
@@ -56,22 +50,20 @@ export function useTrendController (
         redraw()
     }
 
-    const montageChanged = () => {
-        context.RESOURCE.activeMontage?.onPropertyChange('trends', refreshTrends, context.ID)
-        refreshTrends()
-    }
 
     const recompute = () => {
-        // Each modality currently exposes a single trend setup hook. When additional trend types
-        // land they can register their own setup methods and the resolution moves to the trend
-        // registry; for now aEEG is the only trend so calling the hook unconditionally is fine.
-        const resource = context.RESOURCE as unknown as { ensureAeegTrendSetup?: () => void }
-        resource.ensureAeegTrendSetup?.()
+        // Clear existing trends first so the guard in _buildAmplitudeTrends does not
+        // short-circuit the rebuild when trends already exist.
+        const resource = context.RESOURCE as unknown as {
+            ensureTrendSetup?: () => void
+            removeAllTrends?: () => void
+        }
+        resource.removeAllTrends?.()
+        resource.ensureTrendSetup?.()
     }
 
     onMounted(() => {
-        context.RESOURCE.onPropertyChange('activeMontage', montageChanged, context.ID)
-        context.RESOURCE.activeMontage?.onPropertyChange('trends', refreshTrends, context.ID)
+        context.RESOURCE.onPropertyChange('trends', refreshTrends, context.ID)
         refreshTrends()
     })
 
@@ -79,7 +71,6 @@ export function useTrendController (
         for (const trend of trends.value) {
             trend.removeAllEventListeners(context.ID)
         }
-        context.RESOURCE.activeMontage?.removeAllEventListeners(context.ID)
         context.RESOURCE.removeAllEventListeners(context.ID)
     })
 

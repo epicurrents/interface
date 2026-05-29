@@ -44,6 +44,8 @@ import format_underlined from '@material-symbols/svg-400/outlined/format_underli
 import fullscreen from '@material-symbols/svg-400/outlined/fullscreen.svg?raw'
 import fullscreen_exit from '@material-symbols/svg-400/outlined/fullscreen_exit.svg?raw'
 import help from '@material-symbols/svg-400/outlined/help.svg?raw'
+import horizontal_align_left from '@material-symbols/svg-400/outlined/horizontal_align_left.svg?raw'
+import horizontal_align_right from '@material-symbols/svg-400/outlined/horizontal_align_right.svg?raw'
 import info from '@material-symbols/svg-400/outlined/info.svg?raw'
 import keyboard_arrow_down from '@material-symbols/svg-400/outlined/keyboard_arrow_down.svg?raw'
 import keyboard_arrow_up from '@material-symbols/svg-400/outlined/keyboard_arrow_up.svg?raw'
@@ -112,6 +114,8 @@ export const ICON_SVGS: Record<string, { outlined: string; filled?: string }> = 
     fullscreen:                     { outlined: fullscreen },
     fullscreen_exit:                { outlined: fullscreen_exit },
     help:                           { outlined: help },
+    horizontal_align_left:          { outlined: horizontal_align_left },
+    horizontal_align_right:         { outlined: horizontal_align_right },
     info:                           { outlined: info },
     keyboard_arrow_down:            { outlined: keyboard_arrow_down },
     keyboard_arrow_up:              { outlined: keyboard_arrow_up },
@@ -154,6 +158,8 @@ const FA_TO_MATERIAL: Record<string, string> = {
     'angle-down':                       'keyboard_arrow_down',
     'angle-up':                         'keyboard_arrow_up',
     'arrow-down-to-arc':                'format_underlined',
+    'arrow-left-to-line':               'horizontal_align_left',
+    'arrow-right-to-line':              'horizontal_align_right',
     'arrow-up-right-from-square':       'open_in_new',
     'arrows-from-dotted-line':          'unfold_more',
     'arrows-maximize':                  'fullscreen',

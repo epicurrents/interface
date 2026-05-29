@@ -18,8 +18,9 @@ export type TrendRegistryEntry = {
     derivationType: BiosignalTrend['derivation']['type']
     /** Async loader for the body component (label gutter + canvases + scale). */
     getRendererComponent: () => Component
-    /** Async loader for the settings panel rendered inside the controls drawer. */
-    getSettingsComponent: () => Component
+    /** Async loader for the settings panel rendered inside the controls drawer.
+     *  Optional — when absent the controls drawer shows no settings panel. */
+    getSettingsComponent?: () => Component
 }
 
 export const TREND_REGISTRY: Record<string, TrendRegistryEntry> = {
@@ -27,5 +28,20 @@ export const TREND_REGISTRY: Record<string, TrendRegistryEntry> = {
         derivationType: 'amplitude',
         getRendererComponent: () => loadAsyncComponent(() => import('./aeeg/AeegRenderer.vue')),
         getSettingsComponent: () => loadAsyncComponent(() => import('./aeeg/AeegSettings.vue')),
+    },
+    ratio: {
+        derivationType: 'ratio',
+        getRendererComponent: () => loadAsyncComponent(() => import('./ratio/RatioRenderer.vue')),
+        getSettingsComponent: () => loadAsyncComponent(() => import('./ratio/RatioSettings.vue')),
+    },
+    pdbsi: {
+        derivationType: 'pdbsi',
+        getRendererComponent: () => loadAsyncComponent(() => import('./pdbsi/PdbsiRenderer.vue')),
+        getSettingsComponent: () => loadAsyncComponent(() => import('./pdbsi/PdbsiSettings.vue')),
+    },
+    spectrogram: {
+        derivationType: 'spectrogram',
+        getRendererComponent: () => loadAsyncComponent(() => import('./spectrogram/SpectrogramRenderer.vue')),
+        getSettingsComponent: () => loadAsyncComponent(() => import('./spectrogram/SpectrogramSettings.vue')),
     },
 }
