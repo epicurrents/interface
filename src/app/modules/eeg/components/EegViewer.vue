@@ -49,7 +49,7 @@
                                 :pxPerSecond="pxPerSecond"
                                 :secPerPage="secPerPage"
                                 :viewRange="viewRange"
-                                :visibleRange="visibleRange"
+                                :visibleRange="navigatorRange"
                                 v-on:double-click="handlePlotDoubleClick"
                                 v-on:go-backward="goBackward"
                                 v-on:go-forward="goForward"
@@ -65,8 +65,22 @@
                                 v-on:plot-updated="handlePlotUpdated"
                                 v-on:touch-start="handlePlotTouchStart"
                             />
-                            <!-- Annotations-->
-                            <annotation-labels v-if="overlay && viewReady"
+                            <!-- Cascade-specific overlay (per-row time labels + main-view indicator).
+                                 Mounts only when the active montage is a cascade — non-cascade montages
+                                 don't need either piece. -->
+                            <cascade-overlay v-if="cascadeMontage && viewReady"
+                                :montage="cascadeMontage"
+                                :plotDimensions="plotDimensions"
+                                :pxPerSecond="pxPerSecond"
+                            />
+                            <!-- Annotations — cascade uses a row-aware read-only renderer; regular
+                                 montages use the full-featured (drag, resize, edit) variant. -->
+                            <cascade-annotations v-if="cascadeMontage && viewReady"
+                                :montage="cascadeMontage"
+                                :plotDimensions="plotDimensions"
+                                :pxPerSecond="pxPerSecond"
+                            />
+                            <annotation-labels v-if="!cascadeMontage && overlay && viewReady"
                                 :overlay="overlay"
                                 :pxPerSecond="pxPerSecond"
                                 :secPerPage="viewRange"
@@ -76,14 +90,27 @@
                                 v-on:edit-annotation="editEvent"
                                 v-on:updated="handleEventsUpdated"
                             />
-                            <!-- Selected signal segments -->
-                            <div v-for="(_selection, idx) in plotSelections" :key="`drag-selection-${idx}`"
-                                :id="`signal-selection-${idx}`"
-                                class="selection-area"
-                                :style="selectionStyles"
-                                @click="handleSelectionClick(idx)"
-                                @contextmenu.prevent=""
-                            ></div>
+                            <!-- Selected signal segments. Regular montages render one clickable
+                                 div per selection; cascade view renders multi-row segments via
+                                 CascadeSelections (one bar per affected row, all sharing the same
+                                 source selection). -->
+                            <template v-if="!cascadeMontage">
+                                <div v-for="(_selection, idx) in plotSelections" :key="`drag-selection-${idx}`"
+                                    :id="`signal-selection-${idx}`"
+                                    class="selection-area"
+                                    :style="selectionStyles"
+                                    @click="handleSelectionClick(idx)"
+                                    @contextmenu.prevent=""
+                                ></div>
+                            </template>
+                            <cascade-selections v-if="cascadeMontage && viewReady"
+                                :activeSelectionIdx="cascadeActiveSelectionIdx"
+                                :montage="cascadeMontage"
+                                :plotDimensions="plotDimensions"
+                                :plotSelections="plotSelections"
+                                :pxPerSecond="pxPerSecond"
+                                v-on:selection-click="handleSelectionClick"
+                            />
                             <div v-if="selectionBound"
                                 class="selection-bound"
                                 :style="selectionBoundStyles"
@@ -192,7 +219,7 @@
                         :open="sidebarOpen === 'annotations'"
                         :selections="plotSelections"
                         :tab="sidebarTab"
-                        :visibleRange="visibleRange"
+                        :visibleRange="navigatorRange"
                         v-on:close="hideSideDrawer"
                         v-on:create-events="createEvents"
                         v-on:remove-event="removeUserEvents"
@@ -219,7 +246,7 @@
                     :displayMode="effectiveTrendDisplayMode"
                     :height="effectiveTrendVisible ? trendHeight : 0"
                     :style="{ flex: `0 0 ${effectiveTrendVisible ? trendHeight : 0}px` }"
-                    :visibleRange="visibleRange"
+                    :visibleRange="navigatorRange"
                     :width="viewerSize[0]"
                     ref="trend"
                     v-on:navigation="handlePlotNavigation"
@@ -232,7 +259,7 @@
                     :height="actualNavigatorHeight"
                     :selectionBound="selectionBound"
                     :style="{ flex: `0 0 ${actualNavigatorHeight}px` }"
-                    :visibleRange="visibleRange"
+                    :visibleRange="navigatorRange"
                     :width="viewerSize[0]"
                     v-on:backward="goBackward"
                     v-on:forward="goForward"
@@ -257,6 +284,7 @@ import { Log } from 'scoped-event-log'
 import type {
     AnnotationEventTemplate,
     BiosignalAnnotationEvent,
+    BiosignalCascadeMontage,
     BiosignalChannel,
     ChannelPositionProperties,
     MontageChannel,
@@ -284,6 +312,9 @@ import type { SignalHighlight } from '#types/plot'
 import AnnotationLabels from '#app/views/biosignal/overlays/AnnotationLabels.vue'
 import AnnotationEditor from '#app/views/biosignal/overlays/AnnotationEditor.vue'
 import AnnotationSidebar from '#app/views/biosignal/sidebars/AnnotationSidebar.vue'
+import CascadeAnnotations from '#app/views/biosignal/overlays/CascadeAnnotations.vue'
+import CascadeOverlay from '#app/views/biosignal/overlays/CascadeOverlay.vue'
+import CascadeSelections from '#app/views/biosignal/overlays/CascadeSelections.vue'
 import ChannelHighlights from '#app/views/biosignal/overlays/ChannelHighlights.vue'
 import ContextMenu from '#app/views/biosignal/overlays/ContextMenu.vue'
 import DynamicReportForm from '#components/report/components/DynamicReportForm.vue'
@@ -319,6 +350,9 @@ export default defineComponent({
         AnnotationLabels,
         AnnotationEditor,
         AnnotationSidebar,
+        CascadeAnnotations,
+        CascadeOverlay,
+        CascadeSelections,
         ChannelHighlights,
         ContextMenu,
         DynamicReportForm,
@@ -340,6 +374,13 @@ export default defineComponent({
         const activeCursorTool = ref(null as string | null)
         const activeSelection = ref(null as PlotSelection | null)
         const channelsChanged = ref(0)
+        // Bumped by `activeMontageChanged` so the `cascadeMontage` computed has a tracked
+        // dependency to invalidate on. `RESOURCE.activeMontage` is a plain getter on an
+        // EventTarget-extended asset (not a Vue-reactive property), so without this trigger
+        // Vue would cache the first result of `cascadeMontage` and never re-evaluate —
+        // leaving CascadeOverlay / CascadeAnnotations / CascadeSelections mounted after
+        // switching back to a regular montage.
+        const activeMontageVersion = ref(0)
         const cmPerSec = ref(0)
         const contextMenu = ref(null as ContextMenuContext | null)
         const dataSetupDone = ref(false)
@@ -423,7 +464,6 @@ export default defineComponent({
         // Unsubscribe from store mutations
         const unsubscribe = ref(null as (() => void) | null)
         const unsubscribeActions = ref(null as (() => void) | null)
-
         // ── Composable setup ─────────────────────────────────────────────────
         const eegCtx = useEegContext(store, 'EegViewer')
         const layout = useBiosignalLayout(
@@ -441,6 +481,22 @@ export default defineComponent({
         )
         const { borderWidth, plotDimensions, pxPerSecond, visibleRange } = layout
         const viewRange = computed(() => secPerPage.value || plotDimensions.value[0] / pxPerSecond.value)
+        // Navigator-side range: the seconds of the recording currently on screen across the *whole*
+        // viewer (vs. visibleRange, which describes one renderer page). For a cascade montage with N
+        // rows of pageLength seconds each, the user actually sees `rowCount * pageLength` seconds —
+        // that's what the navigator viewbox should span and what click-to-center should bracket.
+        // Falls back to `visibleRange` for regular montages (pageStep is null) so the existing
+        // single-page semantics are preserved.
+        const navigatorRange = computed(() => {
+            // Read visibleRange first to introduce a reactive dependency. `pageStep` is a plain
+            // value on the (non-reactive) montage object and wouldn't trigger re-evaluation on
+            // its own — but it co-changes with visibleRange in every relevant transition
+            // (`activeMontageChanged` calls `timebaseChanged` which updates `secPerPage` → updates
+            // `visibleRange`).
+            const fallback = visibleRange.value
+            const step = eegCtx.RESOURCE.activeMontage?.pageStep
+            return typeof step === 'number' && step > 0 ? step : fallback
+        })
         const annoEditor = useBiosignalAnnotationEditor(eegCtx.RESOURCE, editingEvents, editingEventsMode)
 
         const analysis = useBiosignalAnalysis(eegCtx.RESOURCE, plotSelections, 'EegViewer')
@@ -448,9 +504,11 @@ export default defineComponent({
         const nav = useBiosignalNavigation(
             eegCtx.RESOURCE,
             eegCtx.SETTINGS,
-            visibleRange,
+            navigatorRange,
             (position, _goTo) => {
-                eegCtx.RESOURCE.viewStart = Math.max(Math.floor(position - visibleRange.value/2), 0)
+                // Centre on the user-visible reach so cascade montages park N rows around the
+                // clicked time rather than just one row.
+                eegCtx.RESOURCE.viewStart = Math.max(Math.floor(position - navigatorRange.value/2), 0)
             },
             video,
         )
@@ -507,6 +565,7 @@ export default defineComponent({
         return {
             activeCursorTool,
             activeSelection,
+            activeMontageVersion,
             channelsChanged,
             cmPerSec,
             contextMenu,
@@ -523,6 +582,7 @@ export default defineComponent({
             nextAnimationFrame,
             onnxContinue,
             onnxHighlights,
+            navigatorRange,
             recordingReady,
             reportSchemaManager,
             reportWindow,
@@ -603,6 +663,33 @@ export default defineComponent({
                 ? [`${NAVIGATOR_MIN_HEIGHT}px`, '40%']
                 : [`${NAVIGATOR_MIN_HEIGHT}px`, `${NAVIGATOR_MIN_HEIGHT}px`]
         },
+        /**
+         * Index of the currently-active selection within `plotSelections`. Used by the cascade
+         * selection overlay to flag which set of row segments is the live drag (vs. finalised
+         * historical selections that the user might be cycling between).
+         */
+        cascadeActiveSelectionIdx (): number {
+            if (!this.activeSelection) {
+                return -1
+            }
+            return this.plotSelections.indexOf(this.activeSelection)
+        },
+        /**
+         * Active montage narrowed to `BiosignalCascadeMontage` when it actually is one. Drives
+         * `CascadeOverlay` mounting and the cascade-aware branch in the double-click handler.
+         * Reads `activeMontageVersion` so Vue invalidates the cached result whenever
+         * `activeMontageChanged` fires — without that read the computed has no reactive deps
+         * (`RESOURCE.activeMontage` is a plain getter) and the cascade overlays survive the
+         * switch back to a regular montage.
+         */
+        cascadeMontage (): BiosignalCascadeMontage | null {
+            void this.activeMontageVersion
+            const active = this.RESOURCE.activeMontage
+            if (active?.isCascade) {
+                return active as BiosignalCascadeMontage
+            }
+            return null
+        },
         isOnlyMenuChannelActive (): boolean {
             if (this.menuChannel) {
                 const activeChans = (this.RESOURCE.activeMontage?.channels || []).filter(c => c?.isActive)
@@ -665,6 +752,16 @@ export default defineComponent({
          */
         activeMontageChanged () {
             this.hideAllOverlayElements()
+            // Bump the reactive trigger that `cascadeMontage` reads, so the computed (and the
+            // `v-if`-gated cascade overlays) re-evaluate against the new active montage. Without
+            // this the cached value sticks across the switch and overlays from the previous
+            // cascade keep rendering.
+            this.activeMontageVersion++
+            // The new montage may override timebaseUnit / pageLength (e.g. EegCascadeMontage forces
+            // sec/page with a montage-specific page length). Recompute so the layout reflects the
+            // effective values; falls back to the recording defaults when the montage doesn't
+            // override.
+            this.timebaseChanged()
         },
         /**
          * Add a `handler` method for when the pointer leaves the given `element`.
@@ -1121,6 +1218,17 @@ export default defineComponent({
                             this.RESOURCE.addMontage(`${setup}:${montage.name}`, montage.label, setup, montage)
                         }
                     }
+                    // Resolve cascade montage entries against the now-populated setups list and
+                    // register one cascade montage per entry whose source candidate matches. The
+                    // recording exposes addCascadeMontagesFromEntries as a Promise-returning helper;
+                    // we don't await here because additional montages are added in a fire-and-forget
+                    // pattern (same as the extraMontages loop above). The settings shape is keyed
+                    // by setup name (mirroring extraMontages), so check Object.keys().length, not
+                    // Array.length.
+                    const cascadeEntries = this.SETTINGS.cascadeMontages
+                    if (cascadeEntries && Object.keys(cascadeEntries).length && this.RESOURCE.addCascadeMontagesFromEntries) {
+                        this.RESOURCE.addCascadeMontagesFromEntries(cascadeEntries)
+                    }
                 }
             }
         },
@@ -1146,6 +1254,10 @@ export default defineComponent({
             }
         },
         timebaseChanged () {
+            // RESOURCE.timebase and RESOURCE.timebaseUnit are routing-aware getters — they
+            // surface the active montage's override values when `applyToMontage` is true
+            // (e.g. cascade montages forcing sec/page with a row-sized page length). No
+            // manual consult is needed here.
             if (this.isInEpochMode || this.RESOURCE.timebaseUnit === 'secPerPage') {
                 this.cmPerSec = 0
                 this.secPerPage = this.SETTINGS.epochMode.epochLength || this.RESOURCE.timebase

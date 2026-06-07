@@ -221,14 +221,35 @@ export default defineComponent({
                 if (!sig.data) {
                     continue
                 }
+                // Selections that span an interruption arrive with NaN samples for the gap;
+                // running an FFT on those silently poisons every psd value and every label
+                // downstream (NaN.toFixed → "NaN %"). Replace NaN with 0 so the gap reads as a
+                // silent stretch in the spectrum rather than dirtying the whole result.
+                let signalForFft = sig.data
+                for (let i = 0; i < sig.data.length; i++) {
+                    if (!Number.isFinite(sig.data[i])) {
+                        signalForFft = new Float32Array(sig.data.length)
+                        for (let j = 0; j < sig.data.length; j++) {
+                            signalForFft[j] = Number.isFinite(sig.data[j]) ? sig.data[j] : 0
+                        }
+                        break
+                    }
+                }
                 // Get FFT for the signal sample
-                const fft = fftAnalysis(sig.data, sig.channel.samplingRate)
+                const fft = fftAnalysis(signalForFft, sig.channel.samplingRate)
                 if (!fft.frequencyBins.length || !fft.resolution) {
                     continue
                 }
-                // Include the whole spectrum, in case maximum is outside visible range
-                const psdMax = Math.max(...fft.psds)
-                const fftMax = 1.25*psdMax
+                // Include the whole spectrum, in case maximum is outside visible range. Spread
+                // on a large Float32Array can stack-overflow; iterate and ignore NaN as a final
+                // safety net against any residual non-finite values in psds.
+                let psdMax = 0
+                for (const v of fft.psds) {
+                    if (Number.isFinite(v) && v > psdMax) {
+                        psdMax = v
+                    }
+                }
+                const fftMax = 1.25*psdMax || 1
                 // Calculate guideline positions and frequency band power densities
                 sig.frequencyBandProperties.splice(0)
                 // Start with the DC band
@@ -291,10 +312,27 @@ export default defineComponent({
                     // Start from current endIndex on next round
                     startIndex = endIndex
                 }
-                // Calculate relative power densities
+                // Calculate relative power densities. A silent selection (post-NaN sanitisation
+                // of an all-interruption gap) gives totalPower / totalAverage of 0, so guard the
+                // divisions — relativeAbsolute/Average display as 0 % rather than NaN %.
                 for (const band of sig.frequencyBandProperties) {
-                    band.relativeAbsolute = band.absolute/totalPower
-                    band.relativeAverage = band.average/totalAverage
+                    band.relativeAbsolute = totalPower ? band.absolute/totalPower : 0
+                    band.relativeAverage = totalAverage ? band.average/totalAverage : 0
+                    if (!Number.isFinite(band.relativeAbsolute)) {
+                        band.relativeAbsolute = 0
+                    }
+                    if (!Number.isFinite(band.relativeAverage)) {
+                        band.relativeAverage = 0
+                    }
+                    if (!Number.isFinite(band.peakFrequency)) {
+                        band.peakFrequency = 0
+                    }
+                    if (!Number.isFinite(band.absolute)) {
+                        band.absolute = 0
+                    }
+                    if (!Number.isFinite(band.average)) {
+                        band.average = 0
+                    }
                 }
                 // Mark peak frequency power band
                 if (!peakFrequency) {

@@ -8,7 +8,7 @@
 // Make sure global is defined.
 window.global ||= window
 
-import { MB_BYTES, safeObjectFrom } from '@epicurrents/core/dist/util'
+import { MB_BYTES, MICRO, safeObjectFrom } from '@epicurrents/core/dist/util'
 import type { ApplicationInterfaceConfig } from '#types/globals'
 import { Log } from 'scoped-event-log'
 // Make sure we have valid initial configuration.
@@ -25,7 +25,24 @@ const SETUP: Required<ApplicationInterfaceConfig> = Object.assign(
         isProduction: false,
         locale: 'en',
         logThreshold: 'WARN',
-        modules: {},
+        modules: {
+            eeg: {
+                cascadeMontages: {
+                    'default:10-20': [
+                        {
+                            id: 'ekg',
+                            label: 'EKG cascade',
+                            candidates: ['EKG', 'ECG'],
+                            rowCount: 10,
+                            pageLength: 30,
+                            sensitivity: 1000*MICRO,
+                            highpass: 0.5,
+                            lowpass: 40,
+                        },
+                    ],
+                },
+            },
+        },
         //pyodideAssetPath: 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/', // CDN path.
         pyodideAssetPath: `${window.location.origin}/vendor/pyodide/0.25.0/`, // Local dev path.
         scope: 'local' as 'local' | 'workspace',

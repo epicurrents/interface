@@ -318,21 +318,46 @@ export default defineComponent({
                 props.res = (croppedSignal.length || 0)/this.svgWidth
                 props.xPerPoint = xPerPoint
                 this.signalProps[i] = props
-                const sigArray = Array.from(croppedSignal)
-                const minValue = Math.min(...sigArray)
-                const maxValue = Math.max(...sigArray)
+                // Interruption gaps inside the selection arrive as NaN samples. `Math.min(...spread)`
+                // on an arbitrarily long signal can stack-overflow regardless, but with NaN in the
+                // mix it also poisons the bounds — every coord downstream collapses to NaN and the
+                // points string becomes "x,NaN, x,NaN…" which polylines reject. Iterate once and
+                // ignore non-finite values.
+                let minValue = Infinity
+                let maxValue = -Infinity
+                for (const v of croppedSignal) {
+                    if (Number.isFinite(v)) {
+                        if (v < minValue) {
+                            minValue = v
+                        }
+                        if (v > maxValue) {
+                            maxValue = v
+                        }
+                    }
+                }
+                if (minValue === Infinity) {
+                    minValue = 0
+                    maxValue = 0
+                }
                 // First determine signal bounds
                 props.margin = (maxValue - minValue)*0.2
                 const displayMax = maxValue + props.margin
                 const displayMin = minValue - props.margin
+                const range = displayMax - displayMin
                 // Update baseline
-                props.baseline = Math.floor(this.svgHeight*(-1*displayMin)/(displayMax - displayMin)) + 0.5
+                props.baseline = range
+                    ? Math.floor(this.svgHeight*(-1*displayMin)/range) + 0.5
+                    : Math.floor(this.svgHeight/2) + 0.5
                 // Construct signal display SVG coordinate pairs from signal data
                 const points = [] as string[]
                 // Add padding
                 let x = PAD_AMOUNT*props.xPerPoint
+                // Drop NaN samples so the polyline doesn't carry invalid coords — the line crosses
+                // the gap straight rather than crashing.
                 for (const y of croppedSignal) {
-                    points.push(`${x},${this.svgHeight*((y - displayMin)/(displayMax - displayMin))}`)
+                    if (Number.isFinite(y) && range) {
+                        points.push(`${x},${this.svgHeight*((y - displayMin)/range)}`)
+                    }
                     x += props.xPerPoint
                 }
                 props.points = points.join(', ')
@@ -612,15 +637,42 @@ export default defineComponent({
                 // Lift te circle high enough to hide it
                 return -2*this.SETTINGS.tools.poiMarkerCircle.radius
             }
-            const dataArray = Array.from(this.activeSelection.crop.length === 2
-                                         ? this.activeSelection.signal.data.subarray(
-                                             this.activeSelection.crop[0], this.activeSelection.crop[1]
-                                         )
-                                         : this.activeSelection.signal.data
-                              )
-            const displayMax = Math.max(...dataArray) + this.activeProps.margin
-            const displayMin = Math.min(...dataArray) - this.activeProps.margin
-            return this.svgHeight*((this.activeSelection.signal.data[marker.index] - displayMin)/(displayMax - displayMin))
+            // Iterate once and skip non-finite values — `Math.max/min(...spread)` over a long
+            // Float32Array stack-overflows, and NaN samples from interruption gaps poison the
+            // bounds (every coord downstream collapses to NaN). Same fix already applied in
+            // `calculateSignalProperties`; the marker path needs it too.
+            const data = this.activeSelection.crop.length === 2
+                         ? this.activeSelection.signal.data.subarray(
+                             this.activeSelection.crop[0], this.activeSelection.crop[1]
+                         )
+                         : this.activeSelection.signal.data
+            let minValue = Infinity
+            let maxValue = -Infinity
+            for (const v of data) {
+                if (Number.isFinite(v)) {
+                    if (v < minValue) {
+                        minValue = v
+                    }
+                    if (v > maxValue) {
+                        maxValue = v
+                    }
+                }
+            }
+            if (minValue === Infinity) {
+                // No finite samples in the selection — park the marker on the baseline.
+                return this.activeProps.baseline
+            }
+            const displayMax = maxValue + this.activeProps.margin
+            const displayMin = minValue - this.activeProps.margin
+            const range = displayMax - displayMin
+            if (!range) {
+                return this.activeProps.baseline
+            }
+            const sample = this.activeSelection.signal.data[marker.index]
+            if (!Number.isFinite(sample)) {
+                return this.activeProps.baseline
+            }
+            return this.svgHeight*((sample - displayMin)/range)
         },
     },
     beforeMount () {

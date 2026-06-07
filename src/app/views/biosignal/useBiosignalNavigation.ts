@@ -52,8 +52,8 @@ export function useBiosignalNavigation (
             goTo(resource.viewStart - settings.epochMode.epochLength)
         } else {
             if (!step) {
-                step = Math.min(
-                    settings.pageLength,
+                step = resource.activeMontage?.pageStep ?? Math.min(
+                    resource.activeMontage?.pageLength ?? settings.pageLength,
                     Math.ceil(visibleRange.value) - 1
                 )
             }
@@ -74,7 +74,10 @@ export function useBiosignalNavigation (
             step = settings.epochMode.epochLength
         } else {
             if (!step) {
-                step = Math.min(settings.pageLength, Math.ceil(visibleRange.value) - 1)
+                step = resource.activeMontage?.pageStep ?? Math.min(
+                    resource.activeMontage?.pageLength ?? settings.pageLength,
+                    Math.ceil(visibleRange.value) - 1
+                )
             }
         }
         goTo(resource.viewStart + step)

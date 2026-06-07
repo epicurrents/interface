@@ -135,6 +135,24 @@ export const runtime = {
                 }
             }
         }
+        // Cascade montage definitions (resolved + added per recording in EegViewer.montagesChanged
+        // once the recording's default setups and montages are in place). Keyed by setup name —
+        // mirrors the extraMontages shape so the same mental model applies.
+        if (config.cascadeMontages) {
+            for (const [setup, entries] of Object.entries(config.cascadeMontages)) {
+                for (const entry of entries) {
+                    Log.debug(
+                        `Registering cascade montage '${entry.label}' (id=${entry.id}) for setup '${setup}'.`,
+                        SCOPE,
+                    )
+                    if (!settings.cascadeMontages[setup]) {
+                        settings.cascadeMontages[setup] = [entry]
+                    } else {
+                        settings.cascadeMontages[setup].push(entry)
+                    }
+                }
+            }
+        }
         // Skip default setups flag.
         if (config.skipDefaultSetups !== undefined) {
             settings.skipDefaultSetups = config.skipDefaultSetups

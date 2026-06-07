@@ -393,7 +393,21 @@ export default defineComponent({
                 }
                 const trace = wglPlot.traces[i]
                 const data = trace.getData()
-                sigData.push(data)
+                // Replace interruption-gap NaN samples with 0 before handing the signal to the
+                // Python periodogram. NaN propagates through numpy / scipy and the resulting psd
+                // arrays carry NaN at every bin, which then poisons every downstream maxPower /
+                // log10 / point computation and the plot renders as a dead polyline.
+                let cleanData = data
+                for (let j = 0; j < data.length; j++) {
+                    if (!Number.isFinite(data[j])) {
+                        cleanData = new Float32Array(data.length)
+                        for (let k = 0; k < data.length; k++) {
+                            cleanData[k] = Number.isFinite(data[k]) ? data[k] : 0
+                        }
+                        break
+                    }
+                }
+                sigData.push(cleanData)
             }
             // Loading time debugging.
             this.loadingWelch = Date.now()
@@ -408,7 +422,21 @@ export default defineComponent({
             if (response.success && response.result) {
                 const result = JSON.parse(response.result)
                 this.periodogram = result.channels
-                const maxPower = Math.max(...result.channels.map((p: number[]) => Math.max(...p)))
+                // Walk both axes to find the spectral max — `Math.max(...spread)` over very long
+                // arrays risks a call-stack overflow, and any residual NaN would propagate. Defaults
+                // to 1 so `log10` stays finite for a silent (post-sanitisation) input where every
+                // psd value is 0.
+                let maxPower = 0
+                for (const channel of result.channels as number[][]) {
+                    for (const v of channel) {
+                        if (Number.isFinite(v) && v > maxPower) {
+                            maxPower = v
+                        }
+                    }
+                }
+                if (maxPower <= 0) {
+                    maxPower = 1
+                }
                 // Apply a small gap to the top of the plot.
                 this.maxPower = Math.log10(maxPower*1.5)
                 this.frequencies = result.fs

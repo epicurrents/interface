@@ -474,6 +474,7 @@ export const settings: EegInterfaceSettings = safeObjectFrom({
         epochLength: 0,
         onlyFullEpochs: false,
     },
+    cascadeMontages: {},
     extraMontages: {},
     extraSetups: [],
     filters: {
@@ -626,7 +627,7 @@ export const settings: EegInterfaceSettings = safeObjectFrom({
     sensitivity: {
         // Sensitivity units must be integers as they are rounded to account for float errors from scaling.
         uVperCm: {
-            availableValues: [10, 20, 30, 50, 70, 100, 125, 150, 175, 200, 250, 300, 400, 500, 1000],
+            availableValues: [10, 20, 30, 50, 70, 100, 125, 150, 175, 200, 250, 300, 400, 500, 1000, 2000, 5000],
             default: 100,
             // We need to convert from sensitivity uV into base unit V, so apply a scale of 10^-6.
             scale: 1e-6,

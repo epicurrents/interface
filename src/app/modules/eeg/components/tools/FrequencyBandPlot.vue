@@ -172,6 +172,12 @@ export default defineComponent({
             for (const line of this.lines) {
                 let points = [] as string[]
                 for (const [x, y] of line.points) {
+                    // NaN comparisons are always false, so the original ternary fell through to
+                    // `x*plotWidth = NaN`. Drop non-finite points so a polyline with one bad bin
+                    // doesn't reject the entire `points` attribute.
+                    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+                        continue
+                    }
                     const xPos = x < 0
                                  ? -1
                                  : x > 1

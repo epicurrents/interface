@@ -15,6 +15,7 @@ import { Log } from 'scoped-event-log'
 import { settingsColorToRgba } from '@epicurrents/core/util'
 import { NO_POINTER_BUTTON_DOWN } from '#util'
 import type {
+    BiosignalCascadeMontage,
     BiosignalChannel,
     BiosignalResource,
     ChannelPositionProperties,
@@ -132,6 +133,38 @@ export function useBiosignalPointer ({
         if (!selectionBound.value) {
             return 'display:none'
         }
+        const borderStyle = `border-left: ${[
+            settings.selectionBound.style || 'solid',
+            settings.selectionBound.width + 'px',
+            settingsColorToRgba(settings.selectionBound.color),
+        ].join(' ')}`
+        // Cascade: the dashed line marks an x position relative to the row containing the chosen
+        // time, and its vertical extent is the row's channel band (not the full viewport — that
+        // would obscure every other row's signal). For both channel-specific (start-selection
+        // from a labelled channel) and global (start-global-selection) actions in cascade view
+        // the marker only makes sense on one row, so they render identically.
+        const active = resource.activeMontage
+        if (active?.isCascade) {
+            const cascade = active as BiosignalCascadeMontage
+            const rowIdx = cascade.getRowAtTime(selectionBound.value.position)
+            if (rowIdx < 0) {
+                return 'display:none'
+            }
+            const range = cascade.getRowTimeRange(rowIdx)
+            const chan = cascade.channels[rowIdx]
+            if (!range || !chan?.offset) {
+                return 'display:none'
+            }
+            const xWithinRow = (selectionBound.value.position - range[0]) * pxPerSecond.value
+            const leftPx = xWithinRow + borderWidth.value.left - settings.selectionBound.width / 2
+            return [
+                `display:block`,
+                `top:${(1 - chan.offset.top) * 100}%`,
+                `bottom:${chan.offset.bottom * 100}%`,
+                `left:${leftPx}px`,
+                borderStyle,
+            ].join(';')
+        }
         const relPos = selectionBound.value.position - resource.viewStart
         if (relPos < 0 || relPos >= visibleRange.value) {
             return 'display:none'
@@ -141,11 +174,7 @@ export function useBiosignalPointer ({
             return [
                 `display:block`,
                 `left:${leftPos - settings.selectionBound.width / 2}px`,
-                `border-left: ${[
-                    settings.selectionBound.style || 'solid',
-                    settings.selectionBound.width + 'px',
-                    settingsColorToRgba(settings.selectionBound.color),
-                ].join(' ')}`,
+                borderStyle,
             ].join(';')
         }
         return 'display:none'
@@ -211,18 +240,33 @@ export function useBiosignalPointer ({
 
     function hideAllDragElements () {
         for (const selection of plotSelections) {
-            selection.getElement().classList.add('epicv-hidden')
+            // Cascade-mode selections live in the CascadeSelections overlay (no per-selection
+            // `#signal-selection-<idx>` div), so `getElement()` is null. Optional-chain so the
+            // hide path is a no-op there.
+            selection.getElement()?.classList.add('epicv-hidden')
         }
     }
 
     function showAllDragElements () {
         for (const selection of plotSelections) {
-            selection.getElement().classList.remove('epicv-hidden')
+            selection.getElement()?.classList.remove('epicv-hidden')
         }
     }
 
     function updateDragElement () {
         if (!activeSelection.value || !dragAction.value) {
+            return
+        }
+        // Cascade montages route selection rendering through CascadeSelections.vue — there's no
+        // single DOM element per selection (one bar per affected row), so the imperative style
+        // path below would have nothing to mutate. Update `dimensions` so analysis-side consumers
+        // that key off it still see consistent values and let the overlay re-render reactively
+        // from `activeSelection.value.range`.
+        if (resource.activeMontage?.isCascade) {
+            activeSelection.value.dimensions = [
+                timeToOverlayX(dragAction.value.startPos),
+                timeToOverlayX(dragAction.value.dragPos),
+            ].sort((a, b) => a - b)
             return
         }
         const dragEl = activeSelection.value.getElement()
@@ -283,6 +327,16 @@ export function useBiosignalPointer ({
                 })
             }
             nextTick(() => {
+                // Cascade montages render selections reactively via CascadeSelections.vue —
+                // there's no single DOM element to mutate. Just publish dimensions so analysis
+                // tools that key off them see consistent values; the overlay handles drawing.
+                if (resource.activeMontage?.isCascade) {
+                    selection.dimensions = [
+                        timeToOverlayX(start),
+                        timeToOverlayX(end),
+                    ].sort((a, b) => a - b)
+                    return
+                }
                 const selEl = selection.getElement()
                 if (!selEl) {
                     Log.error('Selection element not available.', 'useBiosignalPointer')
@@ -361,7 +415,19 @@ export function useBiosignalPointer ({
                 return
             }
             activeSelection.value.channel = selectionChannel
-            activeSelection.value.getElement().style.pointerEvents = 'initial'
+            // Cascade montages render selections through CascadeSelections.vue — there is no
+            // single `#signal-selection-<idx>` div, so `getElement()` returns null and a naïve
+            // `.style.pointerEvents = ...` would throw. The overlay segments already carry
+            // `pointer-events: auto` in their own CSS, so just skip the imperative DOM mutation
+            // here. The dragEl can also legitimately be null for regular montages if the v-for
+            // hasn't flushed yet (race between push to plotSelections and Vue's nextTick); guard
+            // both paths.
+            if (!resource.activeMontage?.isCascade) {
+                const dragEl = activeSelection.value.getElement()
+                if (dragEl) {
+                    dragEl.style.pointerEvents = 'initial'
+                }
+            }
             cursors.value.enable()
             if (detail.pointerButton === 2 || activeCursorTool.value === 'inspect') {
                 onOpenAnalysis()
@@ -411,6 +477,15 @@ export function useBiosignalPointer ({
             } as PlotSelection
             plotSelections.push(selection)
             nextTick(() => {
+                // Cascade selections are drawn by the CascadeSelections overlay reactively; no
+                // single DOM element to style. The overlay already mirrors the time range so
+                // there's nothing to do here besides opening analysis if the trigger matches.
+                if (resource.activeMontage?.isCascade) {
+                    if (detail.pointerButton === 2 || activeCursorTool.value === 'inspect') {
+                        onOpenAnalysis()
+                    }
+                    return
+                }
                 const dragEl = selection.getElement()
                 if (!dragEl) {
                     Log.error('New drag element not available!', 'useBiosignalPointer')
@@ -468,6 +543,19 @@ export function useBiosignalPointer ({
             return
         }
         const { detail } = event
+        // Cascade view: a double-click moves the recording's viewStart so the clicked time
+        // becomes the centre of the next non-cascade montage's window. The user picks the
+        // target montage themselves — viewStart is a recording-level property, so whichever
+        // they activate will inherit the new position. Skip the selection / cursor logic
+        // below because cascade rows aren't currently editable.
+        if (resource.activeMontage?.isCascade) {
+            const mainLen = resource.mainViewLength
+            const target = mainLen && mainLen > 0
+                ? Math.max(detail.startPos - mainLen / 2, 0)
+                : Math.max(detail.startPos, 0)
+            resource.viewStart = Math.floor(target)
+            return
+        }
         const startPos = Math.max(resource.viewStart, detail.startPos - 0.5)
         const endPos = Math.min(resource.viewStart + visibleRange.value, detail.startPos + 0.5)
         if (event.detail.ctrlKey && detail.channelProps) {

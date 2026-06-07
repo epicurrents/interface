@@ -62,6 +62,48 @@ export type EegInterfaceSettings = CommonBiosignalInterfaceSettings & {
     continuousBrowseInterval: number
     /** Montage to use by default when opening a new recording (one of `rec`, `avg`, `lon`, `trv`). */
     defaultMontage: string
+    /**
+     * Cascade montage definitions, keyed by setup name (mirroring `extraMontages`). Each entry
+     * produces one polygraphic-style montage where N vertically stacked rows show successive
+     * `pageLength`-second slices of the same source channel (EKG, breathing, EMG, EOG, ...). The
+     * cascade is built against the keyed setup; an entry whose candidates do not resolve in that
+     * setup is silently skipped. See `EegCascadeMontage`.
+     */
+    cascadeMontages: {
+        [setup: string]: {
+            /** Stable identifier used as the montage name suffix (e.g. `'ekg'` → `'cascade:ekg'`). */
+            id: string
+            /** Display label shown in the montage selector. */
+            label: string
+            /**
+             * Candidate source channels in priority order. The first candidate that matches a
+             * channel in the keyed setup (by label or name) wins. Each candidate is a plain string
+             * (no electrode-pair derivation — the cascade view always reads the raw source).
+             */
+            candidates: string[]
+            /** Number of stacked time-shifted rows. Typical polygraphic scanning range is 10–15. */
+            rowCount: number
+            /**
+             * Seconds per row. Becomes the montage's `pageLength` override — forces constant
+             * sec/page geometry while the cascade montage is active so calibrated (cm/sec)
+             * timebase is coerced.
+             */
+            pageLength: number
+            /**
+             * Initial sensitivity for the cascade montage. Units match the recording's sensitivity
+             * unit (typically µV/cm; the user-facing slider operates on the same value). Cascade
+             * montages flip `applyToMontage` on, so this value is the montage's own state and does
+             * not affect the recording's sensitivity. Omit to inherit the recording's value.
+             */
+            sensitivity?: number
+            /** Initial highpass filter (Hz). 0 or omitted = off. Typical EKG band starts at 0.5. */
+            highpass?: number
+            /** Initial lowpass filter (Hz). 0 or omitted = off. Typical EKG band ends around 40. */
+            lowpass?: number
+            /** Initial notch filter (Hz). 0 or omitted = off. Typical values 50 (EU) or 60 (US). */
+            notch?: number
+        }[]
+    }
     /** Additional montages to use as { [setup name]: EegMontage } */
     extraMontages: {
         [setup: string]: BiosignalMontageTemplate[]
@@ -195,6 +237,7 @@ export type EegInterfaceSettings = CommonBiosignalInterfaceSettings & {
  * Additional setup for the EEG module.
  */
 export type EegModuleConfiguration = ModuleConfiguration & {
+    cascadeMontages?: EegInterfaceSettings['cascadeMontages']
     epochMode?: EegInterfaceSettings['epochMode']
     extraMontages?: {
         [setup: string]: (BiosignalMontageTemplate | string)[]

@@ -173,13 +173,26 @@ export default defineComponent({
                 // Add one for padding at the end.
                 // Construct signal display SVG coordinate pairs from signal data.
                 const points = [] as string[]
+                // A flat-zero (or uninitialised) signal poisons every Y with `y/0 = NaN` and the
+                // resulting polyline points string fails SVG attribute parsing. Skip the trace
+                // in that case — the separately-drawn baseline already shows the flat line.
+                if (!displayAbsMax) {
+                    props.points = ''
+                    continue
+                }
                 // Start with one datapoint of padding.
                 let x = props.xPerPoint*PAD_AMOUNT
                 const polarity = selection.channel.displayPolarity
                                ? selection.channel.displayPolarity*this.SETTINGS.displayPolarity
                                : 1
+                // Skip NaN samples (interruption gaps) so the points string never carries
+                // `x,NaN` pairs that some browsers reject. The polyline crosses the gap with a
+                // straight line — a small visual hint that the segment is non-contiguous, but
+                // the alternative of crashing the analysis window is worse.
                 for (const y of selection.signal.data) {
-                    points.push(`${x},${(this.height/2)*(1 + polarity*y/displayAbsMax)}`)
+                    if (Number.isFinite(y)) {
+                        points.push(`${x},${(this.height/2)*(1 + polarity*y/displayAbsMax)}`)
+                    }
                     x += props.xPerPoint
                 }
                 props.points = points.join(', ')
@@ -204,11 +217,26 @@ export default defineComponent({
             if (!selection?.signal) {
                 return { min: 0, max: 0 }
             }
-            const data = Array.from(selection.signal.data)
-            return {
-                min: Math.min(...data),
-                max: Math.max(...data),
+            // Interruption-spanning selections carry NaN samples for the gap. `Math.min(...data)`
+            // with a NaN poisons the result (and `Math.min(...spread)` on a large array can blow
+            // the call stack), so iterate and ignore non-finite values. Pure-NaN selections fall
+            // back to a zero range so the downstream display divides cleanly.
+            let min = Infinity
+            let max = -Infinity
+            for (const v of selection.signal.data) {
+                if (Number.isFinite(v)) {
+                    if (v < min) {
+                        min = v
+                    }
+                    if (v > max) {
+                        max = v
+                    }
+                }
             }
+            if (min === Infinity) {
+                return { min: 0, max: 0 }
+            }
+            return { min, max }
         },
     },
     beforeMount () {

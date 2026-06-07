@@ -230,12 +230,25 @@ export default defineComponent({
             if (!selection?.signal) {
                 return { min: 0, max: 0 }
             }
-            const data = Array.from(selection.signal.data)
-            return {
-                // Convert from volts to microvolts.
-                min: Math.min(...data)*1e6,
-                max: Math.max(...data)*1e6,
+            // Skip NaN samples (interruption gaps inside the selection). Otherwise Math.min/max
+            // collapses to NaN and every downstream baseline / limit computation breaks.
+            let min = Infinity
+            let max = -Infinity
+            for (const v of selection.signal.data) {
+                if (Number.isFinite(v)) {
+                    if (v < min) {
+                        min = v
+                    }
+                    if (v > max) {
+                        max = v
+                    }
+                }
             }
+            if (min === Infinity) {
+                return { min: 0, max: 0 }
+            }
+            // Convert from volts to microvolts.
+            return { min: min*1e6, max: max*1e6 }
         },
         resize (isRetry = false) {
             if (!this.wrapper.offsetWidth) {

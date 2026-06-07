@@ -19,6 +19,7 @@
 import { defineComponent, PropType, reactive, Ref, ref } from "vue"
 import { T } from "#i18n"
 import { BiosignalChannel, MontageChannel } from "@epicurrents/core/types"
+import type { BiosignalCascadeMontage } from "@epicurrents/core/types"
 import { useStore } from "vuex"
 import { settingsColorToRgba, shouldDisplayChannel } from "@epicurrents/core/util"
 import { NUMERIC_ERROR_VALUE } from "@epicurrents/core/util"
@@ -334,7 +335,20 @@ export default defineComponent({
             const relY = yPos/containerH
             const contLeft = this.plot.getBoundingClientRect().left
             const pointerLeft = event.clientX - contLeft
-            const position = pointerLeft/this.pxPerSecond + this.RESOURCE.viewStart
+            // For a cascade montage every row covers a different recording-time slice, so the
+            // cursor's seconds-from-row-start has to be added to the row's start time rather than
+            // to viewStart directly. The cascade helpers do the row-index hit-test from `relY`.
+            // For regular montages the row math collapses to the existing formula.
+            const active = this.RESOURCE.activeMontage
+            let position: number
+            if (active?.isCascade) {
+                const cascade = active as BiosignalCascadeMontage
+                const rowIndex = cascade.getRowAtY(relY)
+                const secondsWithinRow = pointerLeft / this.pxPerSecond
+                position = cascade.getTimeAtRowPosition(rowIndex, secondsWithinRow)
+            } else {
+                position = pointerLeft / this.pxPerSecond + this.RESOURCE.viewStart
+            }
             return {
                 /** Pointer position in seconds from recording start. */
                 position,
@@ -534,12 +548,18 @@ export default defineComponent({
             this.pointerButton = initialEvent.button
             const threshold = this.pointerDragThreshold
             let overThreshold = false
-            const pointerMove = (left: number, top: number, _meta?: OverlayPointerEventMeta) => {
+            const pointerMove = (left: number, top: number, meta?: OverlayPointerEventMeta) => {
                 // Only drag on channels and if shift key is down.
                 if (!channelProps && !initialEvent.shiftKey) {
                     return
                 }
-                const pointerPos = left/this.pxPerSecond + this.RESOURCE.viewStart
+                // Route through getPointerPosition so cascade montages map the pointer's (x, y)
+                // back to the correct row's recording time. Without this every drag past row 0
+                // would compute time as if it were on row 0 — selections render on the wrong
+                // row and `range[1]` lands at the wrong recording time.
+                const pointerPos = meta?.event
+                    ? this.getPointerPosition(meta.event).position
+                    : left/this.pxPerSecond + this.RESOURCE.viewStart
                 // Allow drag in both directions
                 const dif = left - initialLeft
                 // Wait for dif to exceed threshold at least once before considering this a drag action.
@@ -565,14 +585,15 @@ export default defineComponent({
                 })
                 this.$emit('pointer-drag', customEv)
             }
-            const pointerUp = (left: number, _top: number, meta: OverlayPointerEventMeta) => {
+            const pointerUp = (_left: number, _top: number, meta: OverlayPointerEventMeta) => {
                 // Only end drag event if the original button is released.
                 if (event.button !== this.pointerButton) {
                     return
                 }
                 this.pointerButton = NO_POINTER_BUTTON_DOWN
-                const timePos = left/this.pxPerSecond + this.RESOURCE.viewStart
-                const { x, y } = this.getPointerPosition(meta.event!)
+                // Same cascade-aware routing as pointerMove — re-deriving timePos from raw `left`
+                // here would drop the row offset and the drag-end event would land on row 0.
+                const { x, y, position: timePos } = this.getPointerPosition(meta.event!)
                 const customEv = new CustomEvent('plotpointerup', {
                     detail: {
                         channelProps: channelProps,
@@ -683,13 +704,15 @@ export default defineComponent({
                     // Long-press without swipe.
                     const { relY, position, x, y } = this.getPointerPosition(event.changedTouches[0])
                     const channelProps = this.RESOURCE.getChannelAtYPosition(relY)
-                    const timePos = x/this.pxPerSecond + this.RESOURCE.viewStart
+                    // Touch end happens at the same point as `position` was sampled, so reuse the
+                    // cascade-aware value rather than re-deriving from raw x (which would land on
+                    // row 0 for any touch past the first cascade row).
                     const customEv = new CustomEvent('plotpointerup', {
                         detail: {
                             channelProps: channelProps,
                             pointerButton: 2, // Simulate right-click.
                             pointerPosition: [x, y],
-                            position: timePos,
+                            position,
                             startPos: position,
                         },
                     })

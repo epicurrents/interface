@@ -5,7 +5,7 @@
             @click="labelClicked(chan, $event)"
             @contextmenu.prevent="labelClicked(chan, $event)"
         >
-            <span :class="{ 'active': chan.isActive }">{{ chan.label }}</span>
+            <span :class="{ 'active': chan.isActive }">{{ rowLabels[idx] ?? chan.label }}</span>
         </div>
     </div>
 </template>
@@ -17,9 +17,10 @@
  */
 import { defineComponent, PropType, Ref, ref } from "vue"
 import { T } from "#i18n"
+import { padTime, secondsToTimeString } from "@epicurrents/core/util"
 import { useStore } from "vuex"
 import { useBiosignalContext } from "#config"
-import type { BiosignalChannel } from "@epicurrents/core/types"
+import type { BiosignalCascadeMontage, BiosignalChannel } from "@epicurrents/core/types"
 
 export default defineComponent({
     name: 'PlotYAxis',
@@ -39,9 +40,15 @@ export default defineComponent({
         // Visible channels in resource is a computed property and isn't automatically reactive. We need to save a
         // reactive reference to it.
         const visibleChannels = ref(context.RESOURCE.visibleChannels.filter(c => !c.isOriginal))
+        // Per-row label override. Populated only when the active montage is a cascade — every row
+        // points at the same source channel, so the channel's own label repeats N times and a
+        // recording-time tag per row is the only useful identifier. Recomputed on viewStart change
+        // by `updateRowLabels` below.
+        const rowLabels = ref([] as (string | null)[])
         const labels = ref<HTMLDivElement>() as Ref<HTMLDivElement>
         return {
             visibleChannels,
+            rowLabels,
             labels,
             // Context methods.
             ...context,
@@ -73,8 +80,23 @@ export default defineComponent({
         $t: function (key: string, params = {}, capitalized = false) {
             return T(key, this.$options.name, params, capitalized)
         },
+        formatTime (seconds: number): string {
+            const parts = secondsToTimeString(Math.floor(seconds), true) as number[]
+            const [, hours, mins, secs] = parts
+            if (hours) {
+                return `${hours}:${padTime(mins)}:${padTime(secs)}`
+            }
+            return `${padTime(mins)}:${padTime(secs)}`
+        },
         labelClicked (channel: BiosignalChannel | null, e: MouseEvent) {
             if (!channel) {
+                return
+            }
+            // Cascade rows all point at the same source channel — toggling that channel off or
+            // opening its properties menu would either nuke the whole stack or duplicate a single
+            // channel's actions across N rows. Neither is useful, so swallow label clicks while
+            // a cascade is active and let the parent suppress the menu.
+            if (this.RESOURCE.activeMontage?.isCascade) {
                 return
             }
             if (e.button === 0) {
@@ -82,6 +104,20 @@ export default defineComponent({
             } if (e.button === 2) {
                 this.$emit('select-channel', channel)
             }
+        },
+        updateRowLabels () {
+            const active = this.RESOURCE.activeMontage
+            if (!active?.isCascade) {
+                this.rowLabels = []
+                return
+            }
+            const cascade = active as BiosignalCascadeMontage
+            const next: (string | null)[] = []
+            for (let i = 0; i < this.visibleChannels.length; i++) {
+                const range = cascade.getRowTimeRange(i)
+                next.push(range ? this.formatTime(range[0]) : null)
+            }
+            this.rowLabels = next
         },
         resizeElements (initial = false) {
             let i = 0
@@ -113,11 +149,19 @@ export default defineComponent({
         // Listen to montage changes
         this.RESOURCE.onPropertyChange('activeMontage', () => {
             this.visibleChannels = this.RESOURCE.visibleChannels.filter(c => !c.isOriginal)
+            this.updateRowLabels()
             requestAnimationFrame(() =>
                 this.resizeElements()
             )},
             this.ID
         )
+        // Cascade row labels show recording time — refresh on every viewStart change so the
+        // labels track the displayed slice as the user scrolls. `pageLength` also affects the
+        // per-row range; `timebase` propagates the cascade's routed pageLength.
+        this.RESOURCE.onPropertyChange('viewStart', this.updateRowLabels, this.ID)
+        this.RESOURCE.onPropertyChange('displayViewStart', this.updateRowLabels, this.ID)
+        this.RESOURCE.onPropertyChange('timebase', this.updateRowLabels, this.ID)
+        this.updateRowLabels()
         this.$nextTick(() => {
             // Resize elements after the component is mounted.
             this.resizeElements(true)
