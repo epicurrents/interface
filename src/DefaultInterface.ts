@@ -197,8 +197,8 @@ export const DefaultInterface: DefaultInterfaceModuleConstructor = class Epicurr
         epicApp.eventBus.subscribe('add-resource', event => {
             const context = event.detail.payload as { resource: BiosignalResource }
             const resource = context.resource
-            const pyodide = window.__EPICURRENTS__.RUNTIME.SERVICES.get('pyodide') as PythonInterpreterService | null
-            const memoryManager = window.__EPICURRENTS__.RUNTIME.SETTINGS.app.useMemoryManager
+            const pyodide = window.__EPICURRENTS__.RUNTIME!.SERVICES.get('pyodide') as unknown as PythonInterpreterService | null
+            const memoryManager = window.__EPICURRENTS__.RUNTIME!.SETTINGS.app.useMemoryManager
             if (pyodide && memoryManager && Object.hasOwn(resource, '_signalCacheStatus')) {
                 // Refresh of the Pyodide-side input arrays is demand-driven inside
                 // `biosignal_get_signals` (and the batched `biosignal_refresh_channels`

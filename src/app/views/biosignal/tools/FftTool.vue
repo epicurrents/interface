@@ -83,7 +83,7 @@ import { BiosignalChannel } from "@epicurrents/core/types"
 import { settingsColorToRgba, settingsDashArrayToSvgStrokeDasharray } from "@epicurrents/core/util"
 import type { PlotTraceSelection } from "#types/plot"
 import { useStore } from "vuex"
-import { useEegContext } from "#app/modules/eeg"
+import { useBiosignalContext } from "#config"
 
 type SignalProperties = {
     channel: BiosignalChannel
@@ -154,7 +154,7 @@ export default defineComponent({
             settingsColorToRgba,
             settingsDashArrayToSvgStrokeDasharray,
             // Shorthands
-            ...useEegContext(useStore()),
+            ...useBiosignalContext(useStore()),
         }
     },
     watch: {
@@ -206,9 +206,13 @@ export default defineComponent({
             return T(key, this.$options.name, params, capitalized)
         },
         calculateFfts () {
+            // Optional on `CommonBiosignalSettings` — modalities without a
+            // canonical band taxonomy (e.g. accelerometry) leave it unset and
+            // the FFT spectrum draws without guidelines or per-band rows.
+            const bands = this.SETTINGS.frequencyBands ?? []
             // Add guildelines
             this.frequencyBandLines.splice(0)
-            for (const band of this.SETTINGS.frequencyBands) {
+            for (const band of bands) {
                 // Add guideline if it is within visible plot range
                 if (this.maxHz > band.upperLimit) {
                     this.frequencyBandLines.push({
@@ -271,7 +275,7 @@ export default defineComponent({
                 let peakPower = fft.psds[0]
                 let topAbsolute = fft.psds[0]
                 let topAverage = fft.psds[0]
-                for (const band of this.SETTINGS.frequencyBands) {
+                for (const band of bands) {
                     let powerDensity = 0
                     let binsInBand = 0
                     let bandPeakFrequency = 0
@@ -339,7 +343,7 @@ export default defineComponent({
                     sig.frequencyBandProperties[0].topFrequency = true
                 } else {
                     for (let i=1; i<sig.frequencyBandProperties.length; i++) {
-                        if (this.SETTINGS.frequencyBands[i-1].upperLimit > peakFrequency) {
+                        if (bands[i-1].upperLimit > peakFrequency) {
                             sig.frequencyBandProperties[i].topFrequency = true
                             break
                         }

@@ -85,7 +85,7 @@ import { settingsColorToRgba, settingsDashArrayToSvgStrokeDasharray } from "@epi
 import type { Modify } from "@epicurrents/core/types"
 import type { PlotTraceSelection } from "#types/plot"
 import { useStore } from "vuex"
-import { useEegContext } from "#app/modules/eeg"
+import { useBiosignalContext } from "#config"
 import { NUMERIC_ERROR_VALUE } from "@epicurrents/core/util"
 import { NO_POINTER_BUTTON_DOWN } from "#util"
 import type { PointerInteraction } from "#types/interface"
@@ -192,7 +192,7 @@ export default defineComponent({
             settingsColorToRgba,
             settingsDashArrayToSvgStrokeDasharray,
             // Shorthands
-            ...useEegContext(useStore()),
+            ...useBiosignalContext(useStore()),
         }
     },
     watch: {
@@ -324,8 +324,11 @@ export default defineComponent({
                     const up = () => {
                         this.dragging = false
                     }
+                    const dialogEl = document
+                        .querySelector('[data-component="window-dialog"]')
+                        ?.shadowRoot?.querySelector('.dialog') as HTMLElement | null
                     this.overlay.trackPointer(event, { move, up },
-                        document.querySelector('[data-component="window-dialog"]')!.shadowRoot!.querySelector('.dialog__overlay')!
+                        ...(dialogEl ? [dialogEl] : [])
                     )
                     return
                 }

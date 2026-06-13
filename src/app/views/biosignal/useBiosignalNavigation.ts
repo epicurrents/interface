@@ -16,7 +16,11 @@ import type { ComputedRef, Ref } from 'vue'
 import type { BiosignalResource } from '@epicurrents/core/dist/types'
 
 type NavigationSettings = {
-    epochMode: {
+    /**
+     * Optional — modalities that don't surface an epoch view (e.g.
+     * accelerometry) omit this, and the composable falls back to plain paging.
+     */
+    epochMode?: {
         enabled: boolean
         epochLength: number
         onlyFullEpochs: boolean
@@ -41,14 +45,14 @@ export function useBiosignalNavigation (
     }
 
     function checkEpochMode () {
-        isInEpochMode.value = settings.epochMode.enabled && settings.epochMode.epochLength > 0
+        isInEpochMode.value = !!settings.epochMode?.enabled && (settings.epochMode?.epochLength ?? 0) > 0
     }
 
     function goBackward (step?: number) {
         if (isAtStart.value) {
             return
         }
-        if (isInEpochMode.value) {
+        if (isInEpochMode.value && settings.epochMode) {
             goTo(resource.viewStart - settings.epochMode.epochLength)
         } else {
             if (!step) {
@@ -70,7 +74,7 @@ export function useBiosignalNavigation (
         if (isAtEnd.value) {
             return
         }
-        if (isInEpochMode.value) {
+        if (isInEpochMode.value && settings.epochMode) {
             step = settings.epochMode.epochLength
         } else {
             if (!step) {
@@ -87,19 +91,23 @@ export function useBiosignalNavigation (
         if (time < 0 || time >= resource.totalDuration) {
             return
         }
-        const nEpochs = (resource.totalDuration - epochStart.value) / (settings.epochMode.epochLength || 1)
-        const endEpoch = (settings.epochMode.onlyFullEpochs ? Math.floor(nEpochs) : Math.ceil(nEpochs)) - 1
-        if (isInEpochMode.value) {
+        const epochLength = settings.epochMode?.epochLength ?? 0
+        const onlyFullEpochs = settings.epochMode?.onlyFullEpochs ?? false
+        const nEpochs = epochLength > 0
+            ? (resource.totalDuration - epochStart.value) / epochLength
+            : 0
+        const endEpoch = (onlyFullEpochs ? Math.floor(nEpochs) : Math.ceil(nEpochs)) - 1
+        if (isInEpochMode.value && epochLength > 0) {
             if (time < epochStart.value) {
                 resource.viewStart = epochStart.value
-            } else if ((time - epochStart.value) / settings.epochMode.epochLength >= endEpoch + 1) {
-                resource.viewStart = epochStart.value + endEpoch * settings.epochMode.epochLength
+            } else if ((time - epochStart.value) / epochLength >= endEpoch + 1) {
+                resource.viewStart = epochStart.value + endEpoch * epochLength
             } else {
                 const epochIndex = Math.min(
-                    Math.floor((time - epochStart.value) / settings.epochMode.epochLength),
+                    Math.floor((time - epochStart.value) / epochLength),
                     endEpoch
                 )
-                resource.viewStart = epochStart.value + epochIndex * settings.epochMode.epochLength
+                resource.viewStart = epochStart.value + epochIndex * epochLength
             }
         } else {
             resource.viewStart = time
@@ -111,8 +119,8 @@ export function useBiosignalNavigation (
         }
         if (
             resource.viewStart + visibleRange.value >= resource.totalDuration
-            || (isInEpochMode.value
-                && resource.viewStart === epochStart.value + (nEpochs - 1) * settings.epochMode.epochLength
+            || (isInEpochMode.value && epochLength > 0
+                && resource.viewStart === epochStart.value + (nEpochs - 1) * epochLength
             )
         ) {
             isAtEnd.value = true

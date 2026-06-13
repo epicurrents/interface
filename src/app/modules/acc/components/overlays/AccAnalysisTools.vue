@@ -1,5 +1,5 @@
 <template>
-    <div data-component="eeg-analysis-tools" ref="wrapper">
+    <div data-component="acc-analysis-tools" ref="wrapper">
         <wa-tab-group ref="tabgroup" @wa-tab-show="switchTab">
             <template v-for="(tab, _idx) in tabs" :key="`top-tab-${_idx}`">
                 <wa-tab v-if="shouldShowTab(tab)"
@@ -48,44 +48,7 @@
                     />
                 </template>
             </wa-tab-panel>
-            <wa-tab-panel name="topo">
-                <template v-if="shouldShowPanel('topo')">
-                    <topomap-tool
-                        :cursorPos="cursorPos"
-                        :selectedChannels="selectedChannelIndices"
-                        :seriesSpan="seriesSpan"
-                        v-on:series-span="seriesSpan = $event"
-                    />
-                    <div class="subtitle">
-                        <div>{{ $t(`Cursor position`) }}</div>
-                    </div>
-                    <signal-cursor-tool
-                        :cursorPos="cursorPos"
-                        :data="compareSelections"
-                        :height="bottomPanelHeight"
-                        :selected="activeIdx"
-                        :seriesSpan="seriesSpan"
-                        :width="panelWidth"
-                        v-on:set-cursor-pos="setCursorPos"
-                    />
-                </template>
-            </wa-tab-panel>
-            <wa-tab-panel name="power">
-                <power-spectrum-tool v-if="shouldShowPanel('power')"
-                    :height="panelHeight"
-                    :selected="activeIdx"
-                    :width="panelWidth"
-                />
-            </wa-tab-panel>
-            <wa-tab-panel name="source-loc">
-                <source-localization-tool v-if="shouldShowPanel('source-loc')"
-                    :cursorPos="cursorPos"
-                    :height="panelHeight"
-                    :width="panelWidth"
-                />
-            </wa-tab-panel>
         </wa-tab-group>
-        <!-- Legend after the main content, so it is placed on top of it -->
         <div v-if="showLegend" ref="legend" class="legend">
             <template v-for="(selection, idx) in compareSelections" :key="`signal-tool-legend-${idx}`">
                 <div v-if="selection.channel"
@@ -110,9 +73,6 @@
 </template>
 
 <script lang="ts">
-/**
- * Signal analysis window.
- */
 import {
     defineComponent,
     reactive,
@@ -124,23 +84,15 @@ import { T } from "#i18n"
 import { settingsColorToRgba } from "@epicurrents/core/util"
 import { type PlotTraceSelection } from "#types/plot"
 import { useStore } from "vuex"
-import { useEegContext } from "../.."
-// Reimport to use as type.
+import { useAccContext } from "../.."
 import type { default as WaTabGroup } from '@awesome.me/webawesome/dist/components/tab-group/tab-group.js'
 
-// Child components
 import ExamineTool from '#app/views/biosignal/tools/ExamineTool.vue'
 import FftTool from '#app/views/biosignal/tools/FftTool.vue'
-import PowerSpectrumTool from '../tools/PowerSpectrumTool.vue'
 import SignalCropTool from '#app/views/biosignal/tools/SignalCropTool.vue'
-import SignalCursorTool from '../tools/SignalCursorTool.vue'
 import SignalPropertiesTool from '#app/views/biosignal/tools/SignalPropertiesTool.vue'
-import TopomapTool from '../tools/TopomapTool.vue'
-import SourceLocalizationTool from '../tools/SourceLocalizationTool.vue'
 import { PlotSelection } from '#app/views/biosignal/types'
 
-// Too many signals can become confusing and may not fit on the legend row,
-// so limit the number of signals selections to 3 for now.
 const MAX_COMPARE_SELECTIONS = 3
 
 type AnalysisTraceSelections = Required<PlotTraceSelection>
@@ -153,7 +105,7 @@ type PanelTabProps = {
 }
 
 export default defineComponent({
-    name: 'EegAnalysisTools',
+    name: 'AccAnalysisTools',
     props: {
         cmPerSec: {
             type: Number,
@@ -187,36 +139,21 @@ export default defineComponent({
     components: {
         ExamineTool,
         FftTool,
-        PowerSpectrumTool,
         SignalCropTool,
-        SignalCursorTool,
         SignalPropertiesTool,
-        SourceLocalizationTool,
-        TopomapTool,
     },
-    setup (props/*, { attrs, slots, emit }*/) {
-        // Shorthands for scoped constants
+    setup (props) {
         const store = useStore()
-        // Instance properties
         const activeIdx = ref(Math.min(props.selectedIdx, MAX_COMPARE_SELECTIONS - 1))
         const activeTab = ref('')
         const tabs = reactive([
             { code: 'fft', label: 'FFT', requireChannel: true, requireSignal: true, showLegend: true },
             { code: 'examine', label: 'Examine', requireChannel: true, requireSignal: true, showLegend: true },
         ] as PanelTabProps[])
-        // Add certain tabs only if MNE is enabled.
-        if (store.state.SERVICES.get('pyodide')) {
-            tabs.push({ code: 'topo', label: 'Topogram', requireChannel: true, requireSignal: true, showLegend: true })
-            tabs.push({ code: 'power', label: 'Power', requireChannel: false, requireSignal: false, showLegend: false })
-            tabs.push({ code: 'source-loc', label: 'Source', requireChannel: false, requireSignal: false, showLegend: false })
-        }
         const bottomPanelHeight = ref(0)
         const panelHeight = ref(0)
-        const panelWidth = ref (0)
+        const panelWidth = ref(0)
         const rso = null as null | ResizeObserver
-        const selectedChannelIndices = ref([0])
-        const seriesSpan = ref(100)
-        /** Should the channel name legend be displayed on this tab. */
         const showLegend = ref(false)
         const topPanelHeight = ref(0)
         const legend = ref<HTMLDivElement>() as Ref<HTMLDivElement>
@@ -230,24 +167,19 @@ export default defineComponent({
             panelHeight,
             panelWidth,
             rso,
-            selectedChannelIndices,
-            seriesSpan,
             showLegend,
             tabgroup,
             tabs,
             topPanelHeight,
             wrapper,
-            // Imported methods
             settingsColorToRgba,
-            // Shorthands
-            ...useEegContext(store, 'EegAnalysisTools'),
+            ...useAccContext(store, 'AccAnalysisTools'),
         }
     },
     computed: {
         compareSelections (): AnalysisTraceSelections[] {
             const selectionsWithChannel = this.selections.filter(s => s.channel) as AnalysisTraceSelections[]
             const showChannels = [] as AnalysisTraceSelections[]
-            // Make sure the active selection is included in the list of selections to show.
             let activeIncluded = this.selectedIdx < MAX_COMPARE_SELECTIONS
             for (const selection of selectionsWithChannel) {
                 if (activeIncluded || showChannels.length < MAX_COMPARE_SELECTIONS - 1) {
@@ -266,48 +198,14 @@ export default defineComponent({
         },
     },
     methods: {
-        /**
-         * Override the default I18n translate method.
-         * Returns a component-specific translation (default) or a
-         * general translation (fallback) for the given key string.
-         */
         $t: function (key: string, params = {}, capitalized = false) {
             return T(key, this.$options.name, params, capitalized)
         },
-        findSelectedChannelIndices () {
-            this.selectedChannelIndices = []
-            const selected = this.selections[this.activeIdx]
-            if (!selected || !selected.channel) {
-                return
-            }
-            const selectedName = selected.channel.name
-            const index = this.RESOURCE.activeMontage?.channels.filter(c => c.modality === 'eeg')
-                                                               .findIndex(c => c.name === selectedName)
-            if (index === undefined || index < 0) {
-                this.selectedChannelIndices.push(0)
-            } else {
-                this.selectedChannelIndices.push(index)
-            }
-            if (this.selections.length > 1) {
-                for (const sel of this.selections) {
-                    if (!sel.channel || sel.channel.name === selectedName) {
-                        continue
-                    }
-                    const idx = this.RESOURCE.activeMontage?.channels.filter(c => c.modality === 'eeg')
-                                                                     .findIndex(c => c.name === sel.channel!.name)
-                    if (idx !== undefined && idx >= 0) {
-                        this.selectedChannelIndices.push(idx)
-                    }
-                }
-            }
-        },
         resize () {
             if (!this.wrapper) {
-                // DOM update isn't ready yet.
                 return
             }
             this.panelWidth = this.wrapper.offsetWidth
-            // Reduce tab-row, sub-header and padding height.
             const tabRow = this.wrapper.querySelector('wa-tab-group')?.shadowRoot?.querySelector('div[part=tabs]') as HTMLElement
             const panels = this.wrapper.querySelectorAll('wa-tab-panel') as NodeListOf<HTMLElement>
             this.panelHeight = this.wrapper.offsetHeight - (tabRow?.offsetHeight || 0)
@@ -317,7 +215,6 @@ export default defineComponent({
                     (base as HTMLElement).style.height = `${this.panelHeight}px`
                 }
             }
-            // Reduce bottom panel header and margins.
             const splitContentHeight = this.panelHeight - 45 - 10
             this.topPanelHeight = splitContentHeight*0.75
             this.bottomPanelHeight = splitContentHeight*0.25
@@ -327,10 +224,6 @@ export default defineComponent({
                 return
             }
             this.activeIdx = idx
-            this.findSelectedChannelIndices()
-        },
-        setCursorPos (pos: number) {
-            this.$emit('set-cursor-pos', pos)
         },
         shouldShowPanel (tab: string) {
             if (!this.isVisible) {
@@ -367,12 +260,10 @@ export default defineComponent({
         },
     },
     beforeMount () {
-        // Add component styles to shadow root
         this.$store.dispatch(
             'add-component-styles',
             { component: this.$options.name, styles: this.$options.__scopeId }
         )
-        this.findSelectedChannelIndices()
     },
     mounted () {
         this.rso = new ResizeObserver(this.resize)
@@ -388,19 +279,18 @@ export default defineComponent({
 </script>
 
 <style scoped>
-[data-component="eeg-analysis-tools"] {
+[data-component="acc-analysis-tools"] {
     position: relative;
     width: 100%;
     height: 525px;
     overflow: hidden;
 }
-    [data-component="eeg-analysis-tools"] wa-tab-panel::part(base) {
+    [data-component="acc-analysis-tools"] wa-tab-panel::part(base) {
         display: flex;
         flex-direction: column;
         padding: 10px 0 0;
     }
-    [data-component="eeg-analysis-tools"] wa-tab::part(base) {
-        /* Height attribute does not work here for some reason, must define height using padding. */
+    [data-component="acc-analysis-tools"] wa-tab::part(base) {
         height: 0px;
         padding: 1rem 1rem 1rem 0.25rem;
     }

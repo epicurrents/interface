@@ -1,5 +1,5 @@
 <template>
-    <div data-component="eeg-channel-properties" ref="component">
+    <div data-component="acc-channel-properties" ref="component">
         <div class="title">
             {{ !channels.length ? channel.label : channels.length === 1 ? channels[0].label : $t('Multiple') }}
         </div>
@@ -10,12 +10,12 @@
             <div class="value">
                 <wa-select :value="`sensitivity:${sensitivity}`" @change="setSensitivity($event.target.value)">
                     <wa-option value="sensitivity:0">{{ $t('Default') }}</wa-option>
-                    <wa-option v-for="(sens, idx) in SETTINGS.sensitivity.uVperCm.availableValues"
-                        :key="`ecp-sensitivity-${idx}`"
+                    <wa-option v-for="(sens, idx) in SETTINGS.sensitivity.mssPerCm.availableValues"
+                        :key="`acp-sensitivity-${idx}`"
                         :value="`sensitivity:${sens}`"
                     >
                         {{ sens }}
-                        <span slot="end">µV/cm</span>
+                        <span slot="end">m/s²/cm</span>
                     </wa-option>
                 </wa-select>
             </div>
@@ -30,26 +30,6 @@
                 </wa-select>
             </div>
         </div>
-        <div class="property">
-            <div class="name">{{ $t('Scale') }}</div>
-            <div class="value">
-                <wa-select :value="`scale:${scale}`" @change="setScale($event.target.value)">
-                    <template v-for="(scale, idx) in SETTINGS.scale.availableValues">
-                        <wa-option v-if="scale"
-                            :key="`ecp-scale-${idx}`" :value="`scale:${scale}`"
-                        >
-                            <span slot="prefix">10^</span>
-                            {{ scale }}
-                        </wa-option>
-                        <wa-option v-else
-                            key="ecp-scale-disabled" :value="`scale:${scale}`"
-                        >
-                            {{ $t('Disabled') }}
-                        </wa-option>
-                    </template>
-                </wa-select>
-            </div>
-        </div>
         <div class="space"></div>
         <div class="header">{{ $t('Filters') }}</div>
         <div class="property">
@@ -58,7 +38,7 @@
                 <wa-select :value="`highpass:${highpass}`" @change="setHighpassFilter($event.target.value)">
                     <wa-option value="highpass:null">{{ $t('Default') }}</wa-option>
                     <wa-option v-for="(hf, idx) in SETTINGS.filters.highpass.availableValues"
-                        :key="`ecp-highpass-${idx}`"
+                        :key="`acp-highpass-${idx}`"
                         :value="`highpass:${hf}`"
                     >
                         {{ hf ? `${hf}` : $t('Disabled') }}
@@ -73,26 +53,11 @@
                 <wa-select :value="`lowpass:${lowpass}`" @change="setLowpassFilter($event.target.value)">
                     <wa-option value="lowpass:null">{{ $t('Default') }}</wa-option>
                     <wa-option v-for="(lf, idx) in SETTINGS.filters.lowpass.availableValues"
-                        :key="`ecp-lowpass-${idx}`"
+                        :key="`acp-lowpass-${idx}`"
                         :value="`lowpass:${lf}`"
                     >
                         {{ lf ? `${lf}` : $t('Disabled') }}
                         <span v-if="lf" slot="end">Hz</span>
-                    </wa-option>
-                </wa-select>
-            </div>
-        </div>
-        <div class="property">
-            <div class="name">{{ $t('Notch') }}</div>
-            <div class="value">
-                <wa-select :value="`notch:${notch}`" @change="setNotchFilter($event.target.value)">
-                    <wa-option value="notch:null">{{ $t('Default') }}</wa-option>
-                    <wa-option v-for="(nf, idx) in SETTINGS.filters.notch.availableValues"
-                        :key="`ecp-notch-${idx}`"
-                        :value="`notch:${nf}`"
-                    >
-                        {{ nf ? `${nf}` : $t('Disabled') }}
-                        <span v-if="nf" slot="end">Hz</span>
                     </wa-option>
                 </wa-select>
             </div>
@@ -114,11 +79,11 @@ import type {
 } from "@epicurrents/core/types"
 import { settingsColorToRgba } from "@epicurrents/core/util"
 import { useStore } from "vuex"
-import { useEegContext } from "../../"
+import { useAccContext } from "../../"
 import type { PointerEventOverlay } from "#root/src/app/overlays/PointerEventOverlay.vue"
 
 export default defineComponent({
-    name: 'EegChannelProperties',
+    name: 'AccChannelProperties',
     props: {
         changes: {
             type: Number,
@@ -142,33 +107,25 @@ export default defineComponent({
         // Decouple component properties from actual channel properties.
         // Initial values must NOT match any wa-option. wa-select binds to the
         // matching option once on mount and ignores later :value updates; if
-        // sensitivity, polarity, or scale starts at 0, that matches the
-        // "Default" option and the dropdown silently snaps there before
-        // channelPropertiesChanged has had a chance to write the real value.
+        // sensitivity (or polarity) starts at 0, that matches the "Default"
+        // option and the dropdown silently snaps there before channelProperties-
+        // Changed has had a chance to write the real value.
         const highpass = ref(-1 as number | null)
         const lowpass = ref(-1 as number | null)
-        const notch = ref(-1 as number | null)
         const polarity = ref(-2 as -2 | -1 | 0 | 1 | null)
-        const scale = ref(-99 as number | null)
         const sensitivity = ref(-1 as number | null)
         const updating = false
-        // DOM
         const component = ref<HTMLDivElement>() as Ref<HTMLDivElement>
         return {
             channels,
             highpass,
             lowpass,
-            notch,
             polarity,
             updating,
-            scale,
             sensitivity,
-            // DOM
             component,
-            // Imported methods
             settingsColorToRgba,
-            // Scoped properties
-            ...useEegContext(useStore(), 'EegChannelProperties'),
+            ...useAccContext(useStore(), 'AccChannelProperties'),
         }
     },
     watch: {
@@ -185,68 +142,37 @@ export default defineComponent({
             this.setPosition()
         },
     },
-    computed: {
-    },
     methods: {
-        /**
-         * Override the default I18n translate method.
-         * Returns a component-specific translation (default) or a
-         * general translation (fallback) for the given key string.
-         */
         $t: function (key: string, params = {}, capitalized = false) {
             return T(key, this.$options.name, params, capitalized)
         },
         channelPropertiesChanged () {
             if (this.updating) {
-                // Prevent setting properties (to undefined) while updating multiple channels.
                 return
             }
             let commonSensitivity = this.channels[0]?.sensitivity as number | null
             let commonPolarity = this.channels[0]?.displayPolarity as -1 | 0 | 1 | null
-            let commonScale = this.channels[0]?.scale as number | null
             let commonHighpass = this.channels[0]?.highpassFilter as number | null
             let commonLowpass = this.channels[0]?.lowpassFilter as number | null
-            let commonNotch = this.channels[0]?.notchFilter as number | null
             for (let i=1; i<this.channels.length; i++) {
                 const chan = this.channels[i]
-                if (commonSensitivity !== null) {
-                    if (chan.sensitivity !== commonSensitivity) {
-                        // If channels have different values, set to an undefined value
-                        commonSensitivity = null
-                    }
+                if (commonSensitivity !== null && chan.sensitivity !== commonSensitivity) {
+                    commonSensitivity = null
                 }
-                if (commonPolarity !== null) {
-                    if (chan.displayPolarity !== commonPolarity) {
-                        commonPolarity = null
-                    }
+                if (commonPolarity !== null && chan.displayPolarity !== commonPolarity) {
+                    commonPolarity = null
                 }
-                if (commonScale !== null) {
-                    if (chan.scale !== commonScale) {
-                        commonScale = null
-                    }
+                if (commonHighpass !== null && chan.highpassFilter !== commonHighpass) {
+                    commonHighpass = null
                 }
-                if (commonHighpass !== null) {
-                    if (chan.highpassFilter !== commonHighpass) {
-                        commonHighpass = null
-                    }
-                }
-                if (commonLowpass !== null) {
-                    if (chan.lowpassFilter !== commonLowpass) {
-                        commonLowpass = null
-                    }
-                }
-                if (commonNotch !== null) {
-                    if (chan.notchFilter !== commonNotch) {
-                        commonNotch = null
-                    }
+                if (commonLowpass !== null && chan.lowpassFilter !== commonLowpass) {
+                    commonLowpass = null
                 }
             }
             this.sensitivity = commonSensitivity
             this.polarity = commonPolarity
-            this.scale = commonScale
             this.highpass = commonHighpass
             this.lowpass = commonLowpass
-            this.notch = commonNotch
         },
         checkChannels () {
             const trueChans = this.RESOURCE.activeMontage
@@ -256,8 +182,7 @@ export default defineComponent({
                 this.channels = []
                 return
             }
-            const activeChans = trueChans.filter(c => c.isActive)
-            this.channels = activeChans
+            this.channels = trueChans.filter(c => c.isActive)
         },
         close () {
             this.channel.isActive = false
@@ -281,15 +206,6 @@ export default defineComponent({
             this.updating = false
             this.channelPropertiesChanged()
         },
-        setNotchFilter (value: string) {
-            value = value.split(':')[1]
-            this.updating = true
-            for (const chan of this.channels) {
-                chan.setNotchFilter(value === 'null' ? null : parseInt(value))
-            }
-            this.updating = false
-            this.channelPropertiesChanged()
-        },
         setPolarity (value: string) {
             value = value.split(':')[1]
             this.updating = true
@@ -301,7 +217,6 @@ export default defineComponent({
         },
         setPosition () {
             const chanLabelTop = (1 - this.channel.offset.baseline)*this.overlay.getOffsetHeight() - 10
-            // If channel label top edge is far enough from container bottom, set container to align with that
             if (this.overlay.getOffsetHeight() - chanLabelTop > this.component.offsetHeight) {
                 this.component.style.bottom = ''
                 this.component.style.top = chanLabelTop + 'px'
@@ -316,15 +231,6 @@ export default defineComponent({
                 this.component.style.visibility = 'visible'
             }
         },
-        setScale (value: string) {
-            value = value.split(':')[1]
-            this.updating = true
-            for (const chan of this.channels) {
-                chan.scale = parseFloat(value)
-            }
-            this.updating = false
-            this.channelPropertiesChanged()
-        },
         setSensitivity (value: string) {
             value = value.split(':')[1]
             this.updating = true
@@ -337,16 +243,13 @@ export default defineComponent({
         },
     },
     beforeMount () {
-        // Add component styles to shadow root
         this.$store.dispatch(
             'add-component-styles',
             { component: this.$options.name, styles: this.$options.__scopeId }
         )
     },
     mounted () {
-        // Listen to recording property changes.
         this.RESOURCE.onPropertyChange('channels', this.channelPropertiesChanged, this.ID)
-        // Close component on overlay click
         this.overlay.$el.addEventListener('pointerup', this.close)
         this.checkChannels()
         this.channelPropertiesChanged()
@@ -360,13 +263,13 @@ export default defineComponent({
 </script>
 
 <style scoped>
-[data-component="eeg-channel-properties"] {
+[data-component="acc-channel-properties"] {
     position: absolute;
     left: 0;
     width: 12.5rem;
     height: fit-content;
     padding-bottom: 0.25rem;
-    visibility: hidden; /* Hide the component until position has been set */
+    visibility: hidden;
     border: solid 1px var(--epicv-border);
     border-radius: 0.25rem;
     background-color: var(--epicv-background);

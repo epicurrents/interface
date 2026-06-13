@@ -76,7 +76,7 @@ import { T } from "#i18n"
 import { settingsColorToRgba, settingsDashArrayToSvgStrokeDasharray } from "@epicurrents/core/util"
 import type { PlotTraceSelection } from "#types/plot"
 import { useStore } from "vuex"
-import { useEegContext } from "#app/modules/eeg"
+import { useBiosignalContext } from "#config"
 import { NUMERIC_ERROR_VALUE } from "@epicurrents/core/util"
 
 import SignalTool from './SignalTool.vue'
@@ -148,7 +148,7 @@ export default defineComponent({
             settingsColorToRgba,
             settingsDashArrayToSvgStrokeDasharray,
             // Shorthands
-            ...useEegContext(store),
+            ...useBiosignalContext(store),
         }
     },
     watch: {

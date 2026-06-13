@@ -79,6 +79,7 @@ if (typeof window.__EPICURRENTS__ === 'undefined') {
     }
 }
 // Import rest of the modules after global property setup.
+import * as interfaceAccModule from '#app/modules/acc'
 import * as interfaceDocModule from '#app/modules/doc'
 import * as interfaceEegModule from '#app/modules/eeg'
 import * as interfacePdfModule from '#app/modules/pdf'
@@ -144,8 +145,10 @@ import * as interfacePdfModule from '#app/modules/pdf'
  */
 import { Epicurrents } from '@epicurrents/core'
 import { inlineWorker } from '@epicurrents/core/dist/util'
+import * as accModule from '@epicurrents/acc-module'
 import * as docModule from '@epicurrents/doc-module'
 import * as eegModule from '@epicurrents/eeg-module'
+import { CsvImporter, CsvWorkerSubstitute } from '@epicurrents/csv-reader'
 import { EdfImporter, EdfWorkerSubstitute } from '@epicurrents/edf-reader'
 import { DicomImporter, DicomWorkerSubstitute } from '@epicurrents/dicom-reader'
 import { HtmImporter, MarkdownWorkerSubstitute } from '@epicurrents/htm-reader'
@@ -193,6 +196,10 @@ const dcmWorker = () => inlineWorker('DicomWorker', dcmWorkerSrc).create()
 // EDF
 import edfWorkerSrc from '#root/dist/workers/edf.worker.js?raw'
 const edfWorker = () => inlineWorker('EdfWorker', edfWorkerSrc).create()
+
+// CSV
+import csvWorkerSrc from '#root/dist/workers/csv.worker.js?raw'
+const csvWorker = () => inlineWorker('CsvWorker', csvWorkerSrc).create()
 
 // PDF — pdfjs requires a URL string for `GlobalWorkerOptions.workerSrc`. `inlineWorker`'s
 // returned `url` is a Blob URL pointing at the same compiled bundle as `create()`.
@@ -258,7 +265,7 @@ export const createEpicurrentsApp = async (config?: ApplicationInterfaceConfig) 
         })
         const edfLoader = new EdfImporter()
         edfLoader.setWorkerOverride('eeg', () => {
-            const eegSAB = window.__EPICURRENTS__.RUNTIME.SETTINGS.getFieldValue('eeg.useMemoryManager')
+            const eegSAB = window.__EPICURRENTS__.RUNTIME!.SETTINGS.getFieldValue('eeg.useMemoryManager')
             if (USE_SAB && eegSAB) {
                 return edfWorker()
             }
@@ -276,7 +283,7 @@ export const createEpicurrentsApp = async (config?: ApplicationInterfaceConfig) 
         // DICOM reader is in development stage.
         const dcmLoader = new DicomImporter()
         dcmLoader.setWorkerOverride('eeg', () => {
-            const eegSAB = window.__EPICURRENTS__.RUNTIME.SETTINGS.getFieldValue('eeg.useMemoryManager')
+            const eegSAB = window.__EPICURRENTS__.RUNTIME!.SETTINGS.getFieldValue('eeg.useMemoryManager')
             if (USE_SAB && eegSAB) {
                 return dcmWorker()
             }
@@ -292,6 +299,23 @@ export const createEpicurrentsApp = async (config?: ApplicationInterfaceConfig) 
         coreApp.registerStudyImporter('eeg/dcm-url', 'Open DICOM from URL', 'url', eegDcmLoader)
     }
 
+    // ACC module setup.
+    if (!SETUP.activeModules.length || SETUP.activeModules.includes('acc')) {
+        coreApp.registerModule('acc', accModule)
+        const csvLoader = new CsvImporter()
+        csvLoader.setWorkerOverride('acc', () => {
+            const accSAB = window.__EPICURRENTS__.RUNTIME!.SETTINGS.getFieldValue('acc.useMemoryManager')
+            if (USE_SAB && accSAB) {
+                return csvWorker()
+            }
+            return new CsvWorkerSubstitute()
+        })
+        const accLoader = new accModule.AccStudyLoader('AccCsvLoader', csvLoader)
+        coreApp.registerStudyImporter('acc/csv-file', 'Open CSV file', 'file', accLoader)
+        coreApp.registerStudyImporter('acc/csv-folder', 'Open CSV files from folder', 'folder', accLoader)
+        coreApp.registerStudyImporter('acc/csv-url', 'Open CSV from URL', 'url', accLoader)
+    }
+
     // Markdown module setup.
     if (!SETUP.activeModules.length || SETUP.activeModules.includes('htm')) {
         // Register the document module and htm reader.
@@ -299,7 +323,7 @@ export const createEpicurrentsApp = async (config?: ApplicationInterfaceConfig) 
         const htmReader = new HtmImporter('markdown')
         htmReader.setWorkerOverride('markdown',
             () => {
-                const docSAB = window.__EPICURRENTS__.RUNTIME.SETTINGS.getFieldValue('doc.useMemoryManager')
+                const docSAB = window.__EPICURRENTS__.RUNTIME!.SETTINGS.getFieldValue('doc.useMemoryManager')
                 if (USE_SAB && docSAB) {
                     return mdWorker()
                 }
@@ -339,7 +363,7 @@ export const createEpicurrentsApp = async (config?: ApplicationInterfaceConfig) 
         coreApp.registerModule('emg', emgModule)
         const wavReader = new WavImporter()
         wavReader.setWorkerOverride('emg', () => {
-            const emgSAB = window.__EPICURRENTS__.RUNTIME.SETTINGS.getFieldValue('emg.useMemoryManager')
+            const emgSAB = window.__EPICURRENTS__.RUNTIME!.SETTINGS.getFieldValue('emg.useMemoryManager')
             if (USE_SAB && emgSAB) {
                 return wavWorker()
             }
@@ -383,7 +407,7 @@ export const createEpicurrentsApp = async (config?: ApplicationInterfaceConfig) 
         )
         apiReader.setWorkerOverride('tab-api',
             () => {
-                const tabSAB = window.__EPICURRENTS__.RUNTIME.SETTINGS.getFieldValue('tab.useMemoryManager')
+                const tabSAB = window.__EPICURRENTS__.RUNTIME!.SETTINGS.getFieldValue('tab.useMemoryManager')
                 if (USE_SAB && tabSAB) {
                     return apiWorker()
                 }
@@ -400,6 +424,7 @@ export const createEpicurrentsApp = async (config?: ApplicationInterfaceConfig) 
 
     // Add interface resource modules.
     DefaultInterface.MODULES = {
+        acc: interfaceAccModule,
         htm: interfaceDocModule,
         eeg: interfaceEegModule,
         pdf: interfacePdfModule,

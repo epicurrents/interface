@@ -417,7 +417,7 @@ export const useContext = (store: Pick<EpiCStore, "state">, context: string, com
     // Include reference to possible Pyodide service and information about SharedArrayBuffer support.
     const pyodide = {
         /** Pyodide service or null if not available. */
-        service: window.__EPICURRENTS__?.RUNTIME?.SERVICES?.get('pyodide') as PythonInterpreterService || null,
+        service: window.__EPICURRENTS__?.RUNTIME?.SERVICES?.get('pyodide') as unknown as PythonInterpreterService || null,
         /** Is memory manager and SharedArrayBuffer support available. */
         usesMemoryManager: window.__EPICURRENTS__?.RUNTIME?.SETTINGS?.app?.useMemoryManager || false as boolean,
     }

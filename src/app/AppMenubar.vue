@@ -167,6 +167,23 @@ export default defineComponent({
             }
             fileContexts.push(docCtx)
         }
+        if (importerNames.some(k => k.includes('acc/'))) {
+            const accCtx = {
+                modalities: ['acc'],
+                header: 'Accelerometry',
+                headerDone: false,
+                groups: [],
+            } as FileContext
+            if (importerNames.some(k => k.includes('acc/csv-'))) {
+                accCtx.groups.push({
+                    fileExtensions: ['.csv', '.tsv'],
+                    items: [] as any[],
+                    label: T('Open ACC from CSV', 'AppMenubar'),
+                    type: 'menu',
+                })
+            }
+            fileContexts.push(accCtx)
+        }
         if (importerNames.some(k => k.includes('eeg/'))) {
             const eegCtx = {
                 modalities: ['eeg'],

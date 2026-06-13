@@ -783,16 +783,27 @@ export default defineComponent({
         window.addEventListener('keyup', this.handleKeyup, false)
         // Cancel all hotkey events if user leaves the tab.
         window.addEventListener('blur', this.cancelHotkeyEvents, false)
+        // Log.announce events route through `window.__EPICURRENTS__.announce`,
+        // a host-provided callback that owns the toast surface. The viewer
+        // ships as a UMD bundle that embeds its own `scoped-event-log`
+        // singleton, so a Log.addEventListener call on the host side fires
+        // on a different listener registry and never catches viewer-internal
+        // events. The callback hop is the only way the two singletons can
+        // rendezvous without a shared module.
+        //
+        // When no callback is registered (standalone viewer use), nothing
+        // happens — the host is responsible for providing whatever surface
+        // it wants the announce to render on. The viewer's wa-toast element
+        // stays mounted for the `display-callout` Vuex action below.
         Log.addEventListener(['ERROR', 'WARN'], (level, event) => {
-            if (event?.announce) {
-                // announce === true → use the log message verbatim; a string
-                // value provides a separate user-facing message so the log
-                // line can stay technical.
-                const text = typeof event.announce === 'string' ? event.announce : event.message
-                this.addCallout(
-                    Array.isArray(text) ? text : [text],
-                    level === 'ERROR' ? 'error' : 'warning'
-                )
+            if (!event?.announce) {
+                return
+            }
+            const text = typeof event.announce === 'string'
+                ? event.announce
+                : Array.isArray(event.message) ? event.message.join(' ') : String(event.message ?? '')
+            if (typeof window.__EPICURRENTS__?.announce === 'function') {
+                window.__EPICURRENTS__.announce(text, level as 'ERROR' | 'WARN')
             }
         })
         // Bind methods to page elements.

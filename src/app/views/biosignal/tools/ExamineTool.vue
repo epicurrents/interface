@@ -156,7 +156,7 @@ import { getSignalScale, settingsColorToRgba, settingsDashArrayToSvgStrokeDashar
 import { PointerInteraction } from "#types/interface"
 import { NUMERIC_ERROR_VALUE } from "@epicurrents/core/util"
 import { PlotTraceSelection, SignalPoI } from "#types/plot"
-import { useEegContext } from "#app/modules/eeg"
+import { useBiosignalContext } from "#config"
 import { NO_POINTER_BUTTON_DOWN } from "#util"
 import { useStore } from "vuex"
 
@@ -230,7 +230,7 @@ export default defineComponent({
             settingsColorToRgba,
             settingsDashArrayToSvgStrokeDasharray,
             // Shorthands
-            ...useEegContext(useStore(), 'ExamineTool'),
+            ...useBiosignalContext(useStore(), 'ExamineTool'),
         }
     },
     watch: {

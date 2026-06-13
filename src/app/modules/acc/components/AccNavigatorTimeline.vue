@@ -1,5 +1,5 @@
 <template>
-    <div data-component="eeg-navigator-timeline" ref="timeline">
+    <div data-component="acc-navigator-timeline" ref="timeline">
     </div>
 </template>
 
@@ -11,7 +11,7 @@ import { defineComponent, Ref, ref } from "vue"
 import { T } from "#i18n"
 
 export default defineComponent({
-    name: 'EegNavigatorTimeline',
+    name: 'AccNavigatorTimeline',
     props: {
         duration: {
             type: Number,
@@ -125,7 +125,7 @@ export default defineComponent({
 </script>
 
 <style scoped>
-[data-component="eeg-navigator-timeline"] {
+[data-component="acc-navigator-timeline"] {
     position: absolute;
     left: 0;
     bottom: 0;
@@ -134,7 +134,7 @@ export default defineComponent({
     font-size: 0.8rem;
     overflow: visible;
 }
-    [data-component="eeg-navigator-timeline"] div {
+    [data-component="acc-navigator-timeline"] div {
         position: absolute;
         width: 50px;
         height: 20px;
