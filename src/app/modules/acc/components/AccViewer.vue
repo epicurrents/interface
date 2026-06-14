@@ -120,6 +120,7 @@
                                 :overlay="overlay"
                                 :pxPerSecond="pxPerSecond"
                                 :viewRange="viewRange"
+                                v-on:main-cursor-grab="onCursorGrab"
                                 v-on:main-cursor-position=""
                             ></vertical-cursors>
                             <viewer-overlay ref="overlay"
@@ -213,6 +214,8 @@
                 v-on:forward="goForward"
                 v-on:loaded="resizeElements"
                 v-on:navigation="handlePlotNavigation"
+                v-on:rewind-audio="onRewindAudio"
+                v-on:toggle-audio="toggleAudio"
                 v-on:toggle-controls="handleNavigatorToggleControls"
             />
         </template>
@@ -235,7 +238,6 @@ import type {
     BiosignalChannel,
     ChannelPositionProperties,
     MontageChannel,
-    SourceChannel,
 } from '@epicurrents/core/types'
 import type { SignalSelectionLimit } from '#types/interface'
 import { useBiosignalAnalysis } from '#app/views/biosignal/useBiosignalAnalysis'
@@ -245,6 +247,7 @@ import { useBiosignalKeyboard } from '#app/views/biosignal/useBiosignalKeyboard'
 import { useBiosignalLayout } from '#app/views/biosignal/useBiosignalLayout'
 import { useBiosignalNavigation } from '#app/views/biosignal/useBiosignalNavigation'
 import { useBiosignalPointer } from '#app/views/biosignal/useBiosignalPointer'
+import { useMediaCursorSync } from '#app/views/biosignal/useMediaCursorSync'
 import type { ContextMenuContext } from '#types/interface'
 import type { PlotSelection } from '#app/views/biosignal/types'
 import type { SignalHighlight } from '#types/plot'
@@ -341,7 +344,7 @@ export default defineComponent({
         const editingEventsMode = ref('new' as 'new' | 'edit')
         const lastCacheEnd = ref(0)
         const lastVideoTime = ref(0)
-        const menuChannel = ref(null as MontageChannel | SourceChannel | null)
+        const menuChannel = ref(null as MontageChannel | null)
         const montageSetupDone = ref(false)
         const pointerDownPoint = reactive({ x: NUMERIC_ERROR_VALUE, y: NUMERIC_ERROR_VALUE })
         const navigatorHeight = ref(NAVIGATOR_MIN_HEIGHT)
@@ -478,10 +481,18 @@ export default defineComponent({
             }
         )
 
+        const mediaCursor = useMediaCursorSync({
+            awaitPlotUpdate: () => new Promise(resolve => { resolvePlotUpdate.value = resolve }),
+            resource: accCtx.RESOURCE,
+            setCursorPos: (seconds: number) => cursors.value?.setCursorPos(seconds),
+            viewRange: () => viewRange.value,
+        })
+
         return {
             activeCursorTool,
             activeSelection,
             activeMontageVersion,
+            mediaCursor,
             channelsChanged,
             contextMenu,
             dataSetupDone,
@@ -680,6 +691,56 @@ export default defineComponent({
         },
         clearCursorTool () {
             this.$store.dispatch('acc.set-cursor-tool', null)
+        },
+        /**
+         * Grabbing the main cursor while audio is playing stops it so the user can drag freely; pressing play again
+         * starts stethoscope playback from the cursor's new position.
+         */
+        onCursorGrab () {
+            if (this.RESOURCE.isAudioPlaying) {
+                this.RESOURCE.rewindAudio()
+                this.mediaCursor.stop()
+            }
+        },
+        onRewindAudio () {
+            this.RESOURCE.rewindAudio()
+            this.mediaCursor.stop()
+        },
+        async playStethoscopeFromCursor () {
+            const resource = this.RESOURCE
+            const resumed = await resource.resumeAudio()
+            if (!resumed) {
+                await resource.playAudio(this.cursors?.mainCursorPos || 0)
+            }
+            // The view follows playback only in stethoscope mode (recording-relative playbackPosition).
+            this.mediaCursor.follow({
+                get currentTime () {
+                    return resource.playbackPosition
+                },
+                get isPlaying () {
+                    return resource.isAudioPlaying
+                },
+            })
+        },
+        /** Range of the first active signal selection in recording seconds, or null when nothing is selected. */
+        selectedAudioSegment (): [number, number] | null {
+            const selection = this.plotSelections.find(s => !s.canceled && s.range?.length === 2)
+            return selection ? [selection.range[0], selection.range[1]] : null
+        },
+        toggleAudio () {
+            if (this.RESOURCE.isAudioPlaying) {
+                this.RESOURCE.pauseAudio()
+                this.mediaCursor.stop()
+                return
+            }
+            const segment = this.selectedAudioSegment()
+            if (segment) {
+                // Selected segment → spectral-tone: a steady tone from that window, no cursor involvement.
+                this.RESOURCE.playAudio(0, segment)
+                return
+            }
+            // No selection → stethoscope from the cursor, with the view following playback.
+            this.playStethoscopeFromCursor()
         },
         closeChannelMenu () {
             this.menuChannel = null
@@ -1252,6 +1313,8 @@ export default defineComponent({
         if (this.nextAnimationFrame) {
             cancelAnimationFrame(this.nextAnimationFrame)
         }
+        // Stop the media-cursor sync loop.
+        this.mediaCursor.stop()
         //const ONNX = this.$store.state.SERVICES.get('ONNX') as OnnxService
         //if (ONNX) {
         //    ONNX.setSourceResource(null)

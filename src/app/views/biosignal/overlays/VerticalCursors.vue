@@ -161,7 +161,8 @@ export default defineComponent({
                 }
                 this.overlay.trackPointer(event, { move: pointerMove })
             } else if (this.displayMainCursor && this.mainCursor) {
-                // Main cursor.
+                // Main cursor. Signal the grab so a consumer can react (e.g. stop media playback before a drag).
+                this.$emit('main-cursor-grab')
                 const pointerMove = (left: number, _top: number, _meta: OverlayPointerEventMeta) => {
                     const rangeFromEnd = this.RESOURCE.totalDuration - this.RESOURCE.viewStart
                     const leftPos = Math.min(

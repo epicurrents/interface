@@ -104,6 +104,33 @@
             >
                 {{ $t('Page forward') }}
             </wa-tooltip>
+            <wa-button
+                appearance="epicv"
+                :disabled="audioPlaying || undefined"
+                id="epicv-acc-audio-rewind"
+                @click="$emit('rewind-audio')"
+            >
+                <app-icon name="backward-fast" variant="regular"></app-icon>
+            </wa-button>
+            <wa-tooltip
+                for="epicv-acc-audio-rewind"
+                placement="bottom"
+            >
+                {{ $t('Rewind audio') }}
+            </wa-tooltip>
+            <wa-button
+                appearance="epicv"
+                id="epicv-acc-audio-play"
+                @click="$emit('toggle-audio')"
+            >
+                <app-icon :name="audioPlaying ? 'pause' : 'play'" variant="regular"></app-icon>
+            </wa-button>
+            <wa-tooltip
+                for="epicv-acc-audio-play"
+                placement="bottom"
+            >
+                {{ audioPlaying ? $t('Pause audio') : $t('Play audio') }}
+            </wa-tooltip>
         </div>
     </div>
 </template>
@@ -159,12 +186,14 @@ export default defineComponent({
         },
     },
     setup () {
+        const audioPlaying = ref(false)
         const highlights = ref([] as { color: SettingsColor, highlights: [number, number][], interval: number }[])
         const navigator = ref<HTMLCanvasElement>() as Ref<HTMLCanvasElement>
         const viewbox = ref<HTMLCanvasElement>() as Ref<HTMLCanvasElement>
         const timeValue = reactive([] as string[])
         const unsubscribe = ref(null as (() => void) | null)
         return {
+            audioPlaying,
             highlights,
             navigator,
             timeValue,
@@ -573,6 +602,9 @@ export default defineComponent({
         // canvas) so scrolling doesn't trigger the full navigator redraw.
         this.RESOURCE.onPropertyChange('displayViewStart', this.drawViewbox, this.ID)
         this.RESOURCE.onPropertyChange('signalCacheStatus', this.drawNavigator, this.ID)
+        this.RESOURCE.onPropertyChange('isAudioPlaying', () => {
+            this.audioPlaying = this.RESOURCE.isAudioPlaying
+        }, this.ID)
         this.RESOURCE.activeMontage?.onPropertyChange('highlights', this.updateHighlights, this.ID)
         // Trigger element resize in parent component once this component is done loading
         this.$emit('loaded')

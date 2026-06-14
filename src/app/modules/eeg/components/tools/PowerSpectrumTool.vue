@@ -157,7 +157,7 @@ export default defineComponent({
          * The frequency power plot won't update merely by changing the `powers` contents, we must change the component key as well.
          */
         const powerTS = ref(0)
-        const rBSI = ref([] as { symbol: string, value: number }[])
+        const rBSI = ref([] as { symbol: string | undefined, value: number }[])
         const selected = ref(-1)
         const tarD = ref(0)
         const tarL = ref(0)

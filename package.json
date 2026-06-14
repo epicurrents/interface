@@ -7,6 +7,7 @@
     "build": "vue-tsc && vite build --config vite.config.lib.ts",
     "build:app": "vue-tsc && vite build --config vite.config.app.ts",
     "build:custom": "vue-tsc && vite build --config vite.config.custom.ts",
+    "build:dist": "vite build --config vite.config.dist.ts",
     "copy:umd": "cp node_modules/@epicurrents/core/umd/* public/epicurrents/ && cp node_modules/@epicurrents/edf-reader/umd/* public/edf-reader/ && cp node_modules/@epicurrents/pyodide-service/umd/* public/pyodide-service/",
     "copy:workers": "node scripts/workers.mjs",
     "deps:build": "node scripts/build.mjs",
@@ -31,6 +32,23 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./modules/eeg": {
+      "import": "./dist/modules/eeg.js",
+      "default": "./dist/modules/eeg.js"
+    },
+    "./modules/acc": {
+      "import": "./dist/modules/acc.js",
+      "default": "./dist/modules/acc.js"
+    },
+    "./modules/doc": {
+      "import": "./dist/modules/doc.js",
+      "default": "./dist/modules/doc.js"
+    },
+    "./modules/pdf": {
+      "import": "./dist/modules/pdf.js",
+      "default": "./dist/modules/pdf.js"
+    },
+    "./style.css": "./dist/style.css",
     "./types": "./dist/types/index.d.ts",
     "./package.json": "./package.json",
     "./dist/types": "./dist/types/index.d.ts"

@@ -10,7 +10,7 @@
  * @license    Apache-2.0
  */
 
-import { createEpicurrentsApp } from '#setups/default'
+import { createEpicurrentsApp } from '#setups/standalone'
 import { Log } from 'scoped-event-log'
 
 // Try to fetch local settings JSON and launch the app instance.

@@ -73,7 +73,7 @@ import { NO_POINTER_BUTTON_DOWN } from "#util"
 import { PointerInteraction } from "#types/interface"
 import { Log } from "scoped-event-log"
 
-import SignalTool from './SignalTool.vue'
+import SignalTool from '#app/views/biosignal/tools/SignalTool.vue'
 
 type SignalProperties = {
     points: string

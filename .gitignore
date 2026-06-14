@@ -25,7 +25,9 @@ package-lock.json
 vite.config.*.ts
 !vite.config.app.ts
 !vite.config.lib.ts
-!/src/setups/default.ts
+!vite.config.dist.ts
+!/src/setups/index.ts
+!/src/setups/standalone.ts
 tsconfig.*.json
 
 # Editor directories and files

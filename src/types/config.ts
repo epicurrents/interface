@@ -237,8 +237,36 @@ export type CommonBiosignalInterfaceSettings = CommonInterfaceSettings & {
             dasharray?: number[]
             style?: string
         }
+        excludeArea: {
+            color: SettingsColor
+            width: number
+            dasharray?: number[]
+            style?: string
+        }
+        guideLine: {
+            color: SettingsColor
+            width: number
+            dasharray?: number[]
+            style?: string
+        }
+        guideLineSymbol: {
+            color: SettingsColor
+        }
         highlightArea: {
             color: SettingsColor
+        }
+        poiMarkerCircle: {
+            color: SettingsColor
+            radius: number
+            width: number
+            dasharray?: number[]
+            style?: string
+        }
+        poiMarkerLine: {
+            color: SettingsColor
+            width: number
+            dasharray?: number[]
+            style?: string
         }
         signalBaseline: {
             color: SettingsColor
@@ -246,6 +274,14 @@ export type CommonBiosignalInterfaceSettings = CommonInterfaceSettings & {
             dasharray?: number[]
             style?: string
         }
+        /** Per-segment style definitions for tools that draw selected signal segments. */
+        signals: {
+            color: SettingsColor
+            dasharray?: number[]
+            radius?: number
+            style?: string
+            width?: number
+        }[]
     }
     /** Trace (signal line) settings. */
     trace: {
