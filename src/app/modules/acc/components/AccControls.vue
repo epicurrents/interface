@@ -105,6 +105,42 @@ export default defineComponent({
                 version: 0,
                 width: '6.5rem',
             },
+            //////////////////      AUDIO        //////////////////
+            {
+                id: 'audio-rewind',
+                align: 'right',
+                iconName: 'backward-fast',
+                joinRight: true,
+                label: T('Rewind audio', 'AccControls'),
+                onclick: ['acc.audio-rewind', null],
+                type: 'button',
+                version: 0,
+            },
+            {
+                id: 'audio-play',
+                align: 'right',
+                iconName: 'play',
+                joinLeft: true,
+                label: T('Play / pause audio', 'AccControls'),
+                onclick: ['acc.audio-toggle', null],
+                reloadOn: ['resource:isAudioPlaying'],
+                type: 'on-off',
+                value: false,
+                version: 0,
+            },
+            //////////////////      VIDEO        //////////////////
+            {
+                id: 'video',
+                align: 'right',
+                iconName: 'video',
+                label: T('Toggle video', 'AccControls'),
+                onclick: ['acc.video-toggle', null],
+                reloadOn: ['action:acc.video-toggle'],
+                type: 'on-off',
+                value: false,
+                version: 0,
+            },
+            //////////////      EXAMINE / ANNOTATE      //////////////
             // Inspect tool toggle.
             {
                 id: 'inspect',
@@ -124,7 +160,6 @@ export default defineComponent({
                 align: 'right',
                 iconName: 'message-middle',
                 joinLeft: true,
-                joinRight: true,
                 label: T('Toggle annotation tools', 'AccControls'),
                 onclick: ['acc.set-open-sidebar', 'annotations'],
                 reloadOn: ['action:acc.set-open-sidebar'],
@@ -163,11 +198,17 @@ export default defineComponent({
             if (!this.RESOURCE || this.RESOURCE.modality !== 'acc') {
                 return
             }
-            if (id === undefined || id === this.accControls[0].id) {
+            // Look a control up by id rather than array position, so the
+            // descriptor array can be reordered (or grow) without breaking the
+            // per-control build blocks.
+            const control = (controlId: string) => this.accControls.find(c => c.id === controlId)!
+            const wants = (controlId: string) => id === undefined || id === controlId
+            if (wants('active-montage')) {
                 // Construct montage dropdown. ACC montages are typically a single
                 // setup-scoped group plus the "Raw signals" fall-through; the
                 // EEG core-montage split (avg/lon/rec/trv) doesn't apply here.
-                this.accControls[0].groups = []
+                const c = control('active-montage')
+                c.groups = []
                 const availableMontages = this.RESOURCE.montages
                 let currentGroup = null as DropdownGroup | null
                 for (const montage of availableMontages as BiosignalMontage[]) {
@@ -175,7 +216,7 @@ export default defineComponent({
                     const setupLabel = montage.setup?.label || setupName.split(':')[1]
                     if (currentGroup?.id !== setupName) {
                         if (currentGroup) {
-                            this.accControls[0].groups!.push(currentGroup)
+                            c.groups!.push(currentGroup)
                         }
                         currentGroup = {
                             id: setupName,
@@ -191,28 +232,29 @@ export default defineComponent({
                     })
                 }
                 if (currentGroup) {
-                    this.accControls[0].groups.push(currentGroup)
+                    c.groups.push(currentGroup)
                 }
                 // Raw signals fall-through.
-                this.accControls[0].options = [{
+                c.options = [{
                     id: 'raw-signals',
                     enabled: true,
                     label: this.$t('Raw signals'),
                     onclick: ['acc.set-active-montage', null],
                     value: null,
                 }]
-                this.accControls[0].value = this.RESOURCE.activeMontage?.name || 'raw-signals'
-                this.accControls[0].version++
+                c.value = this.RESOURCE.activeMontage?.name || 'raw-signals'
+                c.version++
             }
-            if (id === undefined || id === this.accControls[1].id) {
+            if (wants('sensitivity')) {
                 // Construct sensitivity dropdown.
+                const c = control('sensitivity')
                 const sensitivity = this.SETTINGS.sensitivity[this.SETTINGS.sensitivityUnit]
                 const scale = sensitivity.scale || 1
                 const availableSensitivities = sensitivity.availableValues
-                this.accControls[1].options = []
+                c.options = []
                 for (let i=0; i<availableSensitivities.length; i++) {
                     const sens = availableSensitivities[i]
-                    this.accControls[1].options.push({
+                    c.options.push({
                         id: `sensitivity-${sens}`,
                         enabled: true,
                         label: `${sens}`,
@@ -224,7 +266,7 @@ export default defineComponent({
                 const resourceSensitivity = Math.round(this.RESOURCE.sensitivity/scale)
                 if (!availableSensitivities.includes(resourceSensitivity)) {
                     // Add a "custom" sensitivity option
-                    this.accControls[1].options.push({
+                    c.options.push({
                         id: `sensitivity-custom`,
                         enabled: false,
                         label: this.$t('*' + resourceSensitivity.toFixed()),
@@ -232,15 +274,16 @@ export default defineComponent({
                     })
                 }
                 if (availableSensitivities.includes(resourceSensitivity)) {
-                    this.accControls[1].value = `sensitivity-${resourceSensitivity}`
+                    c.value = `sensitivity-${resourceSensitivity}`
                 } else {
-                    this.accControls[1].value = `sensitivity-custom`
+                    c.value = `sensitivity-custom`
                 }
-                this.accControls[1].version++
+                c.version++
             }
-            if (id === undefined || id === this.accControls[2].id) {
+            if (wants('timebase')) {
                 // Construct timebase.
-                this.accControls[2].groups = []
+                const c = control('timebase')
+                c.groups = []
                 const timebaseTypes = Object.entries(this.SETTINGS.timebase)
                 timebaseTypes.sort((a, b) => a[0].localeCompare(b[0]))
                 for (const [tbName, timebase] of timebaseTypes) {
@@ -260,19 +303,20 @@ export default defineComponent({
                             value: tb,
                         })
                     }
-                    this.accControls[2].groups.push(tbGroup)
+                    c.groups.push(tbGroup)
                 }
                 // ACC has no epoch-mode override on the timebase — the dropdown is always active.
-                this.accControls[2].enabled = true
-                this.accControls[2].value = `timebase-${this.RESOURCE.timebaseUnit}-${this.RESOURCE.timebase}`
-                this.accControls[2].version++
+                c.enabled = true
+                c.value = `timebase-${this.RESOURCE.timebaseUnit}-${this.RESOURCE.timebase}`
+                c.version++
             }
-            if (id === undefined || id === this.accControls[3].id) {
+            if (wants('lowpass-filter')) {
                 // Construct lowpass filter dropdown.
-                this.accControls[3].options = []
+                const c = control('lowpass-filter')
+                c.options = []
                 const availableLow = this.SETTINGS.filters.lowpass.availableValues
                 for (const filter of availableLow) {
-                    this.accControls[3].options.push({
+                    c.options.push({
                         id: `lowpass-${filter}`,
                         enabled: true,
                         label: filter ? T(filter.toString(), 'LocaleNumbers') : '-',
@@ -281,15 +325,16 @@ export default defineComponent({
                         value: filter,
                     })
                 }
-                this.accControls[3].value = `lowpass-${this.RESOURCE.filters.lowpass}`
-                this.accControls[3].version++
+                c.value = `lowpass-${this.RESOURCE.filters.lowpass}`
+                c.version++
             }
-            if (id === undefined || id === this.accControls[4].id) {
+            if (wants('highpass-filter')) {
                 // Construct highpass filter dropdown.
-                this.accControls[4].options = []
+                const c = control('highpass-filter')
+                c.options = []
                 const availableHigh = this.SETTINGS.filters.highpass.availableValues
                 for (const filter of availableHigh) {
-                    this.accControls[4].options.push({
+                    c.options.push({
                         id: `highpass-${filter}`,
                         enabled: true,
                         label: filter ? T(filter.toString(), 'LocaleNumbers') : '-',
@@ -298,28 +343,51 @@ export default defineComponent({
                         value: filter,
                     })
                 }
-                this.accControls[4].value = `highpass-${this.RESOURCE.filters.highpass}`
-                this.accControls[4].version++
+                c.value = `highpass-${this.RESOURCE.filters.highpass}`
+                c.version++
             }
-            if (id === undefined || id === this.accControls[5].id) {
+            if (wants('audio-play')) {
+                // Audio play / pause toggle; the icon reflects the recording's playback state.
+                const c = control('audio-play')
+                const playing = this.RESOURCE.isAudioPlaying
+                c.value = playing
+                c.iconName = playing ? 'pause' : 'play'
+                c.version++
+            }
+            if (wants('video')) {
+                // Video toggle. Only meaningful when the recording carries
+                // attached video, so it is disabled otherwise — the empty panel
+                // never opens. The on/off state mirrors the interface module's
+                // videoVisible flag (the same pattern as inspect / annotations).
+                const c = control('video')
+                const hasVideo = (this.RESOURCE.videos?.length ?? 0) > 0
+                const visible = hasVideo && this.$interface.store.modules.get('acc')!.videoVisible
+                c.enabled = hasVideo
+                c.value = visible
+                c.onclick = ['acc.video-toggle', !visible]
+                c.version++
+            }
+            if (wants('inspect')) {
+                const c = control('inspect')
                 const isActive = this.$interface.store.modules.get('acc')!.cursorToolActive === 'inspect'
                 // Inspect tool toggle.
-                this.accControls[5].value = isActive
-                this.accControls[5].onclick = [
+                c.value = isActive
+                c.onclick = [
                     'acc.set-cursor-tool',
                     isActive ? null : 'inspect',
                 ]
-                this.accControls[5].version++
+                c.version++
             }
-            if (id === undefined || id === this.accControls[6].id) {
+            if (wants('annotations')) {
+                const c = control('annotations')
                 const isActive = this.$interface.store.modules.get('acc')!.openSidebar === 'annotations'
                 // Annotation sidebar toggle.
-                this.accControls[6].value = isActive
-                this.accControls[6].onclick = [
+                c.value = isActive
+                c.onclick = [
                     'acc.set-open-sidebar',
                     isActive ? null : 'annotations',
                 ]
-                this.accControls[6].version++
+                c.version++
             }
             if (id === undefined) {
                 this.controlsLeft.push(...this.accControls.filter(c => (!c.align || c.align === 'left')))

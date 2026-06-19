@@ -222,6 +222,7 @@ const FA_TO_MATERIAL: Record<string, string> = {
     'trash':                            'delete',
     'triangle-exclamation':             'warning',
     'undo':                             'undo',
+    'video':                            'videocam',
     'video-camera':                     'videocam',
     'wave-pulse':                       'vital_signs',
     'x-ray':                            'biotech',

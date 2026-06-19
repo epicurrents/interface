@@ -20,6 +20,8 @@ import type { AccInterfaceSettings, AccModuleConfiguration, AccModuleSettings, A
 const SCOPE = "vue-interface-acc-module"
 
 enum AccActionTypes {
+    AUDIO_REWIND = 'acc.audio-rewind',
+    AUDIO_TOGGLE = 'acc.audio-toggle',
     SET_ACTIVE_MONTAGE = 'acc.set-active-montage',
     SET_CURSOR_TOOL = 'acc.set-cursor-tool',
     SET_HIGHPASS_FILTER = 'acc.set-highpass-filter',
@@ -29,9 +31,16 @@ enum AccActionTypes {
     SET_SENSITIVITY = 'acc.set-sensitivity',
     SET_TIMEBASE = 'acc.set-timebase',
     TOGGLE_ANNOTATION_SIDEBAR = 'acc.toggle-annotation-sidebar',
+    VIDEO_TOGGLE = 'acc.video-toggle',
 }
 
 export const actions = {
+    [AccActionTypes.AUDIO_REWIND] (_injectee: ActionContext<State, State>, _payload: null) {
+        // Broadcast only; handled by AccViewer.
+    },
+    [AccActionTypes.AUDIO_TOGGLE] (_injectee: ActionContext<State, State>, _payload: null) {
+        // Broadcast only; handled by AccViewer.
+    },
     [AccActionTypes.SET_ACTIVE_MONTAGE] (_injectee: ActionContext<State, State>, payload: number | string | null) {
         runtime.setPropertyValue('active-montage', payload)
     },
@@ -60,6 +69,11 @@ export const actions = {
     [AccActionTypes.TOGGLE_ANNOTATION_SIDEBAR] (_injectee: ActionContext<State, State>, _payload: boolean | undefined) {
         // Broadcast only.
     },
+    [AccActionTypes.VIDEO_TOGGLE] (_injectee: ActionContext<State, State>, payload: boolean | null) {
+        // Flip when no explicit target is given; AccViewer reacts to show/hide
+        // the video panel and AccControls reads the flag for the toggle state.
+        runtime.videoVisible = typeof payload === 'boolean' ? payload : !runtime.videoVisible
+    },
 }
 
 export const mutations = {}
@@ -73,6 +87,7 @@ export const runtime = {
     },
     cursorToolActive: null as string | null,
     openSidebar: null as string | null,
+    videoVisible: false,
     async applyConfiguration (config: AccModuleConfiguration) {
         if (config.moduleName?.full) {
             runtime.moduleName.full = config.moduleName.full
@@ -113,6 +128,7 @@ export const runtime = {
 } as InterfaceResourceModule & {
     cursorToolActive: string | null
     openSidebar: string | null
+    videoVisible: boolean
 }
 
 /** Re-exports from config so consumers can `import { settings } from '#app/modules/acc'`. */

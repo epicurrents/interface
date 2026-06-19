@@ -121,7 +121,7 @@
                                 :pxPerSecond="pxPerSecond"
                                 :viewRange="viewRange"
                                 v-on:main-cursor-grab="onCursorGrab"
-                                v-on:main-cursor-position=""
+                                v-on:main-cursor-position="onMainCursorPosition"
                             ></vertical-cursors>
                             <viewer-overlay ref="overlay"
                             ></viewer-overlay>
@@ -163,14 +163,44 @@
                                 v-on:exit="exitEventEditor"
                                 v-on:save="saveEventEdits"
                             ></annotation-editor>
-                            <!-- Video must come after the cursor to stay on top -->
-                            <div v-if="RESOURCE.videos.length" ref="videoWrapper"
-                                :class="[
-                                    'video',
-                                    { 'epicv-hidden': !showVideo },
-                                ]"
+                            <!-- Video surface. Rendered whenever the recording carries video so the
+                                 element is preloaded and can enter picture-in-picture synchronously
+                                 from the toggle's user gesture; shown as a draggable fallback window
+                                 only when PiP is unavailable. videoMode is 'off' | 'window' | 'pip'. -->
+                            <div v-if="RESOURCE.videos.length"
+                                ref="videoPanel"
+                                :class="['video-window', 'video-window-' + videoMode]"
+                                :style="videoPanelStyles"
                             >
-                                <video ref="video" controls :src="RESOURCE.videos[0].url" />
+                                <div ref="videoBar"
+                                    class="video-window-bar"
+                                    v-on:pointerdown="onVideoBarPointerdown"
+                                >
+                                    <span class="video-window-title">{{ $t('Video') }}</span>
+                                    <button
+                                        class="video-window-button"
+                                        :title="$t('Close video')"
+                                        type="button"
+                                        v-on:pointerdown.stop
+                                        v-on:click="closeVideo"
+                                    >
+                                        <wa-icon name="xmark"></wa-icon>
+                                    </button>
+                                </div>
+                                <div class="video-window-body">
+                                    <video
+                                        ref="video"
+                                        controls
+                                        preload="metadata"
+                                        :src="RESOURCE.videos[0].url"
+                                        v-on:enterpictureinpicture="videoEnteredPnP"
+                                        v-on:focus="onVideoFocus"
+                                        v-on:leavepictureinpicture="videoLeftPnP"
+                                        v-on:pause="onVideoPause"
+                                        v-on:play="onVideoPlay"
+                                        v-on:timeupdate="onVideoTimeUpdate"
+                                    ></video>
+                                </div>
                             </div>
                             <div v-if="!dataSetupDone && RESOURCE.state !== 'error'"
                                 class="setup"
@@ -214,8 +244,6 @@
                 v-on:forward="goForward"
                 v-on:loaded="resizeElements"
                 v-on:navigation="handlePlotNavigation"
-                v-on:rewind-audio="onRewindAudio"
-                v-on:toggle-audio="toggleAudio"
                 v-on:toggle-controls="handleNavigatorToggleControls"
             />
         </template>
@@ -362,7 +390,13 @@ export default defineComponent({
         const selectedIndex = ref(0)
         const selectionBound = ref(null as SignalSelectionLimit | null)
         const setupMessage = ref('')
-        const showVideo = ref(true)
+        // Video window state. videoVisible drives the panel; videoPip tracks the
+        // native picture-in-picture session (set from the element's PiP events);
+        // videoPos is the dragged top-left, NaN until first drag so the default
+        // CSS anchors the panel to the bottom-right corner.
+        const videoVisible = ref(false)
+        const videoPip = ref(false)
+        const videoPos = reactive({ left: NaN, top: NaN })
         const sidebarOpen = ref(null as string | null)
         const sidebarTab = ref('events')
         const sidebarWidth = ref(350)
@@ -378,7 +412,8 @@ export default defineComponent({
         const sidebar = ref<HTMLDivElement>() as Ref<HTMLDivElement>
         //const timebase = ref<HTMLDivElement>() as Ref<HTMLDivElement>
         const video = ref<HTMLVideoElement>() as Ref<HTMLVideoElement>
-        const videoWrapper = ref<HTMLDivElement>() as Ref<HTMLDivElement>
+        const videoBar = ref<HTMLDivElement>() as Ref<HTMLDivElement>
+        const videoPanel = ref<HTMLDivElement>() as Ref<HTMLDivElement>
         const wrapper = ref<HTMLDivElement>() as Ref<HTMLDivElement>
         const yaxis = ref<InstanceType<typeof PlotYAxis>>() as Ref<InstanceType<typeof PlotYAxis>>
         // Pointer interaction handlers
@@ -515,7 +550,9 @@ export default defineComponent({
             /** Index of the plot selection that was last clicked. */
             selectedIndex,
             selectionBound,
-            showVideo,
+            videoVisible,
+            videoPip,
+            videoPos,
             sidebarOpen,
             sidebarTab,
             sidebarWidth,
@@ -535,7 +572,8 @@ export default defineComponent({
             setupMessage,
             sidebar,
             video,
-            videoWrapper,
+            videoBar,
+            videoPanel,
             wrapper,
             yaxis,
             // Handlers
@@ -612,6 +650,30 @@ export default defineComponent({
                 ? ['events']
                 : ['create', 'events']
         },
+        /** Display state of the video surface: `off` (toggle off), `pip` (playing
+         *  in the OS picture-in-picture window), or `window` (the in-app fallback
+         *  shown when PiP is unavailable). */
+        videoMode (): 'off' | 'pip' | 'window' {
+            if (!this.videoVisible) {
+                return 'off'
+            }
+            return this.videoPip ? 'pip' : 'window'
+        },
+        /** Inline position for the fallback window — empty (so the CSS bottom-right
+         *  anchor applies) until dragged, then an explicit top-left. Only applies in
+         *  `window` mode; off/pip keep the element off-screen via their own class. */
+        videoPanelStyles (): Record<string, string> {
+            if (this.videoMode !== 'window'
+                || Number.isNaN(this.videoPos.left) || Number.isNaN(this.videoPos.top)) {
+                return {}
+            }
+            return {
+                bottom: 'auto',
+                left: `${this.videoPos.left}px`,
+                right: 'auto',
+                top: `${this.videoPos.top}px`,
+            }
+        },
     },
     methods: {
         /**
@@ -653,53 +715,161 @@ export default defineComponent({
                 this.resolvePlotUpdate = resolve
             })
         },
-        async checkVideoPosLoop () {
-            /*
-            const vidOffset = this.RESOURCE.videos[0].startTime
-            const vidTime = this.video.currentTime + vidOffset
-            if (vidTime !== this.lastVideoTime) {
-                this.cursorPos = vidTime
-                this.lastVideoTime = vidTime
-                // Mark cursor as moved only if video is playing
-                if (this.isVideoPlaying()){
-                    this.cursorMoved = true
-                }
-                if (
-                    !this.video.paused && !this.video.ended &&
-                    this.cursorPos >= this.RESOURCE.viewStart + this.viewRange
-                ) {
-                    // First check if the video is playing and we've moved to the next page
-                    this.RESOURCE.viewStart = Math.floor(this.cursorPos)
-                    // Don't update cursor position here, wait for plot to update first
-                    await this.awaitPlotUpdate()
-                } else {
-                    // Else, check if the user has navigated outside the current page
-                    if (
-                        this.cursorPos < this.RESOURCE.viewStart ||
-                        this.cursorPos >= this.RESOURCE.viewStart + this.viewRange
-                    ) {
-                        this.RESOURCE.viewStart = Math.min(
-                            this.RESOURCE.totalDuration,
-                            Math.max(0, Math.floor(this.cursorPos - this.viewRange/2))
-                        )
-                    }
-                }
-                this.updateCursorPos()
+        closeVideo () {
+            // Route the close through the controls action so the toolbar toggle
+            // returns to its off-state; setVideoVisible(false) does the teardown
+            // (leave PiP, stop the cursor follow, pause, hide the panel).
+            this.$store.dispatch('acc.video-toggle', false)
+        },
+        /**
+         * Tie playback to the main cursor: while the video plays it drives the
+         * cursor and view (recording-relative position = video time + the clip's
+         * startTime offset), mirroring the audio stethoscope behaviour.
+         */
+        followVideo () {
+            const resource = this.RESOURCE
+            const video = this.video
+            const offset = resource.videos[0]?.startTime ?? 0
+            this.mediaCursor.follow({
+                get currentTime () {
+                    return video.currentTime + offset
+                },
+                get isPlaying () {
+                    return !video.paused && !video.ended
+                },
+            })
+        },
+        onVideoBarPointerdown (event: PointerEvent) {
+            // Drag the panel by its strip. Everything is computed in viewport
+            // coordinates (clientX/Y + getBoundingClientRect) and converted once
+            // to the offsetParent's content-box origin — mixing frames (as the
+            // overlay tracker's overlay-relative coords did) is what made the
+            // window snap on the first move. Pointer capture on the strip keeps
+            // the move/up stream flowing regardless of what's under the cursor.
+            if (event.button !== 0) {
+                return
             }
-            this.nextAnimationFrame = requestAnimationFrame(this.checkVideoPosLoop)
-            */
+            const panel = this.videoPanel
+            const bar = this.videoBar
+            const parent = panel?.offsetParent as HTMLElement | null
+            if (!panel || !bar || !parent) {
+                return
+            }
+            const panelRect = panel.getBoundingClientRect()
+            const parentRect = parent.getBoundingClientRect()
+            // Pointer offset within the panel at grab time, and the offsetParent's
+            // padding-box origin (CSS left/top resolve against the padding box, so
+            // clientLeft/clientTop account for the border).
+            const grabX = event.clientX - panelRect.left
+            const grabY = event.clientY - panelRect.top
+            const originX = parentRect.left + parent.clientLeft
+            const originY = parentRect.top + parent.clientTop
+            const onMove = (e: PointerEvent) => {
+                const maxLeft = Math.max(0, parent.clientWidth - panel.offsetWidth)
+                const maxTop = Math.max(0, parent.clientHeight - panel.offsetHeight)
+                this.videoPos.left = Math.min(Math.max(e.clientX - grabX - originX, 0), maxLeft)
+                this.videoPos.top = Math.min(Math.max(e.clientY - grabY - originY, 0), maxTop)
+            }
+            const onUp = () => {
+                if (bar.hasPointerCapture(event.pointerId)) {
+                    bar.releasePointerCapture(event.pointerId)
+                }
+                bar.removeEventListener('pointermove', onMove)
+                bar.removeEventListener('pointerup', onUp)
+                bar.removeEventListener('pointercancel', onUp)
+            }
+            bar.setPointerCapture(event.pointerId)
+            bar.addEventListener('pointermove', onMove)
+            bar.addEventListener('pointerup', onUp)
+            bar.addEventListener('pointercancel', onUp)
+        },
+        onVideoFocus () {
+            // Keep arrow keys driving the plot, not the video's built-in seek.
+            this.video.blur()
+        },
+        onVideoPause () {
+            this.mediaCursor.stop()
+        },
+        onVideoPlay () {
+            this.followVideo()
+        },
+        onVideoTimeUpdate () {
+            // Honor the recording length: a video longer than the data must not
+            // play past the data end, or it would drive the cursor out of range.
+            // Pause once the cursor-mapped position reaches totalDuration; the
+            // sync controller additionally clamps the cursor as a backstop.
+            const total = this.RESOURCE.totalDuration
+            const offset = this.RESOURCE.videos[0]?.startTime ?? 0
+            if (total && !this.video.paused && this.video.currentTime + offset >= total) {
+                this.video.pause()
+            }
+        },
+        pipSupported (): boolean {
+            // Capability check only — the readiness / user-gesture cases surface as
+            // a requestPictureInPicture() rejection, which the caller falls back on.
+            return !!(
+                document.pictureInPictureEnabled
+                && this.video
+                && !this.video.disablePictureInPicture
+            )
+        },
+        setVideoVisible (visible: boolean) {
+            if (visible) {
+                this.videoVisible = true
+                // Position the (preloaded) video at the cursor before it is shown.
+                const offset = this.RESOURCE.videos[0]?.startTime ?? 0
+                this.video.currentTime = Math.max(0, (this.cursors?.mainCursorPos ?? 0) - offset)
+                if (this.pipSupported()) {
+                    // Go straight to PiP. Flag it optimistically so the fallback
+                    // window doesn't flash; the request must fire synchronously here
+                    // to keep the toggle's user gesture. A rejection (PiP refused, or
+                    // the element not ready yet) drops back to the in-app window.
+                    this.videoPip = true
+                    this.video.requestPictureInPicture().catch(() => {
+                        this.videoPip = false
+                    })
+                }
+                // No PiP support → videoPip stays false → fallback window.
+                return
+            }
+            // Closing tears everything down. Drop the flags first so the
+            // leavepictureinpicture handler that exitPictureInPicture triggers sees
+            // the close already in progress and doesn't bounce the toggle off again.
+            this.videoVisible = false
+            this.videoPip = false
+            if (document.pictureInPictureElement === this.video) {
+                document.exitPictureInPicture().catch(() => { /* already detached */ })
+            }
+            if (this.video && !this.video.paused) {
+                this.video.pause()
+            }
+            this.mediaCursor.stop()
         },
         clearCursorTool () {
             this.$store.dispatch('acc.set-cursor-tool', null)
         },
         /**
-         * Grabbing the main cursor while audio is playing stops it so the user can drag freely; pressing play again
-         * starts stethoscope playback from the cursor's new position.
+         * Grabbing the main cursor while audio or video is playing stops playback so the user can drag freely;
+         * resuming play (audio) or the video element's own controls starts again from the cursor's new position.
          */
         onCursorGrab () {
             if (this.RESOURCE.isAudioPlaying) {
                 this.RESOURCE.rewindAudio()
                 this.mediaCursor.stop()
+            }
+            if (this.video && !this.video.paused) {
+                this.video.pause()
+                this.mediaCursor.stop()
+            }
+        },
+        onMainCursorPosition (pos: number) {
+            // Scrub the video as the cursor is dragged. Guarded on the video being
+            // paused so it doesn't fight the play-driven follow loop (while playing,
+            // the video drives the cursor, not the other way around) — the same
+            // guard viewStartUpdated uses for page-change seeks.
+            if (this.RESOURCE.videos.length && this.video && this.video.paused) {
+                const vidOffset = this.RESOURCE.videos[0].startTime
+                this.video.currentTime = pos - vidOffset
             }
         },
         onRewindAudio () {
@@ -735,7 +905,8 @@ export default defineComponent({
             }
             const segment = this.selectedAudioSegment()
             if (segment) {
-                // Selected segment → spectral-tone: a steady tone from that window, no cursor involvement.
+                // Selected segment → spectral-tone: a steady looping tone, no cursor involvement.
+                this.mediaCursor.stop()
                 this.RESOURCE.playAudio(0, segment)
                 return
             }
@@ -1158,27 +1329,18 @@ export default defineComponent({
             }
         },
         videoEnteredPnP () {
-            this.videoWrapper.style.height = '50px'
-            this.videoWrapper.style.opacity = '0.1'
-            this.video.style.top = '-310px'
+            // The video is now in the OS picture-in-picture window; the in-app
+            // surface drops to its hidden 'pip' mode (driven by the CSS class).
+            this.videoPip = true
         },
         videoLeftPnP () {
-            this.videoWrapper.style.height = '360px'
-            this.videoWrapper.style.opacity = 'initial'
-            this.video.style.top = '0'
-        },
-        videoReady () {
-            const vidOffset = this.RESOURCE.videos[0].startTime
-            if (vidOffset <= this.cursors.mainCursorPos) {
-                // We already have video available at current position
-                this.video.currentTime = this.cursors.mainCursorPos - vidOffset
-            } else {
-                this.video.currentTime = NUMERIC_ERROR_VALUE
+            this.videoPip = false
+            // The user closed the PiP window directly (rather than us tearing it down
+            // during a close): treat that as switching the video off, routed through
+            // the controls action so the toolbar toggle returns to its off-state.
+            if (this.videoVisible) {
+                this.closeVideo()
             }
-            this.lastVideoTime = this.video.currentTime
-            this.video.removeEventListener('canplay', this.videoReady)
-            // Start a loop checking the video position and updating cursor to match it
-            requestAnimationFrame(this.checkVideoPosLoop)
         },
         viewStartChanged (newStart: unknown, oldStart: unknown) {
             this.removeAllOverlayElements(true)
@@ -1190,8 +1352,10 @@ export default defineComponent({
         viewStartUpdated () {
             this.updateDragElement()
             this.updateHighlights()
-            if (this.RESOURCE.videos.length) {
-                // Match video time to cursor time
+            // Re-seek the video to the cursor only when it isn't the one driving
+            // the view (i.e. it's paused) — otherwise playback and the follow loop
+            // would fight over the position.
+            if (this.RESOURCE.videos.length && this.video && this.video.paused) {
                 const vidOffset = this.RESOURCE.videos[0].startTime
                 this.video.currentTime = this.cursors.mainCursorPos - vidOffset
             }
@@ -1261,6 +1425,12 @@ export default defineComponent({
         this.unsubscribeActions = this.$store.subscribeAction((action) => {
             if (action.type === 'redo-action') {
                 this.redoAction()
+            } else if (action.type === 'acc.audio-toggle') {
+                this.toggleAudio()
+            } else if (action.type === 'acc.audio-rewind') {
+                this.onRewindAudio()
+            } else if (action.type === 'acc.video-toggle') {
+                this.setVideoVisible(action.payload as boolean)
             } else if (action.type === 'acc.set-cursor-tool') {
                 if (action.payload === 'inspect') {
                     this.overlay.style.cursor = 'zoom-in'
@@ -1276,15 +1446,6 @@ export default defineComponent({
                 this.undoAction()
             }
         })
-        if (this.video) {
-            this.video.addEventListener('canplay', this.videoReady)
-            this.video.addEventListener('enterpictureinpicture', this.videoEnteredPnP)
-            this.video.addEventListener('leavepictureinpicture', this.videoLeftPnP)
-            // Arrow keys will skip the video forward/backward if the element is allowed to keep focus
-            this.video.onfocus = () => {
-                this.video.blur()
-            }
-        }
         this.montagesChanged()
         //const ONNX = window.__EPICURRENTS__.RUNTIME?.SERVICES.get('ONNX') as OnnxService
         //if (ONNX) {
@@ -1368,23 +1529,76 @@ export default defineComponent({
         position: absolute;
         pointer-events: none;
     }
-    .video {
+    .video-window {
         position: absolute;
-        bottom: 0;
-        right: 0;
-        height: 360px;
+        bottom: 0.5rem;
+        right: 0.5rem;
+        z-index: 5;
+        display: flex;
+        flex-direction: column;
+        width: 360px;
         overflow: hidden;
-        transition: opacity ease 0.25s;
+        background: var(--epicv-background-dialog);
+        border: 1px solid var(--epicv-border);
+        border-radius: 4px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     }
-        .video:hover {
-            opacity: 1 !important;
+        .video-window-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            height: 24px;
+            padding: 0 0.25rem;
+            background: var(--epicv-background-emphasize);
+            cursor: move;
+            touch-action: none;
+            user-select: none;
         }
-        .video video {
-            position: relative;
-            height: 360px;
+        .video-window-title {
+            flex: 1;
+            overflow: hidden;
+            font-size: 0.75rem;
+            color: var(--epicv-text-minor);
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
-        .video video::-webkit-media-controls-timeline {
-            display: none;
+        .video-window-button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            padding: 0;
+            border: none;
+            background: transparent;
+            color: var(--epicv-icon-default);
+            cursor: pointer;
+        }
+            .video-window-button:hover {
+                color: var(--epicv-icon-active);
+            }
+        .video-window-body {
+            display: flex;
+            background: black;
+        }
+            .video-window-body video {
+                width: 100%;
+                max-height: 360px;
+            }
+        /* Off (toggle off) and PiP (video in the OS window): keep the element
+           rendered so it preloads and can still enter picture-in-picture, but park
+           it off-screen with no chrome. display:none would unload it / block PiP,
+           so it is moved rather than hidden. */
+        .video-window-off,
+        .video-window-pip {
+            left: -99999px;
+            top: auto;
+            right: auto;
+            bottom: auto;
+            border: none;
+            background: transparent;
+            box-shadow: none;
+            pointer-events: none;
         }
     .setup {
         position: absolute;
