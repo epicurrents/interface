@@ -139,7 +139,9 @@ export const settings = safeObjectFrom({
     filters: {
         highpass: {
             availableValues: [0, 0.1, 0.3, 0.5, 1, 2, 5],
-            default: 0,
+            // Accelerometry sits on a ~1 g gravity baseline (a 0 Hz DC offset, prominent on the vertical axis).
+            // A 0.5 Hz high-pass removes it by default so traces centre on movement; set to 0 to see absolute g.
+            default: 0.5,
         },
         lowpass: {
             availableValues: [0, 5, 10, 20, 30, 50],
