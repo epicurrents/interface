@@ -165,9 +165,14 @@ export default defineComponent({
                 this.$emit('main-cursor-grab')
                 const pointerMove = (left: number, _top: number, _meta: OverlayPointerEventMeta) => {
                     const rangeFromEnd = this.RESOURCE.totalDuration - this.RESOURCE.viewStart
+                    // Clamp to the data end and keep the line's right edge inside the
+                    // viewport — by its real width (cursor.main.width), matching the
+                    // updateCursors clamp — so it never drags down to a hard-to-grab
+                    // sliver at the right boundary.
                     const leftPos = Math.min(
                         Math.max(left, 0),
-                        rangeFromEnd * this.pxPerSecond
+                        rangeFromEnd * this.pxPerSecond,
+                        this.viewRange * this.pxPerSecond - this.SETTINGS.cursor.main.width
                     )
                     if (leftPos <= CURSOR_MARGIN) {
                         // Treat cursor as returned to start position.
@@ -210,9 +215,18 @@ export default defineComponent({
                     Log.warn(`Cannot set cursor position, main cursor is disabled.`, this.$options.name!)
                     return
                 }
-                // Set main cursor position.
+                // Set main cursor position, clamped to the visible page (and the
+                // recording end). A programmatic update — e.g. the media-playback
+                // follow loop reaching the end of the data — would otherwise land
+                // past the right edge, where updateCursors resets it to viewStart
+                // and it vanishes off the left. This mirrors the bound the drag
+                // handler applies.
+                const maxPos = Math.min(
+                    this.RESOURCE.viewStart + this.viewRange,
+                    this.RESOURCE.totalDuration
+                )
                 this.mainCursorMoved = true
-                this.mainCursorPos = pos
+                this.mainCursorPos = Math.min(Math.max(pos, this.RESOURCE.viewStart), maxPos)
                 this.$emit('main-cursor-position', this.mainCursorPos)
             } else if (this.RESOURCE.cursors.length > idx) {
                 // Set vertical cursor position
@@ -236,7 +250,18 @@ export default defineComponent({
                     this.mainCursorPos = this.RESOURCE.viewStart
                     this.$emit('main-cursor-position', this.mainCursorPos)
                 }
-                this.mainCursor.style.left = `${(this.mainCursorPos - this.RESOURCE.viewStart) * this.pxPerSecond - CURSOR_MARGIN}px`
+                // The main cursor must stay visible while it is enabled. A line on
+                // (or past) the right boundary is clipped/pruned out of sight, so
+                // hard-clamp it so its right edge sits flush at the viewport edge —
+                // by the actual line width (cursor.main.width), not the wider drag
+                // hit-area margin, so no gap is left. Covers the media follow loop
+                // running to the data end. The left side is clamped at 0 only
+                // defensively (the start-of-page position is kept).
+                const lineX = Math.min(
+                    Math.max((this.mainCursorPos - this.RESOURCE.viewStart) * this.pxPerSecond, 0),
+                    this.viewRange * this.pxPerSecond - this.SETTINGS.cursor.main.width
+                )
+                this.mainCursor.style.left = `${lineX - CURSOR_MARGIN}px`
             } else {
                 this.mainCursorPos = 0
             }
