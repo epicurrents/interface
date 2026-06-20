@@ -45,31 +45,25 @@ export function useMediaCursorSync (options: MediaCursorSyncOptions) {
         if (!clock) {
             return
         }
-        // Clamp to the recording's bounds so a clock that runs past the data
-        // (e.g. a video longer than the recording) can never scroll the view
-        // outside the recording range — an out-of-range page change throws.
-        // A totalDuration of 0 / undefined (not yet known) disables the clamp
-        // rather than pinning the cursor at 0.
+        // Clamp the cursor to the data range so a clock that overruns the
+        // recording (e.g. a video longer than the data) can't drive the cursor
+        // past the end. The view itself may page beyond the data — the reader
+        // zero-fills there — so viewStart is NOT capped to the last data-bearing
+        // page. A totalDuration of 0 / undefined (not yet known) disables the clamp.
         const total = options.resource.totalDuration || Number.POSITIVE_INFINITY
         const time = Math.min(Math.max(clock.currentTime, 0), total)
         if (time !== lastTime) {
             lastTime = time
             const viewStart = options.resource.viewStart
             const range = options.viewRange()
-            // Never scroll past the last page that still shows data. A clock that
-            // overruns the recording (a video seeked past the data end) would
-            // otherwise set viewStart at the very end and the page would extend out
-            // of range — an out-of-bounds page change. The cursor itself is already
-            // clamped to `total` above; the video stops via onVideoTimeUpdate.
-            const maxViewStart = Math.max(0, total - range)
             if (clock.isPlaying && time >= viewStart + range) {
-                // Playback crossed the page end — advance a full page and let the plot redraw
-                // before the cursor is repositioned on the new page.
-                options.resource.viewStart = Math.min(Math.floor(time), maxViewStart)
+                // Playback crossed the page end — advance one page (cursor lands at
+                // the new left edge) and let the plot redraw before repositioning.
+                options.resource.viewStart = Math.max(Math.floor(time), 0)
                 await options.awaitPlotUpdate()
             } else if (time < viewStart || time >= viewStart + range) {
-                // Position is off-page without playback advancing (e.g. a seek) — recentre on it.
-                options.resource.viewStart = Math.min(Math.max(Math.floor(time - range/2), 0), maxViewStart)
+                // Off-page without playback advancing (e.g. a seek) — recentre on it.
+                options.resource.viewStart = Math.max(Math.floor(time - range/2), 0)
             }
             options.setCursorPos(time)
         }
