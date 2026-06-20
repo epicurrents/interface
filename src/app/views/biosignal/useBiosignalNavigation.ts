@@ -62,8 +62,14 @@ export function useBiosignalNavigation (
                 )
             }
             if (resource.viewStart <= step) {
-                resource.viewStart = 0
-                isAtStart.value = true
+                // Snap to the very start. Route through goTo rather than setting
+                // viewStart directly so isAtEnd is recomputed too: jumping to 0 in
+                // one step from a view whose right edge is past the data end (a
+                // short recording, where the last page is within one step of the
+                // start) would otherwise leave isAtEnd stuck true. With isAtStart
+                // now also true, both goForward and goBackward dead-end and all
+                // paging freezes until the recording is reopened.
+                goTo(0)
             } else {
                 goTo(resource.viewStart - step)
             }
