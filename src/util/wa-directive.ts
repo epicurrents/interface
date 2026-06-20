@@ -16,7 +16,7 @@ const setValue = (el: HTMLInputElement, value: unknown) => {
     if (el.tagName === 'WA-SWITCH' || el.tagName === 'WA-CHECKBOX') {
         el.checked = Boolean(value ?? false)
     } else if (el.tagName === 'WA-INPUT' && typeof value === 'number') {
-        el.value = (value ?? '').toLocaleString()
+        el.value = value.toLocaleString()
     } else {
         el.value = (value ?? '') as string
     }
@@ -29,10 +29,19 @@ const waDirective: Directive = {
         if (!instance || !property) {
             return
         }
-        if (typeof instance[property as keyof typeof instance] === 'undefined') {
+        // Bind whenever the named field exists on the instance — including when
+        // it is currently `undefined` (a ref initialised to undefined). Only a
+        // genuinely absent field (e.g. a typo) is skipped. The `in` check goes
+        // through the Vue public-instance proxy, so it resolves setup state,
+        // data, computed and props identically for Options and Composition use.
+        if (!((property as PropertyKey) in instance)) {
             return
         }
-        const eventName = el.tagName === 'WA-SELECT' ? 'change' : 'input'
+        // WA-CHECKBOX dispatches only `change`; WA-SELECT also only `change`.
+        // WA-SWITCH, WA-INPUT, WA-TEXTAREA, WA-COMBOBOX dispatch `input`.
+        const eventName = (el.tagName === 'WA-SELECT' || el.tagName === 'WA-CHECKBOX')
+            ? 'change'
+            : 'input'
         const inputHandler = function inputHandler (event: InputEvent) {
             const target = event.target as HTMLInputElement
             if (target) {
