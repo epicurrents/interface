@@ -16,6 +16,7 @@ const messagesEN = {
         ExamineTool: locExamineTool,
     },
     // Formatted strings with properties must be declared here.
+    'Adjust speed between {min}-{max}': 'Adjust speed between {min}-{max}',
     date: '{y}/{m}/{d}',
     datetime: '{y}/{m}/{d} {h}:{min}',
     'Dataset {n}': 'Dataset {n}',

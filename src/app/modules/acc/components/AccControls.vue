@@ -111,8 +111,9 @@ export default defineComponent({
                 align: 'right',
                 iconName: 'backward-fast',
                 joinRight: true,
-                label: T('Rewind audio', 'AccControls'),
+                label: T('Rewind', 'AccControls'),
                 onclick: ['acc.audio-rewind', null],
+                reloadOn: ['action:acc.video-toggle', 'action:acc.media-state', 'action:set-settings-value'],
                 type: 'button',
                 version: 0,
             },
@@ -121,9 +122,14 @@ export default defineComponent({
                 align: 'right',
                 iconName: 'play',
                 joinLeft: true,
-                label: T('Play / pause audio', 'AccControls'),
+                label: T('Play / pause', 'AccControls'),
                 onclick: ['acc.audio-toggle', null],
-                reloadOn: ['resource:isAudioPlaying'],
+                reloadOn: [
+                    'resource:isAudioPlaying',
+                    'action:acc.video-toggle',
+                    'action:acc.media-state',
+                    'action:set-settings-value',
+                ],
                 type: 'on-off',
                 value: false,
                 version: 0,
@@ -346,10 +352,25 @@ export default defineComponent({
                 c.value = `highpass-${this.RESOURCE.filters.highpass}`
                 c.version++
             }
+            // The play / rewind transport drives whichever medium is active: an
+            // open video always takes the controls; otherwise the synthesised
+            // audio does, but only when synthesis is enabled in settings. When
+            // neither applies the buttons are disabled.
+            const accRuntime = this.$interface.store.modules.get('acc')!
+            const videoOpen = (this.RESOURCE.videos?.length ?? 0) > 0 && accRuntime.videoVisible
+            const transportEnabled = videoOpen || !!this.SETTINGS.audioSynthesis
+            if (wants('audio-rewind')) {
+                const c = control('audio-rewind')
+                c.enabled = transportEnabled
+                c.version++
+            }
             if (wants('audio-play')) {
-                // Audio play / pause toggle; the icon reflects the recording's playback state.
+                // Icon reflects the active medium's play state — the video's when
+                // it is open (so it also tracks the PiP native controls), the
+                // synthesised audio's otherwise.
                 const c = control('audio-play')
-                const playing = this.RESOURCE.isAudioPlaying
+                const playing = videoOpen ? accRuntime.videoPlaying : this.RESOURCE.isAudioPlaying
+                c.enabled = transportEnabled
                 c.value = playing
                 c.iconName = playing ? 'pause' : 'play'
                 c.version++

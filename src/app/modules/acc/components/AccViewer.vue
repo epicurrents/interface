@@ -789,9 +789,13 @@ export default defineComponent({
         },
         onVideoPause () {
             this.mediaCursor.stop()
+            // Report to AccControls so the play button mirrors the video state
+            // (covers the PiP native controls as well as the toolbar button).
+            this.$store.dispatch('acc.media-state', false)
         },
         onVideoPlay () {
             this.followVideo()
+            this.$store.dispatch('acc.media-state', true)
         },
         onVideoTimeUpdate () {
             // Honor the recording length: a video longer than the data must not
@@ -878,10 +882,11 @@ export default defineComponent({
         },
         async playStethoscopeFromCursor () {
             const resource = this.RESOURCE
-            const resumed = await resource.resumeAudio()
-            if (!resumed) {
-                await resource.playAudio(this.cursors?.mainCursorPos || 0)
-            }
+            // Always (re)start from the current cursor, so dragging the cursor or
+            // changing the page repositions playback rather than continuing from
+            // where it last stopped. (The cursor sits at the paused position when
+            // stopped, so a play without moving still resumes in place.)
+            await resource.playAudio(this.cursors?.mainCursorPos || 0)
             // The view follows playback only in stethoscope mode (recording-relative playbackPosition).
             this.mediaCursor.follow({
                 get currentTime () {
@@ -892,26 +897,59 @@ export default defineComponent({
                 },
             })
         },
-        /** Range of the first active signal selection in recording seconds, or null when nothing is selected. */
-        selectedAudioSegment (): [number, number] | null {
-            const selection = this.plotSelections.find(s => !s.canceled && s.range?.length === 2)
-            return selection ? [selection.range[0], selection.range[1]] : null
-        },
         toggleAudio () {
             if (this.RESOURCE.isAudioPlaying) {
                 this.RESOURCE.pauseAudio()
                 this.mediaCursor.stop()
                 return
             }
-            const segment = this.selectedAudioSegment()
-            if (segment) {
-                // Selected segment → spectral-tone: a steady looping tone, no cursor involvement.
-                this.mediaCursor.stop()
-                this.RESOURCE.playAudio(0, segment)
+            // Stethoscope from the cursor, with the view following playback. Segment
+            // spectral-tone now lives in the analysis window's FFT tab, so the toolbar
+            // transport has a single, unambiguous job.
+            this.playStethoscopeFromCursor()
+        },
+        /**
+         * Route the play / pause transport to the active medium: an open video
+         * always takes the controls; otherwise the synthesised audio does, but
+         * only when synthesis is enabled (AccControls disables the buttons when
+         * neither applies, so this is the same guard from the dispatch side).
+         */
+        togglePlayback () {
+            if (this.videoVisible) {
+                this.toggleVideo()
+            } else if (this.SETTINGS.audioSynthesis) {
+                this.toggleAudio()
+            }
+        },
+        /** Route the rewind transport to the active medium (see {@link togglePlayback}). */
+        rewindPlayback () {
+            if (this.videoVisible) {
+                this.rewindVideo()
+            } else if (this.SETTINGS.audioSynthesis) {
+                this.onRewindAudio()
+            }
+        },
+        /** Play or pause the attached video; it drives the cursor while playing. */
+        toggleVideo () {
+            if (!this.video) {
                 return
             }
-            // No selection → stethoscope from the cursor, with the view following playback.
-            this.playStethoscopeFromCursor()
+            if (this.video.paused) {
+                this.video.play().catch(() => { /* not-ready / autoplay rejection — ignore */ })
+            } else {
+                this.video.pause()
+            }
+        },
+        /** Rewind to the recording start: stop the video and put the cursor at 0. */
+        rewindVideo () {
+            if (this.video && !this.video.paused) {
+                this.video.pause()
+            }
+            this.mediaCursor.stop()
+            // Scroll to the start, then place the cursor there; onMainCursorPosition
+            // re-seeks the (now paused) video to match.
+            this.RESOURCE.viewStart = 0
+            this.cursors?.setCursorPos(0)
         },
         closeChannelMenu () {
             this.menuChannel = null
@@ -1426,9 +1464,9 @@ export default defineComponent({
             if (action.type === 'redo-action') {
                 this.redoAction()
             } else if (action.type === 'acc.audio-toggle') {
-                this.toggleAudio()
+                this.togglePlayback()
             } else if (action.type === 'acc.audio-rewind') {
-                this.onRewindAudio()
+                this.rewindPlayback()
             } else if (action.type === 'acc.video-toggle') {
                 this.setVideoVisible(action.payload as boolean)
             } else if (action.type === 'acc.set-cursor-tool') {

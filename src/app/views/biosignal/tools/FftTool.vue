@@ -41,6 +41,14 @@
                     :points="signal.points"
                 />
             </g>
+            <g v-if="peakCount && activeSelection">
+                <circle v-for="(peak, idx) in activeSelection.peaks" :key="`fft-peak-${idx}`"
+                    :cx="peak.x"
+                    :cy="peak.y"
+                    :fill="settingsColorToRgba(SETTINGS.tools.signals[selected].color)"
+                    r="3"
+                ></circle>
+            </g>
             <g v-if="cursorPos">
                 <line :x1="cursorPos" y1="0" :x2="cursorPos" :y2="svgHeight"
                     shape-rendering="crispEdges"
@@ -53,9 +61,19 @@
         </svg>
         <div ref="fftinfo" class="fftinfo">
             <div class="header">
-                {{ $t('Band') }}
+                {{ peakCount ? $t('Peaks') : $t('Band') }}
             </div>
-            <template v-if="activeSelection">
+            <template v-if="activeSelection && peakCount">
+                <div class="row" v-for="(peak, idx) in activeSelection.peaks" :key="`fft-peak-row-${idx}`">
+                    <span class="label">{{ idx + 1 }}.</span>
+                    <span class="value bold">{{ `${peak.frequency.toFixed(1)} Hz` }}</span>
+                    <span class="value">{{ `${(peak.relative*100).toFixed(0)} %` }}</span>
+                </div>
+                <div v-if="!activeSelection.peaks.length" class="row">
+                    <span class="label">{{ $t('No peaks') }}</span>
+                </div>
+            </template>
+            <template v-else-if="activeSelection">
                 <div class="row" v-for="(band, idx) in activeSelection.frequencyBandProperties" :key="`fft-power-density-row-${idx}`">
                     <span class="label">{{ $t(band.name, {}, true) }}</span>
                     <span :class="[
@@ -99,6 +117,12 @@ type SignalProperties = {
         topAverage: boolean
         topFrequency: boolean
     }[]
+    peaks: {
+        frequency: number
+        relative: number
+        x: number
+        y: number
+    }[]
     points: string
 }
 
@@ -113,6 +137,14 @@ export default defineComponent({
             type: Number,
             required: true,
         },
+        maxFrequency: {
+            type: Number,
+            default: 30,
+        },
+        peakCount: {
+            type: Number,
+            default: 0,
+        },
         selected: {
             type: Number,
             required: true,
@@ -123,7 +155,7 @@ export default defineComponent({
         },
     },
     setup (props) {
-        const maxHz = ref(30)
+        const maxHz = ref(props.maxFrequency)
         const frequencyBandLines = ref([] as { value: number, x: number }[])
         const cursorPos = ref(0)
         const cursorValue = ref('')
@@ -134,6 +166,7 @@ export default defineComponent({
                 channel: d.channel,
                 data: d.signal?.data,
                 frequencyBandProperties: [],
+                peaks: [],
                 points: '',
             } as SignalProperties
         }) as SignalProperties[])
@@ -371,6 +404,28 @@ export default defineComponent({
                 points.push(`-1,${this.svgHeight*(1 - fft.psds[0]/fftMax)}`)
                 points.push(`${(fft.frequencyBins[0]/this.maxHz)*this.svgWidth},${this.svgHeight*(1 - fft.psds[0]/fftMax)}`)
                 sig.points = points.join(', ')
+                // Top-N spectral peaks — for modalities without a band taxonomy
+                // (e.g. accelerometry) the right panel lists these by magnitude
+                // and they are marked on the spectrum. DC (bin 0) is skipped: the
+                // tremor band of interest sits above the high-pass corner.
+                sig.peaks = []
+                if (this.peakCount > 0) {
+                    const maxBin = Math.min(fft.frequencyBins.length - 1, Math.floor(this.maxHz/fft.resolution))
+                    const candidates = [] as { frequency: number, magnitude: number }[]
+                    for (let i=1; i<maxBin; i++) {
+                        if (fft.psds[i] > fft.psds[i - 1] && fft.psds[i] >= fft.psds[i + 1]) {
+                            candidates.push({ frequency: fft.frequencyBins[i], magnitude: fft.psds[i] })
+                        }
+                    }
+                    candidates.sort((a, b) => b.magnitude - a.magnitude)
+                    const peakRef = candidates[0]?.magnitude || 1
+                    sig.peaks = candidates.slice(0, this.peakCount).map(p => ({
+                        frequency: p.frequency,
+                        relative: p.magnitude/peakRef,
+                        x: (p.frequency/this.maxHz)*this.svgWidth,
+                        y: this.svgHeight*(1 - p.magnitude/fftMax),
+                    }))
+                }
             }
         },
         handleFftPointerleave () {

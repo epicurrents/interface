@@ -23,6 +23,8 @@ import type {
 export type AccInterfaceSchemas = InterfaceSchema
 
 export type AccInterfaceSettings = CommonBiosignalInterfaceSettings & {
+    /** Whether the play / rewind controls drive synthesised audio when no video is open. */
+    audioSynthesis: boolean
     /** Delay in milliseconds before starting continuous browsing. */
     continuousBrowseDelay: number
     /** Interval in milliseconds between updates when continuously browsing. */

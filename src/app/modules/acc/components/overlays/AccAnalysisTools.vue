@@ -34,13 +34,15 @@
                     <fft-tool
                         :data="compareSelections"
                         :height="topPanelHeight"
+                        :max-frequency="20"
+                        :peak-count="5"
                         :selected="activeIdx"
                         :width="panelWidth"
                     />
                     <div class="subtitle">
-                        <div>{{ $t(`Signal properties`) }}</div>
+                        <div>{{ $t(`Sound`) }}</div>
                     </div>
-                    <signal-properties-tool
+                    <acc-synthesis-tool
                         :data="compareSelections"
                         :height="bottomPanelHeight"
                         :selected="activeIdx"
@@ -87,10 +89,10 @@ import { useStore } from "vuex"
 import { useAccContext } from "../.."
 import type { default as WaTabGroup } from '@awesome.me/webawesome/dist/components/tab-group/tab-group.js'
 
+import AccSynthesisTool from './AccSynthesisTool.vue'
 import ExamineTool from '#app/views/biosignal/tools/ExamineTool.vue'
 import FftTool from '#app/views/biosignal/tools/FftTool.vue'
 import SignalCropTool from '#app/views/biosignal/tools/SignalCropTool.vue'
-import SignalPropertiesTool from '#app/views/biosignal/tools/SignalPropertiesTool.vue'
 import { PlotSelection } from '#app/views/biosignal/types'
 
 const MAX_COMPARE_SELECTIONS = 3
@@ -137,10 +139,10 @@ export default defineComponent({
         },
     },
     components: {
+        AccSynthesisTool,
         ExamineTool,
         FftTool,
         SignalCropTool,
-        SignalPropertiesTool,
     },
     setup (props) {
         const store = useStore()

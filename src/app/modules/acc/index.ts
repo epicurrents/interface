@@ -22,6 +22,7 @@ const SCOPE = "vue-interface-acc-module"
 enum AccActionTypes {
     AUDIO_REWIND = 'acc.audio-rewind',
     AUDIO_TOGGLE = 'acc.audio-toggle',
+    MEDIA_STATE = 'acc.media-state',
     SET_ACTIVE_MONTAGE = 'acc.set-active-montage',
     SET_CURSOR_TOOL = 'acc.set-cursor-tool',
     SET_HIGHPASS_FILTER = 'acc.set-highpass-filter',
@@ -40,6 +41,11 @@ export const actions = {
     },
     [AccActionTypes.AUDIO_TOGGLE] (_injectee: ActionContext<State, State>, _payload: null) {
         // Broadcast only; handled by AccViewer.
+    },
+    [AccActionTypes.MEDIA_STATE] (_injectee: ActionContext<State, State>, payload: boolean) {
+        // AccViewer reports the attached video's play state here so AccControls
+        // can mirror it on the play button; the dispatch also triggers a reload.
+        runtime.videoPlaying = payload
     },
     [AccActionTypes.SET_ACTIVE_MONTAGE] (_injectee: ActionContext<State, State>, payload: number | string | null) {
         runtime.setPropertyValue('active-montage', payload)
@@ -87,6 +93,7 @@ export const runtime = {
     },
     cursorToolActive: null as string | null,
     openSidebar: null as string | null,
+    videoPlaying: false,
     videoVisible: false,
     async applyConfiguration (config: AccModuleConfiguration) {
         if (config.moduleName?.full) {
@@ -128,6 +135,7 @@ export const runtime = {
 } as InterfaceResourceModule & {
     cursorToolActive: string | null
     openSidebar: string | null
+    videoPlaying: boolean
     videoVisible: boolean
 }
 

@@ -51,7 +51,21 @@ export const schemas: InterfaceModuleSchema = safeObjectFrom({
     },
     settings: {
         description: 'Accelerometry settings.',
-        fields: [],
+        fields: [
+            {
+                text: 'Audio',
+                type: 'subtitle',
+                info: 'Sound synthesised from the accelerometry signal.',
+            },
+            {
+                component: 'settings-checkbox',
+                setting: 'acc.audioSynthesis',
+                text: 'Synthesise sound from the accelerometry signal. The play and '
+                    + 'rewind controls drive it while no video is open.',
+                type: 'setting',
+                width: '5rem',
+            },
+        ],
         label: {
             full: 'Accelerometry',
             short: 'ACC',
@@ -73,6 +87,7 @@ export const settings = safeObjectFrom({
     _userDefinable: {
         'antialiasing': Boolean,
         'annotations.saveToDataset': Boolean,
+        'audioSynthesis': Boolean,
         'channelSpacing': Number,
         'displayPolarity': Number,
         'filters.highpass.default': Number,
@@ -107,6 +122,10 @@ export const settings = safeObjectFrom({
         width: 1,
     },
     antialiasing: false,
+    // When false, the play / rewind controls are inactive unless an attached
+    // video is open (the video always takes the controls). When true, they
+    // drive the synthesised accelerometry audio while no video is open.
+    audioSynthesis: false,
     border: {
         bottom: {
             color: [0.8, 0.8, 0.8, 1] as SettingsColor,
