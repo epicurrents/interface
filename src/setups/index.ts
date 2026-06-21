@@ -183,6 +183,13 @@ export type SetupContext = {
 export type RegisterModules = (context: SetupContext) => void | Promise<void>
 
 /**
+ * The startup configuration object accepted by {@link createEpicurrentsApp}.
+ * Re-exported from the framework entry so an external consumer can type its own
+ * setup file's `config` parameter without reaching into an internal path.
+ */
+export type { ApplicationInterfaceConfig }
+
+/**
  * Create an Epicurrents application instance.
  *
  * The framework performs the shared bootstrap, applies pre-launch configuration
