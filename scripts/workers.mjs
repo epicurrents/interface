@@ -1,44 +1,36 @@
 /**
- * Copy workers from either local or workspace to the build directory.
+ * Copy each @epicurrents package's self-contained (umd) worker bundles into the
+ * interface build's dist/workers directory.
+ *
+ * Packages are auto-discovered: any @epicurrents/* package whose umd/ directory
+ * holds *.worker.js files is copied. Core is copied last so its canonical
+ * memory-manager / montage / trend bundles win over the copies webpack inlines
+ * into other packages' umd output.
  */
 
 import fs from 'fs'
 import path from 'path'
 import { rootDir } from './util.mjs'
 
-const workerPaths = [
-    ['node_modules', '@epicurrents', 'dicom-reader', 'umd'],
-    ['node_modules', '@epicurrents', 'edf-reader', 'umd'],
-    ['node_modules', '@epicurrents', 'htm-reader', 'umd'],
-    ['node_modules', '@epicurrents', 'pdf-reader', 'umd'],
-    ['node_modules', '@epicurrents', 'pyodide-service', 'umd'],
-    // Handle core last to overwrite workers copied from other packages.
-    ['node_modules', '@epicurrents', 'core', 'umd'],
-]
+const scope = path.join(rootDir, 'node_modules', '@epicurrents')
+const dest = path.join(rootDir, 'dist', 'workers')
 
 console.info('Copying workers...')
-const dest = path.join(rootDir, 'dist', 'workers')
-if (!fs.existsSync(path.join(rootDir, 'dist'))) {
-    console.info(`Creating missing dist directory.`)
-    fs.mkdirSync(path.join(rootDir, 'dist'))
-}
-if (!fs.existsSync(dest)) {
-    console.info(`Creating missing workers directory.`)
-    fs.mkdirSync(dest)
-}
-workerPaths.forEach(sourcePath => {
-    const files = fs.readdirSync(path.join(rootDir, ...sourcePath))
-    files.forEach(file => {
+fs.mkdirSync(dest, { recursive: true })
+
+const packages = fs.existsSync(scope)
+    ? fs.readdirSync(scope).filter(name => fs.existsSync(path.join(scope, name, 'umd')))
+    : []
+// Core last — its worker bundles overwrite the copies inlined into other packages.
+packages.sort((a, b) => (a === 'core' ? 1 : b === 'core' ? -1 : 0))
+
+for (const pkg of packages) {
+    const umd = path.join(scope, pkg, 'umd')
+    for (const file of fs.readdirSync(umd)) {
         if (file.endsWith('.worker.js')) {
-            const filePath = path.join(rootDir, ...sourcePath, file)
-            if (fs.existsSync(filePath)) {
-                const pathParts = filePath.split(path.sep)
-                const fileName = pathParts[pathParts.length - 1]
-                const packageName = pathParts[pathParts.length - 3]
-                console.info(`Copying worker ${packageName}/${fileName}.`)
-                fs.copyFileSync(filePath, path.join(dest, fileName))
-            }
+            console.info(`Copying worker ${pkg}/${file}.`)
+            fs.copyFileSync(path.join(umd, file), path.join(dest, file))
         }
-    })
-})
+    }
+}
 console.info('Done copying workers.')
