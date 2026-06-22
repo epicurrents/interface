@@ -182,8 +182,6 @@ export const DefaultInterface: DefaultInterfaceModuleConstructor = class Epicurr
         const state = this.store.instance!.state
         state.APP.id = config.appId || 'app'
         state.APP.containerId = containerId
-        // Save active views to application settings.
-        state.APP.availableViews = config.activeViews?.length ? [...config.activeViews] : []
         // Save a reference to the shadow root in the store.
         if (config.embedded) {
             state.APP.shadowRoot = appCnt.shadowRoot

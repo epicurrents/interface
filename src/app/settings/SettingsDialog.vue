@@ -57,59 +57,57 @@
                             <p>{{ $t("Require either the alt key or the opt key (on Mac) to be pressed down in order for hotkey actions to trigger.") }}</p>
                             <p>{{ $t("This will block browser actions that require those keys.")}}</p>
                         </wa-callout>
-                        <template v-if="isBiosignalViewEnabled">
-                            <wa-divider></wa-divider>
-                            <div class="mains-frequency">
-                                <wa-select
-                                    :value="settings['app.mainsFrequency'].toString()"
-                                    @change="saveMainsFrequency($event.target.value)"
-                                >
-                                    <wa-option value="50">{{ $t('50Hz') }}</wa-option>
-                                    <wa-option value="60">{{ $t('60Hz') }}</wa-option>
-                                    <wa-option value="0">{{ $t('-') }}</wa-option>
-                                </wa-select>
-                                <div>
-                                    {{ $t('Mains AC frequency') }}
-                                    <app-icon
-                                        class="info wa-brand"
-                                        :id="`${ID}-cookie-icon`"
-                                        name="circle-question"
-                                        variant="light"
-                                        @click.prevent="toggleInfo('mains')"
-                                    ></app-icon>
-                                    <wa-tooltip :for="`${ID}-cookie-icon`">{{ $t('More info') }}</wa-tooltip>
-                                </div>
-                            </div>
-                            <wa-callout v-if="infoOpen.mains || false">
-                                <app-icon slot="icon" name="circle-info" variant="light"></app-icon>
-                                <p>{{ $t("You can set the mains power frequency (50/60Hz) used by default filters here.")}}</p>
-                                <p>{{ $t("Setting this will disable the option to choose the AC filter frequency, so be sure that all you datasets can only have this frequency AC artefact if you enable it.")}}</p>
-                            </wa-callout>
-                            <wa-alert v-if="infoOpen['mains-frequency'] || false">
-                                <app-icon slot="icon" name="circle-info" variant="light"></app-icon>
-                                <p>{{ $t("The mains frequency is used to calculate the mains signal in the biosignal viewer. It is set to 50Hz by default, but can be set to 60Hz for US/Canada.") }}</p>
-                            </wa-alert>
-                            <wa-divider></wa-divider>
-                            <p>
-                                {{ $t("Drag the end of the ruler to a length of 10 cm on your screen.") }}
+                        <wa-divider></wa-divider>
+                        <div class="mains-frequency">
+                            <wa-select
+                                :value="settings['app.mainsFrequency'].toString()"
+                                @change="saveMainsFrequency($event.target.value)"
+                            >
+                                <wa-option value="50">{{ $t('50Hz') }}</wa-option>
+                                <wa-option value="60">{{ $t('60Hz') }}</wa-option>
+                                <wa-option value="0">{{ $t('-') }}</wa-option>
+                            </wa-select>
+                            <div>
+                                {{ $t('Mains AC frequency') }}
                                 <app-icon
                                     class="info wa-brand"
-                                    :id="`${ID}-ruler-icon`"
+                                    :id="`${ID}-cookie-icon`"
                                     name="circle-question"
                                     variant="light"
-                                    @click="toggleInfo('ruler')"
+                                    @click.prevent="toggleInfo('mains')"
                                 ></app-icon>
-                                <wa-tooltip :for="`${ID}-ruler-icon`">{{ $t('More info') }}</wa-tooltip>
-                            </p>
-                            <wa-callout v-if="infoOpen.ruler || false">
-                                <app-icon slot="icon" name="circle-info" variant="light"></app-icon>
-                                <p>{{ $t("Pixel size calibration is required to guarantee that signals are scaled correctly along the time and amplitude axes. Web browsers hava no access to this information so it has to be set manually.") }}</p>
-                            </wa-callout>
-                            <screen-calibrator
-                                :default="settings['app.screenPPI']"
-                                v-on:value-changed="saveScreenPPI"
-                            />
-                        </template>
+                                <wa-tooltip :for="`${ID}-cookie-icon`">{{ $t('More info') }}</wa-tooltip>
+                            </div>
+                        </div>
+                        <wa-callout v-if="infoOpen.mains || false">
+                            <app-icon slot="icon" name="circle-info" variant="light"></app-icon>
+                            <p>{{ $t("You can set the mains power frequency (50/60Hz) used by default filters here.")}}</p>
+                            <p>{{ $t("Setting this will disable the option to choose the AC filter frequency, so be sure that all you datasets can only have this frequency AC artefact if you enable it.")}}</p>
+                        </wa-callout>
+                        <wa-alert v-if="infoOpen['mains-frequency'] || false">
+                            <app-icon slot="icon" name="circle-info" variant="light"></app-icon>
+                            <p>{{ $t("The mains frequency is used to calculate the mains signal in the biosignal viewer. It is set to 50Hz by default, but can be set to 60Hz for US/Canada.") }}</p>
+                        </wa-alert>
+                        <wa-divider></wa-divider>
+                        <p>
+                            {{ $t("Drag the end of the ruler to a length of 10 cm on your screen.") }}
+                            <app-icon
+                                class="info wa-brand"
+                                :id="`${ID}-ruler-icon`"
+                                name="circle-question"
+                                variant="light"
+                                @click="toggleInfo('ruler')"
+                            ></app-icon>
+                            <wa-tooltip :for="`${ID}-ruler-icon`">{{ $t('More info') }}</wa-tooltip>
+                        </p>
+                        <wa-callout v-if="infoOpen.ruler || false">
+                            <app-icon slot="icon" name="circle-info" variant="light"></app-icon>
+                            <p>{{ $t("Pixel size calibration is required to guarantee that signals are scaled correctly along the time and amplitude axes. Web browsers hava no access to this information so it has to be set manually.") }}</p>
+                        </wa-callout>
+                        <screen-calibrator
+                            :default="settings['app.screenPPI']"
+                            v-on:value-changed="saveScreenPPI"
+                        />
                     </wa-scroller>
                 </wa-tab-panel>
                 <wa-tab-panel v-for="(tab, idx) of sections" :key="`settings-panel-${idx}`"
@@ -263,11 +261,6 @@ export default defineComponent({
             useContext,
             ...useActiveContext(store),
         }
-    },
-    computed: {
-        isBiosignalViewEnabled () {
-            return this.$store.state.APP.availableViews.includes('biosignal')
-        },
     },
     watch: {
         open (value) {

@@ -38,8 +38,6 @@ export type AugmentedRuntimeAppModule = Modify<RuntimeAppModule, {
     activeScope: string
     /** Currently active resource type. */
     activeModality: string
-    /** Application views that are available for use. */
-    availableViews: string[]
     /** Component level dstyles that have already been loaded. */
     componentStyles: string[]
     /** Id of the DOM container the application resides in. */

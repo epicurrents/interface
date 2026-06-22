@@ -229,18 +229,15 @@ import WelcomeDialog from "#app/overlays/WelcomeDialog.vue"
 import { loadAsyncComponent } from '#util'
 import DefaultInterface from './views/default/DefaultInterface.vue'
 
+// All interface views are async components, so their chunks (including the heavy
+// radiology/OHIF bundle) load on first render rather than up front — no need to
+// gate registration on configured views.
 const VIEWS = {
     DefaultInterface,
+    BiosignalInterface: loadAsyncComponent(() => import('#app/views/biosignal/BiosignalInterface.vue')),
+    MediaInterface: loadAsyncComponent(() => import('#app/views/media/MediaInterface.vue')),
+    RadiologyInterface: loadAsyncComponent(() => import('#app/views/radiology/RadiologyInterface.vue')),
 } as { [key: string]: ReturnType<typeof loadAsyncComponent> }
-if (window.__EPICURRENTS__.SETUP.activeViews?.includes('biosignal')) {
-    VIEWS.BiosignalInterface = loadAsyncComponent(() => import('#app/views/biosignal/BiosignalInterface.vue'))
-}
-if (window.__EPICURRENTS__.SETUP.activeViews?.includes('media')) {
-    VIEWS.MediaInterface = loadAsyncComponent(() => import('#app/views/media/MediaInterface.vue'))
-}
-if (window.__EPICURRENTS__.SETUP.activeViews?.includes('radiology')) {
-    VIEWS.RadiologyInterface = loadAsyncComponent(() => import('#app/views/radiology/RadiologyInterface.vue'))
-}
 
 let _calloutId = 0
 
