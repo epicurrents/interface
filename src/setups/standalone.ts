@@ -113,6 +113,9 @@ const registerAllModules = ({ app, useSAB, setup, registerInterfaceModule }: Set
     if (!setup.activeModules.length || setup.activeModules.includes('eeg')) {
         // Register the EEG and EDF file loader modules.
         app.registerModule('eeg', eegModule)
+        // The eeg module ships useMemoryManager=false; opt it into the shared-memory
+        // path (must be set after registerModule so 'eeg' resolves as a module field).
+        app.configure({ 'eeg.useMemoryManager': useSAB })
         app.setWorkerOverride('eeg-montage', () => {
             if (setup.usePyodide) {
                 return pyoWorker()
@@ -170,6 +173,20 @@ const registerAllModules = ({ app, useSAB, setup, registerInterfaceModule }: Set
         app.registerStudyImporter('acc/csv-file', 'Open CSV file', 'file', accLoader)
         app.registerStudyImporter('acc/csv-folder', 'Open CSV files from folder', 'folder', accLoader)
         app.registerStudyImporter('acc/csv-url', 'Open CSV from URL', 'url', accLoader)
+        // Also load ACC data from EDF (accelerometry exported / converted to EDF),
+        // not just CSV — registered as the acc/edf-* importers.
+        const accEdfImporter = new EdfImporter()
+        accEdfImporter.setWorkerOverride('acc', () => {
+            const accSAB = window.__EPICURRENTS__.RUNTIME!.SETTINGS.getFieldValue('acc.useMemoryManager')
+            if (useSAB && accSAB) {
+                return edfWorker()
+            }
+            return new EdfWorkerSubstitute()
+        })
+        const accEdfLoader = new accModule.AccStudyLoader('AccEdfLoader', accEdfImporter)
+        app.registerStudyImporter('acc/edf-file', 'Open EDF file', 'file', accEdfLoader)
+        app.registerStudyImporter('acc/edf-folder', 'Open EDF files from folder', 'folder', accEdfLoader)
+        app.registerStudyImporter('acc/edf-url', 'Open EDF from URL', 'url', accEdfLoader)
         registerInterfaceModule('acc', interfaceAccModule)
     }
 
