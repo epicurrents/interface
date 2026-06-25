@@ -101,8 +101,11 @@ export const DefaultInterface: DefaultInterfaceModuleConstructor = class Epicurr
         if (config.appName) {
             document.title = config.appName
         }
-        if (import.meta.env.MODE === 'production' && SETTINGS.app.isContextMenuDisabled) {
-            // Disable right click context menu in production mode.
+        if (window.__EPICURRENTS__.SETUP.isProduction && SETTINGS.app.isContextMenuDisabled) {
+            // Disable the native right-click context menu in production so it can't interfere with
+            // the viewer's own right-click actions (e.g. the plot context menu). `isProduction` is
+            // resolved centrally in the framework setup; `import.meta.env.MODE` is unreliable here
+            // because the dist builds as 'development'.
             appCnt.oncontextmenu = (e) => {
                 e.preventDefault()
                 return false

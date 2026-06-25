@@ -86,7 +86,7 @@ export const settings = safeObjectFrom({
             key: 'd',
         },
     },
-    isContextMenuDisabled: false,
+    isContextMenuDisabled: true,
     isExpanded: false,
     isMainComponent: true,
     mainsFrequency: 50, // Default to 50Hz, can be set to 60Hz for US/Canada.
