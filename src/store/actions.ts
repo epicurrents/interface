@@ -68,21 +68,18 @@ const disableAllOtherResources = async (state: State, skip: DataResource | null)
     if (state.APP.activeDataset) {
         for (const item of state.APP.activeDataset.resources) {
             if (item.resource.isActive && (!skip || (item.resource.id !== skip.id))) {
-                // Wait for resource deactivation to finish.
-                let resolveDeact: () => void
-                const deactPromise = new Promise<void>((resolve) => {
-                    resolveDeact = resolve
-                })
-                item.resource.onPropertyChange('isActive', () => {
-                    resolveDeact()
-                    item.resource.removeAllEventListeners('disableAllOtherResources')
-                }, 'disableAllOtherResources')
                 item.resource.isActive = false
                 const useMemoryManager = useContext({ state }, item.resource.modality).SETTINGS.useMemoryManager &&
                                          state.SETTINGS.app.useMemoryManager
                 if (useMemoryManager) {
-                    // Don't proceed until the resource has been fully deactivated.
-                    await deactPromise
+                    // Block until the resource has finished releasing AND rearranging the shared
+                    // buffer. `isActive = false` flips the flag synchronously but runs the actual
+                    // teardown in the background, so awaiting the `isActive` property event would
+                    // return too early — the next recording would then allocate and start caching
+                    // while this resource's rearrange is still moving buffer regions, corrupting
+                    // the new allocation. `awaitDeactivation` resolves only once the release and
+                    // rearrange have completed.
+                    await item.resource.awaitDeactivation()
                 }
             }
         }
