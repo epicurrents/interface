@@ -46,7 +46,6 @@
     </style>
   </head>
   <body>
-    <input type="hidden" id="epicurrents-mode" value="%MODE%" />
     <div id="epicurrents"></div>
     <noscript id="noscript">
         This application requires JavaScript.<br />
@@ -54,45 +53,20 @@
     </noscript>
     <script>
       window.PUBLIC_URL = '/ohif/'
-      const appMode = document.querySelector('#epicurrents-mode').value
-      console.log(`Epicurrents is running in ${appMode} mode.`)
-      const isProduction = appMode === 'production'
-      // Grab possible setup parameters from the address.
-      const searchPart = window.location.search
-      const urlParams = new URLSearchParams(searchPart)
-      // Initial setup for the application. These values can be overridden by URL parameters.
+      // Production mode, the log threshold (?log), the Pyodide service (?services/?advanced) and
+      // the SAB cache size (?memory) are resolved in the framework setup so every consumer honours
+      // them identically. Only build-entry-specific values are set here.
+      const urlParams = new URLSearchParams(window.location.search)
       window.__EPICURRENTS__ = {
         SETUP: {
           /**
-           * List of modules to load on application start.
+           * List of modules to load on application start (test/demo convenience).
            */
           activeModules: urlParams.get('mods')?.split(',') || [],
-          /**
-           * Views to activate on application start.
-           */
-          activeViews: urlParams.get('views')?.split(',') || ['biosignal', 'media'],
           /**
            * Path to the assets folder.
            */
           assetPath: window.location.href,
-          /**
-           * Should the application be run in production mode.
-           */
-          isProduction,
-          /**
-           * Log priority required for message to be printed into the console.
-           * Possible values (from least to most important):
-           * DEBUG, INFO, WARN, ERROR
-           */
-          logThreshold: urlParams.get('log')?.toLocaleUpperCase() || (isProduction ? 'WARN' : 'INFO'),
-          /**
-           * Maximum size of the signal data cache in memory (in megabytes).
-           */
-          signalCacheMaxSize: parseFloat(urlParams.get('memory') || '100', 10),
-          /**
-           * Should the pyodide service be used.
-           */
-          usePyodide: urlParams.get('services')?.split(',').includes('pyodide') || urlParams.has('advanced') || false,
         }
       }
     </script>

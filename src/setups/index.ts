@@ -113,7 +113,7 @@ const SETUP: Required<ApplicationInterfaceConfig> = Object.assign(
         pyodideAssetPath: 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/', // CDN path.
         //pyodideAssetPath: `${window.location.origin}/vendor/pyodide/0.25.0/`, // Local dev path.
         scope: 'local' as 'local' | 'workspace',
-        signalCacheMaxSize: 100,
+        signalCacheMaxSize: 500,
         usePyodide: false,
         user: null,
         useSAB: true,
@@ -207,10 +207,41 @@ export const createEpicurrentsApp = async (
 ) => {
     // Update setup.
     Object.assign(SETUP, config)
+    // Resolve the runtime configuration a host's HTML entry used to set, so every consumer — the
+    // standalone build and embedding hosts such as the platform — honours it identically.
+    const urlParams = new URLSearchParams(window.location?.search || '')
+    // Production unless running under the Vite dev server. `import.meta.hot` is defined only by the
+    // dev server and undefined in any build, making it the reliable build-vs-dev signal — unlike
+    // `import.meta.env.MODE`, which the dist builds as 'development' (NODE_ENV) and so never reads
+    // 'production'. An explicit isProduction in the incoming config still wins.
+    const isProduction = typeof config?.isProduction === 'boolean' ? config.isProduction : !import.meta.hot
+    SETUP.isProduction = isProduction
+    // The `log` flag overrides the print threshold; otherwise default by mode unless the host chose
+    // one (the platform sets its own per its dev-server signal, which must not be clobbered here).
+    const logFlag = urlParams.get('log')
+    if (logFlag) {
+        SETUP.logThreshold = logFlag.toLocaleUpperCase() as typeof SETUP.logThreshold
+    } else if (config?.logThreshold === undefined) {
+        SETUP.logThreshold = isProduction ? 'WARN' : 'INFO'
+    }
+    Log.setPrintThreshold(SETUP.logThreshold)
+    // The `services`/`advanced` flags opt into the Pyodide compute service.
+    if (urlParams.get('services')?.split(',').includes('pyodide') || urlParams.has('advanced')) {
+        SETUP.usePyodide = true
+    }
+    // The `memory` flag sets the signal-cache size in megabytes; a value of 0 disables the
+    // shared-memory (SharedArrayBuffer) route entirely so the plain JS-heap buffer design is used
+    // instead — a safety hatch for environments where SAB misbehaves.
+    const memoryFlag = urlParams.get('memory')
+    const memoryMb = memoryFlag !== null ? Number.parseFloat(memoryFlag) : NaN
+    const sabDisabledByFlag = memoryMb === 0
+    if (Number.isFinite(memoryMb) && memoryMb > 0) {
+        SETUP.signalCacheMaxSize = memoryMb
+    }
     /** Application core. */
     const coreApp = new Epicurrents()
     // Check for SharedArrayBuffer support and the initial config value for the memory manager.
-    const USE_SAB = typeof SharedArrayBuffer !== 'undefined' && SETUP.useSAB
+    const USE_SAB = typeof SharedArrayBuffer !== 'undefined' && SETUP.useSAB && !sabDisabledByFlag
     Log.debug(USE_SAB ? 'Using shared memory features.' : 'Shared memory features are disabled.', 'entry')
     // Apply pre-launch configuration.
     coreApp.configure({
