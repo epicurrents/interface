@@ -7,7 +7,7 @@
                 :id="`epicv-aeeg-epoch-length`"
                 :min="1"
                 :step="1"
-                size="small"
+                size="s"
                 type="number"
                 :value="String(epochLength)"
                 @change="onEpochLengthChanged($event)"
@@ -19,7 +19,7 @@
             <wa-switch
                 :checked="isSuperimposed || undefined"
                 id="epicv-aeeg-superimpose"
-                size="small"
+                size="s"
                 @input="onSuperimposeChanged($event)"
             >
                 {{ $t('Superimpose') }}

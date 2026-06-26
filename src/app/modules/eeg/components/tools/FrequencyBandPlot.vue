@@ -3,7 +3,7 @@
         <div class="header">{{ header }}</div>
         <wa-input
             class="max"
-            size="small"
+            size="s"
             type="number"
             :value="maxX"
             @change="$emit('set-max-x', parseFloat($event.target.value))"

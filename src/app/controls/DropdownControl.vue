@@ -34,7 +34,7 @@
             :label="$t(label)"
             :placeholder="placeholder"
             :value="value"
-            size="small"
+            size="s"
             @change="selectOption"
             @wa-hide="$event.target.blur()"
             @wa-input="$event.target.blur()"

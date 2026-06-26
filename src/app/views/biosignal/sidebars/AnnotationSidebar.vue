@@ -16,7 +16,7 @@
                 <wa-button
                     appearance="filled"
                     :disabled="isAnnotationsSubmitted"
-                    size="small"
+                    size="s"
                     variant="brand"
                     @click="submitAnnotations"
                 >{{ $t('Submit') }}</wa-button>
@@ -82,7 +82,7 @@
                 <div class="submit">
                     <wa-select
                         :placeholder="$t('Export format')"
-                        size="small"
+                        size="s"
                         :title="$t('Export format')"
                         :value="exportFormat"
                         @input="exportFormatChanged($event.target.value)"
@@ -99,7 +99,7 @@
                     <wa-button
                         appearance="filled-outlined"
                         :disabled="!RESOURCE.events.length"
-                        size="small"
+                        size="s"
                         variant="brand"
                         @click="downloadAnnotations"
                     >
@@ -112,12 +112,12 @@
                     class="create-text"
                     resize="vertical"
                     rows="2"
-                    size="small"
+                    size="s"
                 ></wa-textarea>
                 <div class="submit">
                     <wa-select
                         :placeholder="$t('Annotation')"
-                        size="small"
+                        size="s"
                         :value="newClass.toString()"
                         @input="changeClass"
                         @wa-hide="stopPropagation"
@@ -131,7 +131,7 @@
                     </wa-select>
                     <wa-button
                         appearance="filled-outlined"
-                        size="small"
+                        size="s"
                         variant="brand"
                         @click="createEvents"
                     >

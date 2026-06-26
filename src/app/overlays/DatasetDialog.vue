@@ -20,7 +20,7 @@
                 :disabled="!connector.mode.includes('r')"
                 :key="`dataset-connector-in-${index}`"
                 :value="connector.id"
-                size="small"
+                size="s"
             >
                 <span>{{ connector.name }}</span>
                 <small v-if="!connector.mode.includes('r')" class="epicv-text-faint">
@@ -39,7 +39,7 @@
                 :disabled="!connector.mode.includes('w')"
                 :key="`dataset-connector-out-${index}`"
                 :value="connector.id"
-                size="small"
+                size="s"
             >
                 <span>{{ connector.name }}</span>
                 <small v-if="!connector.mode.includes('w')" class="epicv-text-faint">

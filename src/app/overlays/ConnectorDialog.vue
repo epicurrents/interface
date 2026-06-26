@@ -149,7 +149,7 @@
                         <wa-input v-else
                             id="create-folder-input"
                             :placeholder="$t(`New folder name`)"
-                            size="small"
+                            size="s"
                             @focusout="createFolderInput = false"
                             @keydown.esc.stop.prevent="null"
                             @keyup.stop="handleFolderNameKeyup"

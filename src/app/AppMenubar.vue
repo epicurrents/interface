@@ -9,7 +9,7 @@
             <wa-button slot="trigger"
                 appearance="epicv"
                 class="button"
-                size="small"
+                size="s"
                 variant="brand"
                 with-caret
             >

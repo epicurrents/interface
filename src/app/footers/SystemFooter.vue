@@ -25,7 +25,7 @@
                     {{ $t('Log events') }}
                     <wa-button
                         appearance="epicv"
-                        size="small"
+                        size="s"
                         :title="$t('Close')"
                         @click="togglePopup($event, false)"
                     >
@@ -45,7 +45,7 @@
                 </div>
                 <wa-button
                     appearance="plain"
-                    size="small"
+                    size="s"
                     variant="brand"
                     @click="$store.dispatch('toggle-dialog', { name: 'log' })"
                 >
@@ -56,7 +56,7 @@
                 <wa-button
                     appearance="plain"
                     download="logs.json"
-                    size="small"
+                    size="s"
                     variant="brand"
                     @click.capture="downloadLogs"
                 >

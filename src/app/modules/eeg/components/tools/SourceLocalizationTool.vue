@@ -32,7 +32,7 @@
                     <label class="control-label">{{ $t('Method') }}</label>
                     <wa-select
                         class="method-select"
-                        size="small"
+                        size="s"
                         :value="method"
                         @change="onMethodChange"
                     >
@@ -46,7 +46,7 @@
                     <wa-input
                         class="control-input"
                         min="1"
-                        size="small"
+                        size="s"
                         step="0.5"
                         type="number"
                         :value="String(snr)"
@@ -57,7 +57,7 @@
                     <wa-input
                         class="control-input"
                         min="0.05"
-                        size="small"
+                        size="s"
                         step="0.05"
                         type="number"
                         :value="String(windowSec)"

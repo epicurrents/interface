@@ -37,7 +37,7 @@
             class="subtitle"
         >
             {{ $t("PPI:") }}
-            <wa-input type="number" size="small" step="1" :value="screenPPI" @input="inputPPI"></wa-input>
+            <wa-input type="number" size="s" step="1" :value="screenPPI" @input="inputPPI"></wa-input>
         </div>
     </div>
 </template>

@@ -8,7 +8,7 @@
             <wa-input ref="input"
                 :disabled="isLocked"
                 :placeholder="$t('Annotation text')"
-                size="small"
+                size="s"
                 :value="annotationLabel"
                 @input="updateLabel($event.target.value)"
                 @keydown="handleLabelKeydown"
@@ -16,7 +16,7 @@
             ></wa-input>
             <wa-select
                 :disabled="isLocked"
-                size="small"
+                size="s"
                 :value="annotationClass"
                 @input="updateClass($event.target.value)"
             >
@@ -28,7 +28,7 @@
                 appearance="filled-outlined"
                 :disabled="isLocked"
                 id="annotation-editor-save-button"
-                size="small"
+                size="s"
                 variant="brand"
                 @click="save"
                 @keydown="handleButtonKeydown"

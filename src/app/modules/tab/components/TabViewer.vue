@@ -16,7 +16,7 @@
                     {{ $t('Loading data, please wait...') }}
                 </div>
                 <div v-else-if="RESOURCE.state === 'error'" class="container error">
-                    <app-icon class="inline" name="triangle-exclamation" size="large"></app-icon>
+                    <app-icon class="inline" name="triangle-exclamation" size="l"></app-icon>
                     {{ $t('An error occurred while loading study data.') }}
                 </div>
                 <wa-tab-group v-else

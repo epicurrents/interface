@@ -7,7 +7,7 @@
                 id="epicv-spectrogram-epoch-length"
                 :min="1"
                 :step="1"
-                size="small"
+                size="s"
                 type="number"
                 :value="String(localEpochLength)"
                 @change="onEpochLengthChanged($event)"
