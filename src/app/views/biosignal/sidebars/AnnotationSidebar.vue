@@ -333,6 +333,11 @@ export default defineComponent({
             }
         },
         checkTab () {
+            // Scheduled from mounted() via requestAnimationFrame; the sidebar can unmount before
+            // it fires (e.g. switching to a different modality), nulling the tab-group ref.
+            if (!this.tabs) {
+                return
+            }
             if (this.selections.length) {
                 // Assume user wants to create annotations if there are selections.
                 this.tabs.active = 'create'

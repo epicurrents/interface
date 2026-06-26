@@ -20,7 +20,7 @@
             :style="viewerStyles"
         >
             <!-- Scoped view -->
-            <template v-for="resource in activeResources" :key="`viewer-${resource.id}`">
+            <template v-for="resource in visibleResources" :key="`viewer-${resource.id}`">
                 <component :is="VIEWERS[resource.modality]"
                     :viewerSize="singleViewerSize"
                 />
@@ -117,9 +117,24 @@ export default defineComponent({
          */
         singleViewerSize (): number[] {
             return [
-                this.viewerWidth/this.activeResources.length,
+                this.viewerWidth/(this.visibleResources.length || 1),
                 this.viewerHeight
             ]
+        },
+        /**
+         * Active resources, filtered to the current modality.
+         *
+         * `activeModality` updates synchronously with the active-resource change, while
+         * `activeResources` is refreshed one tick later by `checkActiveResources`. The viewer
+         * wrapper is keyed on `activeModality`; without this filter the key change remounts the
+         * wrapper and the v-for renders the previous modality's viewer against the not-yet-updated
+         * list. That viewer resolves its resource through `getActiveResource()` — already the new
+         * resource — and writes its own modality's display defaults onto a resource of a different
+         * modality. Filtering keeps the rendered viewers in step with the keyed modality.
+         */
+        visibleResources (): DataResource[] {
+            const modality = this.$store.state.APP.activeModality
+            return this.activeResources.filter(r => r.modality === modality)
         },
         viewerStyles (): string {
             let styles = ''

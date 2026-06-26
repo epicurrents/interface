@@ -479,8 +479,7 @@ export default defineComponent({
             cmPerSec,
             () => (store.state as any).INTERFACE.app.screenPPI,
         )
-        const { borderWidth, plotDimensions, pxPerSecond, visibleRange } = layout
-        const viewRange = computed(() => secPerPage.value || plotDimensions.value[0] / pxPerSecond.value)
+        const { borderWidth, pxPerSecond, viewRange, visibleRange } = layout
         // Navigator-side range: the seconds of the recording currently on screen across the *whole*
         // viewer (vs. visibleRange, which describes one renderer page). For a cascade montage with N
         // rows of pageLength seconds each, the user actually sees `rowCount * pageLength` seconds —
@@ -597,7 +596,6 @@ export default defineComponent({
             sidebarWidth,
             plotSelections,
             trendVisible,
-            viewRange,
             viewReady,
             yAxisWidth,
             controlsOpen,

@@ -96,6 +96,21 @@ export function useBiosignalLayout (
         return base
     })
 
+    // The full page duration in seconds — the explicit secPerPage when set, otherwise derived
+    // from the plot width. Guards pxPerSecond=0, which is transient on a fresh mount (e.g. when
+    // switching to a different modality remounts the viewer before its layout is measured) while
+    // plotDimensions is already non-zero. Without the guard the division yields Infinity, which
+    // flows into the plot's trace length and throws `Invalid typed array length: Infinity`.
+    const viewRange = computed(() => {
+        if (secPerPage.value) {
+            return secPerPage.value
+        }
+        if (!pxPerSecond.value) {
+            return 0
+        }
+        return plotDimensions.value[0] / pxPerSecond.value
+    })
+
     // ── Methods ───────────────────────────────────────────────────────────────
 
     function resizeElements () {
@@ -192,6 +207,7 @@ export function useBiosignalLayout (
         resizeElements,
         selectionStyles,
         suppressResizeFor,
+        viewRange,
         visibleRange,
     }
 }
