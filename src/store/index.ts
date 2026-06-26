@@ -45,12 +45,12 @@ const SCOPE = "Store"
 export type Getters = AppGetters & {
     /** Get the main biosignal plot instance. */
     getBiosignalPlot: () => () => BiosignalPlot
-    /** Get the controls component for the active resource, or a placeholder if not found. */
-    getResourceControls: (type?: string) => () => (new () => ComponentPublicInstance<unknown>)
-    /** Get the footer component for the active resource, or a placeholder if not found. */
-    getResourceFooter: (type?: string) => () => (new () => ComponentPublicInstance<unknown>)
-    /** Get the viewer component for the active resource, or a placeholder if not found. */
-    getResourceViewer: (type?: string) => () => (new () => ComponentPublicInstance<unknown>)
+    /** Get the controls component for the given modality (defaults to the active resource's). */
+    getResourceControls: () => (modality?: string) => (new () => ComponentPublicInstance<unknown>)
+    /** Get the footer component for the given modality (defaults to the active resource's). */
+    getResourceFooter: () => (modality?: string) => (new () => ComponentPublicInstance<unknown>)
+    /** Get the viewer component for the given modality (defaults to the active resource's). */
+    getResourceViewer: () => (modality?: string) => (new () => ComponentPublicInstance<unknown>)
     /**
      * Get the value of a specific setting, optionally specifying the depth.
      * @param field - The setting field to retrieve (e.g. 'eeg.trace.margin.top').
@@ -226,38 +226,34 @@ export default class AppStore implements InterfaceStoreManager {
                 }
                 return (() => this.runtime!.APP.plots.get('biosignal') as BiosignalPlot)
             },
-            getResourceControls: () => {
-                const resModality = appGetters.getActiveResource(this.store.state)()?.modality
-                if (!resModality) {
-                    return () => loadAsyncComponent(() => nullPromise)
-                }
-                const resourceMod = this.modules.get(resModality)
+            // Resolve the component for an explicit `modality` when given, falling back to the
+            // active resource's modality. The caller (checkActiveResources) keys the result by
+            // the resource's own modality, so it must pass that modality here — resolving via the
+            // active resource would return the wrong component whenever `getActiveResource()` and
+            // the resource being rendered momentarily disagree during a resource switch.
+            getResourceControls: () => (modality?: string) => {
+                const resModality = modality || appGetters.getActiveResource(this.store.state)()?.modality
+                const resourceMod = resModality ? this.modules.get(resModality) : undefined
                 if (!resourceMod) {
-                    return () => loadAsyncComponent(() => nullPromise)
+                    return loadAsyncComponent(() => nullPromise)
                 }
-                return resourceMod.getControlsComponent
+                return resourceMod.getControlsComponent()
             },
-            getResourceFooter: () => {
-                const resModality = appGetters.getActiveResource(this.store.state)()?.modality
-                if (!resModality) {
-                    return () => loadAsyncComponent(() => nullPromise)
-                }
-                const resourceMod = this.modules.get(resModality)
+            getResourceFooter: () => (modality?: string) => {
+                const resModality = modality || appGetters.getActiveResource(this.store.state)()?.modality
+                const resourceMod = resModality ? this.modules.get(resModality) : undefined
                 if (!resourceMod) {
-                    return () => loadAsyncComponent(() => nullPromise)
+                    return loadAsyncComponent(() => nullPromise)
                 }
-                return resourceMod.getFooterComponent
+                return resourceMod.getFooterComponent()
             },
-            getResourceViewer: () => {
-                const resModality = appGetters.getActiveResource(this.store.state)()?.modality
-                if (!resModality) {
-                    return () => loadAsyncComponent(() => nullPromise)
-                }
-                const resourceMod = this.modules.get(resModality)
+            getResourceViewer: () => (modality?: string) => {
+                const resModality = modality || appGetters.getActiveResource(this.store.state)()?.modality
+                const resourceMod = resModality ? this.modules.get(resModality) : undefined
                 if (!resourceMod) {
-                    return () => loadAsyncComponent(() => nullPromise)
+                    return loadAsyncComponent(() => nullPromise)
                 }
-                return resourceMod.getViewerComponent
+                return resourceMod.getViewerComponent()
             },
             getSettingsValue: () => (field: string, depth?: number) => {
                 const intfValue = INTERFACE_SETTINGS.getFieldValue(field, depth)

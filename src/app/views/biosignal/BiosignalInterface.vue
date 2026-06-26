@@ -179,13 +179,13 @@ export default defineComponent({
             }
             // Select the appropriate control, footer and viewer components.
             if (!Object.hasOwn(this.CONTROLS, modality)) {
-                this.CONTROLS[modality] = this.$store.getters.getResourceControls()
+                this.CONTROLS[modality] = this.$store.getters.getResourceControls(modality)
             }
             if (!Object.hasOwn(this.FOOTERS, modality)) {
-                this.FOOTERS[modality] = this.$store.getters.getResourceFooter()
+                this.FOOTERS[modality] = this.$store.getters.getResourceFooter(modality)
             }
             if (!Object.hasOwn(this.VIEWERS, modality)) {
-                this.VIEWERS[modality] = this.$store.getters.getResourceViewer()
+                this.VIEWERS[modality] = this.$store.getters.getResourceViewer(modality)
             }
             this.activeResources.push(...activeResources)
         },
