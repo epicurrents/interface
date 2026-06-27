@@ -1428,8 +1428,16 @@ export default defineComponent({
         // Add property update handlers
         this.RESOURCE.onPropertyChange('activeMontage', this.activeMontageChanged, this.ID)
         this.RESOURCE.onPropertyChange('displayViewStart', this.viewStartUpdated, this.ID)
-        this.RESOURCE.onPropertyChange('isActive', () => {
-            if (!this.RESOURCE.isActive) {
+        // Read the new value from the handler argument: this fires in the 'before'
+        // phase, so this.RESOURCE.isActive still holds the pre-change value here.
+        this.RESOURCE.onPropertyChange('isActive', (isActive) => {
+            if (!isActive) {
+                // Deactivation chains dataset → resource → here. Tear down any open
+                // video (and its PiP window) so switching recording or dataset can't
+                // strand the floating/PiP clip on top of the next view.
+                if (this.videoMode !== 'off') {
+                    this.closeVideo()
+                }
                 // Remove all event listeners before the resource becomes null.
                 this.RESOURCE.removeAllEventListeners(this.ID)
             }
