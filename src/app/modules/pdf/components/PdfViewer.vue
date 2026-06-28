@@ -69,7 +69,9 @@ export default defineComponent({
             },
         } as Record<string, HotkeyProperties>
         const page = null as any
-        const pdfScale = 1
+        // Sentinel scale that no real render can produce, so the first render with a measured viewport always proceeds
+        // past the no-change short-circuit in renderDocument.
+        const pdfScale = 0
         const rendering = false
         // Template refs
         const component = ref<HTMLDivElement>() as Ref<HTMLDivElement>
@@ -238,6 +240,12 @@ export default defineComponent({
         },
         async renderDocument (force = false) {
             if (this.rendering || !this.page) {
+                return
+            }
+            // Bail until the viewer has actually been measured. On auto-open the ResizeObserver in the parent has not
+            // fired yet, so viewerSize is [0, 0]; rendering then would produce a zero-scale, degenerate canvas (the
+            // page appears tiny and flipped). The viewerSize watcher re-runs this once the real dimensions arrive.
+            if (!this.viewerSize[0] || !this.viewerSize[1]) {
                 return
             }
             this.overlay.innerHTML = ''
