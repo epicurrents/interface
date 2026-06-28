@@ -1138,6 +1138,10 @@ App component styles
     text-align: center;
 }
 .epicv-invalid-browser {
+    /* Fixed light colours: this warning can render before the theme is applied,
+       so it must stay legible regardless of the active (possibly dark) theme. */
+    background: #ffffff;
+    color: #202020;
     font-size: min(2vw, 4vh);
     line-height: min(3vw, 6vh);
 }
