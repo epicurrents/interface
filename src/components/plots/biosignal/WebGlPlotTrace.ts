@@ -8,7 +8,8 @@
 import type {
     BiosignalPlot,
     WebGlCompatibleColor,
-    WebGlTrace
+    WebGlTrace,
+    WebGlTraceColorSegment
 } from '#types/plot'
 import { Log } from 'scoped-event-log'
 
@@ -17,6 +18,7 @@ const SCOPE = 'WebGlPlotTrace'
 export default class WebGlPlotTrace implements WebGlTrace {
     protected _buffer = 0 as WebGLBuffer
     protected _color: WebGlCompatibleColor
+    protected _colorSegments: WebGlTraceColorSegment[] | null = null
     protected _coordinates = 0
     protected _downsampleFactor = 0
     protected _offset: number
@@ -45,6 +47,15 @@ export default class WebGlPlotTrace implements WebGlTrace {
     }
     get color () {
         return this._color
+    }
+    get colorSegments () {
+        return this._colorSegments
+    }
+    set colorSegments (value: WebGlTraceColorSegment[] | null) {
+        // Keep the segments sorted by start index so the renderer can walk them
+        // left-to-right without re-sorting on every frame. Copy first so the
+        // caller's array is not mutated.
+        this._colorSegments = value?.length ? [...value].sort((a, b) => a.start - b.start) : null
     }
     get coordinates () {
         return this._coordinates

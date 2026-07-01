@@ -97,7 +97,7 @@ export type BiosignalPlotConfig = {
  * Plot trace for biosignals.
  */
 export type BiosignalTrace = {
-    /** Trace color. TODO: Implement traces with multiple color segments. */
+    /** Trace base color, used for any vertex range not covered by a colour segment. */
     color: WebGlCompatibleColor
     /** TODO: What is this value supposed to be used for? */
     coordinates: number
@@ -301,10 +301,34 @@ export type WebGlCompatibleColor = {
     r: number
 }
 /**
+ * A contiguous span of a WebGL trace drawn in a single colour.
+ *
+ * Segments are expressed as inclusive vertex-index ranges over the trace's own
+ * coordinate array (index 0 is the left edge of the page, `length - 1` the
+ * right edge). A trace carrying one or more segments is drawn as several
+ * connected `LINE_STRIP` spans instead of a single one; any vertex range not
+ * covered by a segment falls back to the trace's base `color`. Adjacent spans
+ * share their boundary vertex so the line stays visually continuous.
+ */
+export type WebGlTraceColorSegment = {
+    /** Colour for this span. */
+    color: WebGlCompatibleColor
+    /** Last vertex index of the span (inclusive). */
+    end: number
+    /** First vertex index of the span (inclusive). */
+    start: number
+}
+/**
  * Biosignal trace with additional WebGL properties.
  */
 export type WebGlTrace = BiosignalTrace & {
     buffer: WebGLBuffer
+    /**
+     * Optional colour segments splitting the trace into differently coloured spans
+     * (see {@link WebGlTraceColorSegment}). Null or empty draws the trace as a
+     * single strip in `color`.
+     */
+    colorSegments: WebGlTraceColorSegment[] | null
     /** An array buffer holding the line x,y -coordinates. */
     xy: Float32Array
 }

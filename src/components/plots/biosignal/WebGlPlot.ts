@@ -12,6 +12,7 @@ import type {
     WebGlCompatibleColor,
     WebGlPlotConfig,
     WebGlTrace,
+    WebGlTraceColorSegment,
 } from '#types/plot'
 import { Log } from 'scoped-event-log'
 import PlotColor from './PlotColor'
@@ -166,6 +167,7 @@ export default class WebGlPlot implements BiosignalPlot {
             return
         }
         this._updateViewport()
+        const gl = this._context
         // Draw background traces (opacity < 1) before foreground traces so they appear behind.
         const sorted = [
             ...this._traces.filter(t => t.render && (t.opacity ?? 1) < 1),
@@ -173,38 +175,88 @@ export default class WebGlPlot implements BiosignalPlot {
         ]
         for (const line of sorted) {
             // Set up matrix.
-            const uScale = this._context.getUniformLocation(this._program, 'uScale')
+            const uScale = gl.getUniformLocation(this._program, 'uScale')
             const scale = 10**line.scale
             // WebGL native canvas scale is from -1 to 1 = 2.
             const ampScale = 2*scale/(this.heightInSensRefUnits*line.sensitivity)
-            this._context.uniformMatrix2fv(
+            gl.uniformMatrix2fv(
                 uScale,
                 false,
                 [1,0, 0,ampScale*line.polarity]
             )
             // Set up line offset.
-            const uOffset = this._context.getUniformLocation(this._program, 'uOffset')
-            this._context.uniform2fv(
+            const uOffset = gl.getUniformLocation(this._program, 'uOffset')
+            gl.uniform2fv(
                 uOffset,
-                // TODO: X-offset could be used to create different colored line segments?
                 new Float32Array([0, line.offset*2 - 1])
             )
-            // Set up color and blend mode.
+            // Set up the blend mode once for the whole trace.
             // Background traces use standard alpha blending so opacity is honoured;
             // foreground traces use multiplicative blending (existing behaviour).
-            const uColor = this._context.getUniformLocation(this._program, "uColor")
             const opacity = line.opacity ?? 1
             if (opacity < 1) {
-                this._context.blendFunc(this._context.SRC_ALPHA, this._context.ONE_MINUS_SRC_ALPHA)
-                this._context.uniform4fv(uColor, [line.color.r, line.color.g, line.color.b, opacity])
+                gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
             } else {
-                this._context.blendFunc(this._context.SRC_COLOR, this._context.DST_COLOR)
-                this._context.uniform4fv(uColor, line.color.array)
+                gl.blendFunc(gl.SRC_COLOR, gl.DST_COLOR)
             }
-            // Create the buffer and draw traces.
-            this._context.bufferData(this._context.ARRAY_BUFFER, line.xy, this._context.STREAM_DRAW)
-            this._context.drawArrays(this._context.LINE_STRIP, 0, line.length)
+            const uColor = gl.getUniformLocation(this._program, "uColor")
+            const applyColor = (color: WebGlCompatibleColor) => {
+                if (opacity < 1) {
+                    gl.uniform4fv(uColor, [color.r, color.g, color.b, opacity])
+                } else {
+                    gl.uniform4fv(uColor, color.array)
+                }
+            }
+            // Upload the trace coordinates once; colour segments only change the draw calls.
+            gl.bufferData(gl.ARRAY_BUFFER, line.xy, gl.STREAM_DRAW)
+            const segments = line.colorSegments
+            if (!segments?.length) {
+                applyColor(line.color)
+                gl.drawArrays(gl.LINE_STRIP, 0, line.length)
+            } else {
+                this._drawSegmentedLine(gl, line, segments, applyColor)
+            }
         }
+    }
+
+    /**
+     * Draw a single trace as a sequence of colour segments.
+     *
+     * Each segment is one `LINE_STRIP` span in its own colour; vertex ranges
+     * between segments (and before the first / after the last) fall back to the
+     * trace's base colour. Consecutive spans share their boundary vertex so the
+     * rendered line stays continuous across colour changes.
+     * @param applyColor - Sets the fragment colour uniform, honouring trace opacity.
+     */
+    protected _drawSegmentedLine (
+        gl: WebGLRenderingContext,
+        line: WebGlTrace,
+        segments: WebGlTraceColorSegment[],
+        applyColor: (color: WebGlCompatibleColor) => void,
+    ) {
+        const last = line.length - 1
+        if (last < 1) {
+            return
+        }
+        const drawSpan = (from: number, to: number, color: WebGlCompatibleColor) => {
+            // A LINE_STRIP of a single vertex renders nothing; skip empty spans.
+            if (to <= from) {
+                return
+            }
+            applyColor(color)
+            gl.drawArrays(gl.LINE_STRIP, from, to - from + 1)
+        }
+        let cursor = 0
+        for (const segment of segments) {
+            const start = Math.max(cursor, Math.min(last, Math.round(segment.start)))
+            const end = Math.max(start, Math.min(last, Math.round(segment.end)))
+            // Base-coloured gap before this segment.
+            drawSpan(cursor, start, line.color)
+            drawSpan(start, end, segment.color)
+            cursor = Math.max(cursor, end)
+        }
+        // Base-coloured remainder after the last segment.
+        drawSpan(cursor, last, line.color)
     }
 
     protected _updateViewport () {
