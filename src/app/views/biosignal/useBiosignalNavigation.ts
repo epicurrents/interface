@@ -24,6 +24,13 @@ type NavigationSettings = {
         enabled: boolean
         epochLength: number
         onlyFullEpochs: boolean
+        /**
+         * Optional — `'centered'` shows the focused epoch with faded context on each
+         * side (semi-epoch mode). Absent or `'full'` shows the epoch alone.
+         */
+        display?: 'full' | 'centered'
+        /** Optional — epochs of context per side in `'centered'` display (default 1). */
+        contextEpochs?: number
     }
     pageLength: number
 }
@@ -36,6 +43,7 @@ export function useBiosignalNavigation (
     video?: Ref<HTMLVideoElement | undefined>,
 ) {
     const epochStart = ref(0)
+    const focusedEpoch = ref(0)
     const isAtEnd = ref(false)
     const isAtStart = ref(false)
     const isInEpochMode = ref(false)
@@ -44,8 +52,56 @@ export function useBiosignalNavigation (
         return !!video?.value && !video.value.paused && !video.value.ended
     }
 
+    /**
+     * Epoch grid geometry for the current settings. `context` is the seconds of
+     * faded context shown on each side of the focused epoch in centered display
+     * (zero in full display); `endEpoch` is the index of the last navigable epoch.
+     */
+    function epochGeometry () {
+        const epochLength = settings.epochMode?.epochLength ?? 0
+        const onlyFullEpochs = settings.epochMode?.onlyFullEpochs ?? false
+        const centered = settings.epochMode?.display === 'centered'
+        const contextEpochs = centered
+            ? Math.max(0, Math.round(settings.epochMode?.contextEpochs ?? 1))
+            : 0
+        const nEpochs = epochLength > 0
+            ? (resource.totalDuration - epochStart.value) / epochLength
+            : 0
+        const endEpoch = (onlyFullEpochs ? Math.floor(nEpochs) : Math.ceil(nEpochs)) - 1
+        return { context: contextEpochs * epochLength, endEpoch, epochLength }
+    }
+
     function checkEpochMode () {
         isInEpochMode.value = !!settings.epochMode?.enabled && (settings.epochMode?.epochLength ?? 0) > 0
+        if (isInEpochMode.value) {
+            const { endEpoch, epochLength } = epochGeometry()
+            // Derive the focused epoch from the current view start. Called on entry
+            // into epoch mode and on epoch-length change, where the view start is the
+            // plain page position (not yet offset by a centered context), so this is
+            // the epoch at the left of the view — matching full-mode paging.
+            const index = epochLength > 0
+                ? Math.floor((resource.viewStart - epochStart.value) / epochLength)
+                : 0
+            focusedEpoch.value = Math.min(Math.max(0, index), Math.max(0, endEpoch))
+        }
+    }
+
+    /**
+     * Position the view for the current `focusedEpoch`, clamping the index into
+     * range and updating the start/end flags. In centered display the view start is
+     * offset so the focused epoch sits in the middle; the offset is clamped so the
+     * page never scrolls before the grid start.
+     */
+    function applyEpochView () {
+        const { context, endEpoch, epochLength } = epochGeometry()
+        if (epochLength <= 0) {
+            return
+        }
+        focusedEpoch.value = Math.min(Math.max(0, focusedEpoch.value), Math.max(0, endEpoch))
+        const focusedBoundary = epochStart.value + focusedEpoch.value * epochLength
+        resource.viewStart = Math.max(epochStart.value, focusedBoundary - context)
+        isAtStart.value = focusedEpoch.value <= 0
+        isAtEnd.value = focusedEpoch.value >= endEpoch
     }
 
     function goBackward (step?: number) {
@@ -53,7 +109,8 @@ export function useBiosignalNavigation (
             return
         }
         if (isInEpochMode.value && settings.epochMode) {
-            goTo(resource.viewStart - settings.epochMode.epochLength)
+            focusedEpoch.value -= 1
+            applyEpochView()
         } else {
             if (!step) {
                 step = resource.activeMontage?.pageStep ?? Math.min(
@@ -81,7 +138,8 @@ export function useBiosignalNavigation (
             return
         }
         if (isInEpochMode.value && settings.epochMode) {
-            step = settings.epochMode.epochLength
+            focusedEpoch.value += 1
+            applyEpochView()
         } else {
             if (!step) {
                 step = resource.activeMontage?.pageStep ?? Math.min(
@@ -89,49 +147,27 @@ export function useBiosignalNavigation (
                     Math.ceil(visibleRange.value) - 1
                 )
             }
+            goTo(resource.viewStart + step)
         }
-        goTo(resource.viewStart + step)
     }
 
     function goTo (time: number) {
         if (time < 0 || time >= resource.totalDuration) {
             return
         }
-        const epochLength = settings.epochMode?.epochLength ?? 0
-        const onlyFullEpochs = settings.epochMode?.onlyFullEpochs ?? false
-        const nEpochs = epochLength > 0
-            ? (resource.totalDuration - epochStart.value) / epochLength
-            : 0
-        const endEpoch = (onlyFullEpochs ? Math.floor(nEpochs) : Math.ceil(nEpochs)) - 1
+        const { endEpoch, epochLength } = epochGeometry()
         if (isInEpochMode.value && epochLength > 0) {
-            if (time < epochStart.value) {
-                resource.viewStart = epochStart.value
-            } else if ((time - epochStart.value) / epochLength >= endEpoch + 1) {
-                resource.viewStart = epochStart.value + endEpoch * epochLength
-            } else {
-                const epochIndex = Math.min(
-                    Math.floor((time - epochStart.value) / epochLength),
-                    endEpoch
-                )
-                resource.viewStart = epochStart.value + epochIndex * epochLength
-            }
+            // `time` is a content time (a click or jump target): focus the epoch
+            // containing it, then position the view around that epoch.
+            const index = time < epochStart.value
+                ? 0
+                : Math.floor((time - epochStart.value) / epochLength)
+            focusedEpoch.value = Math.min(Math.max(0, index), Math.max(0, endEpoch))
+            applyEpochView()
         } else {
             resource.viewStart = time
-        }
-        if (!resource.viewStart || (isInEpochMode.value && resource.viewStart === epochStart.value)) {
-            isAtStart.value = true
-        } else {
-            isAtStart.value = false
-        }
-        if (
-            resource.viewStart + visibleRange.value >= resource.totalDuration
-            || (isInEpochMode.value && epochLength > 0
-                && resource.viewStart === epochStart.value + (nEpochs - 1) * epochLength
-            )
-        ) {
-            isAtEnd.value = true
-        } else {
-            isAtEnd.value = false
+            isAtStart.value = !resource.viewStart
+            isAtEnd.value = resource.viewStart + visibleRange.value >= resource.totalDuration
         }
     }
 
@@ -149,8 +185,10 @@ export function useBiosignalNavigation (
     }
 
     return {
+        applyEpochView,
         checkEpochMode,
         epochStart,
+        focusedEpoch,
         goBackward,
         goForward,
         goTo,

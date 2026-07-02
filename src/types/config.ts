@@ -154,6 +154,18 @@ export type CommonBiosignalInterfaceSettings = CommonInterfaceSettings & {
          * be able to view it.
          */
         onlyFullEpochs: boolean
+        /**
+         * Epoch display layout.
+         * * `'full'` (default): the page shows exactly the focused epoch.
+         * * `'centered'`: the focused epoch is centered with `contextEpochs` epochs of faded
+         *   context on each side (semi-epoch mode). Paging still advances one epoch at a time.
+         */
+        display: 'full' | 'centered'
+        /**
+         * Number of epochs of faded context shown on each side of the focused epoch when
+         * `display` is `'centered'`. Has no effect in `'full'` display.
+         */
+        contextEpochs: number
     },
     filters: {
         highpass: {

@@ -45,6 +45,7 @@
                             <eeg-plot ref="plot" v-if="overlay && viewReady"
                                 class="plot"
                                 :dimensions="plotDimensions"
+                                :epochFocus="epochFocusRange"
                                 :overlay="overlay"
                                 :pxPerSecond="pxPerSecond"
                                 :secPerPage="secPerPage"
@@ -512,6 +513,24 @@ export default defineComponent({
             video,
         )
 
+        // Absolute time range of the focused epoch when centered (semi-epoch) display is
+        // active, else null. `secPerPage` is read as the reactive trigger: it changes on
+        // every epoch-geometry setting (display / contextEpochs / epochLength), which the
+        // SETTINGS proxy would not otherwise surface to a computed.
+        const epochFocusRange = computed<[number, number] | null>(() => {
+            void secPerPage.value
+            const epochMode = eegCtx.SETTINGS.epochMode
+            if (!nav.isInEpochMode.value || epochMode?.display !== 'centered') {
+                return null
+            }
+            const epochLength = epochMode?.epochLength ?? 0
+            if (epochLength <= 0) {
+                return null
+            }
+            const start = nav.epochStart.value + nav.focusedEpoch.value * epochLength
+            return [start, start + epochLength]
+        })
+
         const pointer = useBiosignalPointer({
             resource: eegCtx.RESOURCE,
             settings: eegCtx.SETTINGS,
@@ -573,6 +592,7 @@ export default defineComponent({
             dragButton,
             editingEvents,
             editingEventsMode,
+            epochFocusRange,
             lastCacheEnd,
             lastVideoTime,
             menuChannel,
@@ -1258,7 +1278,15 @@ export default defineComponent({
             // manual consult is needed here.
             if (this.isInEpochMode || this.RESOURCE.timebaseUnit === 'secPerPage') {
                 this.cmPerSec = 0
-                this.secPerPage = this.SETTINGS.epochMode.epochLength || this.RESOURCE.timebase
+                const epochMode = this.SETTINGS.epochMode
+                // In centered (semi-epoch) display the page widens to fit the focused
+                // epoch plus `contextEpochs` faded epochs on each side.
+                const context = this.isInEpochMode && epochMode.display === 'centered'
+                    ? Math.max(0, Math.round(epochMode.contextEpochs ?? 1))
+                    : 0
+                this.secPerPage = epochMode.epochLength
+                    ? epochMode.epochLength * (1 + 2 * context)
+                    : this.RESOURCE.timebase
             } else if (this.RESOURCE.timebaseUnit === 'cmPerSec') {
                 this.secPerPage = 0
                 this.cmPerSec = this.RESOURCE.timebase
@@ -1452,7 +1480,7 @@ export default defineComponent({
         // Check if we are in epoch mode and adjust view start if needed.
         this.checkEpochMode()
         if (this.isInEpochMode) {
-            this.goTo(this.RESOURCE.viewStart)
+            this.applyEpochView()
         }
         // Check timebase scale to use and calculate pixels per second.
         this.timebaseChanged()
@@ -1488,14 +1516,26 @@ export default defineComponent({
                     this.checkEpochMode()
                     if (mutation.payload.value) {
                         // Either epoch mode was enable or epoch length was set to over zero.
-                        this.goTo(this.RESOURCE.viewStart)
+                        this.applyEpochView()
                     }
                     this.$nextTick(() => {
                         this.timebaseChanged()
                     })
                 } else if (mutation.payload.field === 'eeg.epochMode.onlyFullEpochs' && mutation.payload.value) {
                     // Make sure we're not outside the epoch range if full epochs are required.
-                    this.goTo(this.RESOURCE.viewStart)
+                    this.applyEpochView()
+                } else if (
+                    mutation.payload.field === 'eeg.epochMode.display'
+                    || mutation.payload.field === 'eeg.epochMode.contextEpochs'
+                ) {
+                    // Keep the focused epoch; re-centre the view for the new context and
+                    // resize the page (secPerPage) to match.
+                    if (this.isInEpochMode) {
+                        this.applyEpochView()
+                    }
+                    this.$nextTick(() => {
+                        this.timebaseChanged()
+                    })
                 } else if (
                     mutation.payload.field.startsWith('eeg.majorGrid.') ||
                     mutation.payload.field.startsWith('eeg.minorGrid.')

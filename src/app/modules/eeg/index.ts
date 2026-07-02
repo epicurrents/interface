@@ -110,6 +110,12 @@ export const runtime = {
         if (config.epochMode?.onlyFullEpochs) {
             settings.epochMode.onlyFullEpochs = config.epochMode.onlyFullEpochs
         }
+        if (config.epochMode?.display) {
+            settings.epochMode.display = config.epochMode.display
+        }
+        if (config.epochMode?.contextEpochs !== undefined) {
+            settings.epochMode.contextEpochs = config.epochMode.contextEpochs
+        }
         // Module name.
         if (config.moduleName?.full) {
             runtime.moduleName.full = config.moduleName.full

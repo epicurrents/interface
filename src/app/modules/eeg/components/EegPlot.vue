@@ -32,7 +32,7 @@ import type {
     PointerEventOverlay,
 } from "#app/overlays/PointerEventOverlay.vue"
 import { WebGlPlot, PlotColor, WebGlPlotTrace } from "#components"
-import type { WebGlPlotConfig } from "#types/plot"
+import type { WebGlCompatibleColor, WebGlPlotConfig, WebGlTraceColorSegment } from "#types/plot"
 
 // Keydown timeout and interval type
 type KeydownTimer = {
@@ -40,6 +40,12 @@ type KeydownTimer = {
 }
 
 const DOUBLE_CLICK_THRESHOLD = 250
+/**
+ * Fraction the context (non-focused) trace colour is blended toward white in centered
+ * epoch mode (0 = full colour, 1 = background). Under the plot's multiplicative blend
+ * this dims the flanking trace toward the background regardless of its colour.
+ */
+const EPOCH_CONTEXT_FADE = 0.8
 const SWIPE_RANGE_THRESHOLD = 100
 const SWIPE_TIME_THRESHOLD = 500
 const WHEEL_TRIGGER_THRESHOLD = 150
@@ -50,6 +56,14 @@ export default defineComponent({
         dimensions: {
             type: Array as PropType<number[]>,
             required: true,
+        },
+        /**
+         * Absolute `[start, end]` time range of the focused epoch in centered epoch mode,
+         * or null when centered display is inactive. Drives the context fade.
+         */
+        epochFocus: {
+            type: Array as PropType<number[] | null>,
+            default: null,
         },
         overlay: {
             type: Object as PropType<PointerEventOverlay>,
@@ -891,8 +905,60 @@ export default defineComponent({
                     }
                     i++
                 }
+                this.applyEpochFade()
                 this.newSignalData = true
             })
+        },
+        /**
+         * Fade each trace outside the focused epoch when centered (semi-epoch) display is
+         * active: the focused epoch keeps the trace's base colour, the flanking context is
+         * drawn via colour segments blended toward the background. Clears segments when
+         * `epochFocus` is null (full display or not in epoch mode).
+         */
+        applyEpochFade () {
+            const traces = this.wglPlot?.traces
+            if (!traces) {
+                return
+            }
+            const focus = this.epochFocus
+            if (!focus || !this.viewRange) {
+                for (const line of traces) {
+                    if (line.colorSegments) {
+                        line.colorSegments = null
+                    }
+                }
+                return
+            }
+            const viewStart = this.RESOURCE.viewStart
+            const [focusStart, focusEnd] = focus
+            for (const line of traces) {
+                const len = line.length
+                if (!len) {
+                    line.colorSegments = null
+                    continue
+                }
+                // Vertex index of an absolute time within this trace's page.
+                const leftIdx = Math.round(((focusStart - viewStart) / this.viewRange) * len)
+                const rightIdx = Math.round(((focusEnd - viewStart) / this.viewRange) * len)
+                const fade = this.fadeColorFor(line.color)
+                const segments: WebGlTraceColorSegment[] = []
+                if (leftIdx > 0) {
+                    segments.push({ start: 0, end: Math.min(leftIdx, len - 1), color: fade })
+                }
+                if (rightIdx < len - 1) {
+                    segments.push({ start: Math.max(0, rightIdx), end: len - 1, color: fade })
+                }
+                line.colorSegments = segments.length ? segments : null
+            }
+        },
+        fadeColorFor (color: WebGlCompatibleColor) {
+            const f = EPOCH_CONTEXT_FADE
+            return new PlotColor(
+                color.r + (1 - color.r) * f,
+                color.g + (1 - color.g) * f,
+                color.b + (1 - color.b) * f,
+                color.a,
+            )
         },
     },
     beforeMount () {
