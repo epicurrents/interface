@@ -127,15 +127,21 @@ export default defineComponent({
             if (!this.RESOURCE || this.RESOURCE.modality !== 'ncs') {
                 return
             }
-            if (id === undefined || id === this.ncsControls[0].id) {
+            // Look a control up by id rather than array position, so the
+            // descriptor array can be reordered (or grow) without breaking the
+            // per-control build blocks.
+            const control = (controlId: string) => this.ncsControls.find(c => c.id === controlId)!
+            const wants = (controlId: string) => id === undefined || id === controlId
+            if (wants('sensitivity')) {
+                const c = control('sensitivity')
                 // Construct sensitivity dropdown.
                 const sensitivity = this.SETTINGS.sensitivity[this.SETTINGS.sensitivityUnit]
                 const scale = sensitivity.scale || 1
                 const availableSensitivities = sensitivity.availableValues
-                this.ncsControls[0].options = []
+                c.options = []
                 for (let i=0; i<availableSensitivities.length; i++) {
                     const sens = availableSensitivities[i]
-                    this.ncsControls[0].options.push({
+                    c.options.push({
                         id: `sensitivity-${sens}`,
                         enabled: true,
                         label: `${sens < 1000 ? sens : (sens/1000).toFixed(1)}`,
@@ -147,7 +153,7 @@ export default defineComponent({
                 const resourceSensitivity = Math.round(this.RESOURCE.sensitivity/scale)
                 if (!availableSensitivities.includes(resourceSensitivity)) {
                     // Add a "custom" sensitivity option
-                    this.ncsControls[0].options.push({
+                    c.options.push({
                         id: `sensitivity-custom`,
                         enabled: false,
                         label: this.$t('*' + resourceSensitivity.toFixed()),
@@ -155,15 +161,16 @@ export default defineComponent({
                     })
                 }
                 if (availableSensitivities.includes(resourceSensitivity)) {
-                    this.ncsControls[0].value = `sensitivity-${resourceSensitivity}`
+                    c.value = `sensitivity-${resourceSensitivity}`
                 } else {
-                    this.ncsControls[0].value = `sensitivity-custom`
+                    c.value = `sensitivity-custom`
                 }
-                this.ncsControls[0].version++
+                c.version++
             }
-            if (id === undefined || id === this.ncsControls[1].id) {
+            if (wants('timebase')) {
+                const c = control('timebase')
                 // Construct timebase.
-                this.ncsControls[1].groups = []
+                c.groups = []
                 if (Object.hasOwn(this.SETTINGS.timebase, this.SETTINGS.timebaseUnit)) {
                     const tbGroup = {
                         id: `timebase-${this.SETTINGS.timebaseUnit}`,
@@ -181,31 +188,33 @@ export default defineComponent({
                             value: tb,
                         })
                     }
-                    this.ncsControls[1].groups.push(tbGroup)
+                    c.groups.push(tbGroup)
                 }
-                this.ncsControls[1].enabled = true
-                this.ncsControls[1].value = `timebase-${this.RESOURCE.timebaseUnit}-${this.RESOURCE.timebase}`
-                this.ncsControls[1].version++
+                c.enabled = true
+                c.value = `timebase-${this.RESOURCE.timebaseUnit}-${this.RESOURCE.timebase}`
+                c.version++
             }
-            if (id === undefined || id === this.ncsControls[2].id) {
+            if (wants('inspect')) {
+                const c = control('inspect')
                 const isActive = this.$interface.store.modules.get('ncs')!.cursorToolActive === 'inspect'
                 // Inspect tool toggle.
-                this.ncsControls[2].value = isActive
-                this.ncsControls[2].onclick = [
+                c.value = isActive
+                c.onclick = [
                     'ncs.set-cursor-tool',
                     isActive ? null : 'inspect',
                 ]
-                this.ncsControls[2].version++
+                c.version++
             }
-            if (id === undefined || id === this.ncsControls[3].id) {
+            if (wants('annotations')) {
+                const c = control('annotations')
                 const isActive = this.$interface.store.modules.get('ncs')!.openSidebar === 'annotations'
-                // Inspect tool toggle.
-                this.ncsControls[3].value = isActive
-                this.ncsControls[3].onclick = [
+                // Annotations sidebar toggle.
+                c.value = isActive
+                c.onclick = [
                     'ncs.set-open-sidebar',
                     isActive ? null : 'annotations',
                 ]
-                this.ncsControls[3].version++
+                c.version++
             }
             if (id === undefined) {
                 this.controlsLeft.push(...this.ncsControls.filter(c => (!c.align || c.align === 'left')))

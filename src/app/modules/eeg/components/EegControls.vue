@@ -190,9 +190,15 @@ export default defineComponent({
             if (!this.RESOURCE || this.RESOURCE.modality !== 'eeg') {
                 return
             }
-            if (id === undefined || id === this.eegControls[0].id) {
+            // Look a control up by id rather than array position, so the
+            // descriptor array can be reordered (or grow) without breaking the
+            // per-control build blocks.
+            const control = (controlId: string) => this.eegControls.find(c => c.id === controlId)!
+            const wants = (controlId: string) => id === undefined || id === controlId
+            if (wants('active-montage')) {
+                const c = control('active-montage')
                 // Construct montages.
-                this.eegControls[0].groups = []
+                c.groups = []
                 const availableMontages = this.RESOURCE.montages
                 const montageGroup = {
                     id: '',
@@ -205,10 +211,10 @@ export default defineComponent({
                     const setupLabel = montage.setup?.label || setupName.split(':')[1]
                     if (currentGroup) {
                         const completeGroup = {...currentGroup}
-                        this.eegControls[0].groups!.push(completeGroup)
+                        c.groups!.push(completeGroup)
                     }
                     // Check if we have already loaded some montages into this group.
-                    currentGroup = this.eegControls[0].groups!.find(grp => grp.id === setupName) || null
+                    currentGroup = c.groups!.find(grp => grp.id === setupName) || null
                     if (!currentGroup || force) {
                         currentGroup = {...montageGroup}
                         currentGroup.id = setupName
@@ -236,29 +242,30 @@ export default defineComponent({
                     })
                 }
                 if (currentGroup) {
-                    this.eegControls[0].groups.push(currentGroup)
+                    c.groups.push(currentGroup)
                 }
                 // Keep raw signals always on the bottom of the list as a separate option
-                this.eegControls[0].options = []
-                this.eegControls[0].options.push({
+                c.options = []
+                c.options.push({
                     id: 'raw-signals',
                     enabled: true,
                     label: this.$t('Raw signals'),
                     onclick: ['eeg.set-active-montage', null],
                     value: null,
                 })
-                this.eegControls[0].value = this.RESOURCE.activeMontage?.name || 'raw-signals'
-                this.eegControls[0].version++
+                c.value = this.RESOURCE.activeMontage?.name || 'raw-signals'
+                c.version++
             }
-            if (id === undefined || id === this.eegControls[1].id) {
+            if (wants('sensitivity')) {
+                const c = control('sensitivity')
                 // Construct sensitivity dropdown.
                 const sensitivity = this.SETTINGS.sensitivity[this.SETTINGS.sensitivityUnit]
                 const scale = sensitivity.scale || 1
                 const availableSensitivities = sensitivity.availableValues
-                this.eegControls[1].options = []
+                c.options = []
                 for (let i=0; i<availableSensitivities.length; i++) {
                     const sens = availableSensitivities[i]
-                    this.eegControls[1].options.push({
+                    c.options.push({
                         id: `sensitivity-${sens}`,
                         enabled: true,
                         label: `${sens}`,
@@ -270,7 +277,7 @@ export default defineComponent({
                 const resourceSensitivity = Math.round(this.RESOURCE.sensitivity/scale)
                 if (!availableSensitivities.includes(resourceSensitivity)) {
                     // Add a "custom" sensitivity option
-                    this.eegControls[1].options.push({
+                    c.options.push({
                         id: `sensitivity-custom`,
                         enabled: false,
                         label: this.$t('*' + resourceSensitivity.toFixed()),
@@ -278,15 +285,16 @@ export default defineComponent({
                     })
                 }
                 if (availableSensitivities.includes(resourceSensitivity)) {
-                    this.eegControls[1].value = `sensitivity-${resourceSensitivity}`
+                    c.value = `sensitivity-${resourceSensitivity}`
                 } else {
-                    this.eegControls[1].value = `sensitivity-custom`
+                    c.value = `sensitivity-custom`
                 }
-                this.eegControls[1].version++
+                c.version++
             }
-            if (id === undefined || id === this.eegControls[2].id) {
+            if (wants('timebase')) {
+                const c = control('timebase')
                 // Construct timebase.
-                this.eegControls[2].groups = []
+                c.groups = []
                 const timebaseTypes = Object.entries(this.SETTINGS.timebase)
                 timebaseTypes.sort((a, b) => a[0].localeCompare(b[0]))
                 for (const [tbName, timebase] of timebaseTypes) {
@@ -306,25 +314,26 @@ export default defineComponent({
                             value: tb,
                         })
                     }
-                    this.eegControls[2].groups.push(tbGroup)
+                    c.groups.push(tbGroup)
                 }
                 if (this.SETTINGS.epochMode.enabled && this.SETTINGS.epochMode.epochLength) {
-                    this.eegControls[2].enabled = false
-                    this.eegControls[2].placeholder = `${this.SETTINGS.epochMode.epochLength}`
-                    this.eegControls[2].value = ''
+                    c.enabled = false
+                    c.placeholder = `${this.SETTINGS.epochMode.epochLength}`
+                    c.value = ''
                 } else {
-                    this.eegControls[2].enabled = true
-                    this.eegControls[2].value = `timebase-${this.RESOURCE.timebaseUnit}-${this.RESOURCE.timebase}`
+                    c.enabled = true
+                    c.value = `timebase-${this.RESOURCE.timebaseUnit}-${this.RESOURCE.timebase}`
                 }
-                this.eegControls[2].version++
+                c.version++
             }
-            if (id === undefined || id === this.eegControls[3].id) {
+            if (wants('lowpass-filter')) {
+                const c = control('lowpass-filter')
                 // Construct filters
-                this.eegControls[3].options = []
+                c.options = []
                 // TODO: Ability to modify these?
                 const availableLowFilters = this.SETTINGS.filters.highpass.availableValues
                 for (const filter of availableLowFilters) {
-                    this.eegControls[3].options.push({
+                    c.options.push({
                         id: `low-filter-${filter}`,
                         enabled: true,
                         label: filter ? T(filter.toString(), 'LocaleNumbers') : '-',
@@ -333,14 +342,15 @@ export default defineComponent({
                         value: filter,
                     })
                 }
-                this.eegControls[3].value = `low-filter-${this.RESOURCE.filters.highpass}`
-                this.eegControls[3].version++
+                c.value = `low-filter-${this.RESOURCE.filters.highpass}`
+                c.version++
             }
-            if (id === undefined || id === this.eegControls[4].id) {
-                this.eegControls[4].options = []
+            if (wants('highpass-filter')) {
+                const c = control('highpass-filter')
+                c.options = []
                 const availableHighFilters = this.SETTINGS.filters.lowpass.availableValues
                 for (const filter of availableHighFilters) {
-                    this.eegControls[4].options.push({
+                    c.options.push({
                         id: `high-filter-${filter}`,
                         enabled: true,
                         label: filter ? T(filter.toString(), 'LocaleNumbers') : '-',
@@ -349,15 +359,16 @@ export default defineComponent({
                         value: filter,
                     })
                 }
-                this.eegControls[4].value = `high-filter-${this.RESOURCE.filters.lowpass}`
-                this.eegControls[4].version++
+                c.value = `high-filter-${this.RESOURCE.filters.lowpass}`
+                c.version++
             }
-            if (id === undefined || id === this.eegControls[5].id) {
-                this.eegControls[5].options = []
-                if (this.eegControls[5].type === 'dropdown') {
+            if (wants('notch-filter')) {
+                const c = control('notch-filter')
+                c.options = []
+                if (c.type === 'dropdown') {
                     const availableNotchFilters = this.SETTINGS.filters.notch.availableValues
                     for (const filter of availableNotchFilters) {
-                        this.eegControls[5].options.push({
+                        c.options.push({
                             id: `notch-filter-${filter}`,
                             enabled: true,
                             label: filter ? T(filter.toString(), 'LocaleNumbers') : '-',
@@ -366,48 +377,51 @@ export default defineComponent({
                             value: filter,
                         })
                     }
-                    this.eegControls[5].value = `notch-filter-${this.RESOURCE.filters.notch}`
+                    c.value = `notch-filter-${this.RESOURCE.filters.notch}`
                 } else {
                     // This is a toggle control.
                     const isActive = this.RESOURCE.filters.notch === this.SETTINGS.notchDefaultFrequency
-                    this.eegControls[5].onclick = [
+                    c.onclick = [
                         'eeg.set-notch-filter',
                         isActive ? 0 : this.SETTINGS.notchDefaultFrequency,
                     ]
-                    this.eegControls[5].value = isActive
+                    c.value = isActive
                 }
-                this.eegControls[5].version++
+                c.version++
             }
-            if (id === undefined || id === this.eegControls[6].id) {
+            if (wants('inspect')) {
+                const c = control('inspect')
                 const isActive = this.$interface.store.modules.get('eeg')!.cursorToolActive === 'inspect'
                 // Inspect tool toggle.
-                this.eegControls[6].value = isActive
-                this.eegControls[6].onclick = [
+                c.value = isActive
+                c.onclick = [
                     'eeg.set-cursor-tool',
                     isActive ? null : 'inspect',
                 ]
-                this.eegControls[6].version++
+                c.version++
             }
-            if (id === undefined || id === this.eegControls[7].id) {
+            if (wants('report')) {
+                const c = control('report')
                 const isActive = this.$interface.store.modules.get('eeg')!.isReportOpen
                 // Report window toggle.
-                this.eegControls[7].value = isActive
-                this.eegControls[7].onclick = [
+                c.value = isActive
+                c.onclick = [
                     'eeg.set-report-open',
                     !isActive,
                 ]
-                this.eegControls[7].label = isActive ? this.$t('Close report window') : this.$t('Open report window')
-                this.eegControls[7].version++
+                c.label = isActive ? this.$t('Close report window') : this.$t('Open report window')
+                c.version++
             }
-            if (id === undefined || id === this.eegControls[8].id) {
+            if (wants('annotations')) {
+                const c = control('annotations')
                 const isActive = this.$interface.store.modules.get('eeg')!.openSidebar === 'annotations'
                 // Annotations sidebar toggle.
-                this.eegControls[8].value = isActive
-                this.eegControls[8].onclick = [
+                c.value = isActive
+                c.onclick = [
                     'eeg.set-open-sidebar',
                     isActive ? null : 'annotations',
                 ]
-                this.eegControls[8].version++
+                c.version++
             }
             // Finally, push controls to their places.
             if (id === undefined) {

@@ -106,14 +106,21 @@ export default defineComponent({
             if (!this.RESOURCE || this.RESOURCE.modality !== 'pdf') {
                 return
             }
+            // Look a control up by id rather than array position, so the
+            // descriptor array can be reordered (or grow) without breaking the
+            // per-control build blocks.
+            const control = (controlId: string) => this.pdfControls.find(c => c.id === controlId)!
+            const prevPage = control('prev_page')
+            const selectPage = control('select_page')
+            const nextPage = control('next_page')
             const isPaginated = this.RESOURCE.numPages > 1
             // Backward button.
-            this.pdfControls[0].enabled = isPaginated && this.RESOURCE.currentPage > 1
-            this.pdfControls[0].version++
+            prevPage.enabled = isPaginated && this.RESOURCE.currentPage > 1
+            prevPage.version++
             // Page dropdown.
-            this.pdfControls[1].options = []
+            selectPage.options = []
             for (let i=1;i<= this.RESOURCE.numPages; i++) {
-                this.pdfControls[1].options.push({
+                selectPage.options.push({
                     id: `page_num_${i}`,
                     active: this.RESOURCE.currentPage === i,
                     enabled: true,
@@ -122,23 +129,23 @@ export default defineComponent({
                     value: i,
                 })
             }
-            this.pdfControls[1].enabled = isPaginated
-            this.pdfControls[1].suffix = `/ ${this.RESOURCE.numPages || 1}`
+            selectPage.enabled = isPaginated
+            selectPage.suffix = `/ ${this.RESOURCE.numPages || 1}`
             if (!isPaginated) {
-                this.pdfControls[1].placeholder = '1'
+                selectPage.placeholder = '1'
             } else {
-                this.pdfControls[1].value = `page_num_${this.RESOURCE.currentPage}`
+                selectPage.value = `page_num_${this.RESOURCE.currentPage}`
             }
             let width = 3
             if (isPaginated) {
                 width += 1.25 // Add half a rem for expand icon.
                 width += Math.floor(Math.log(this.RESOURCE.numPages))*0.5 // Add room for digits.
             }
-            this.pdfControls[1].width = `${width}rem`
-            this.pdfControls[1].version++
+            selectPage.width = `${width}rem`
+            selectPage.version++
             // Forward button.
-            this.pdfControls[2].enabled = isPaginated && this.RESOURCE.currentPage < this.RESOURCE.numPages
-            this.pdfControls[2].version++
+            nextPage.enabled = isPaginated && this.RESOURCE.currentPage < this.RESOURCE.numPages
+            nextPage.version++
             this.controlsLeft.push(...this.pdfControls.filter(c => (!c.align || c.align === 'left')))
             this.controlsRight.push(...this.pdfControls.filter(c => (c.align === 'right')))
         },

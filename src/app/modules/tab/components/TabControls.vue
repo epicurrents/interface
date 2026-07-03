@@ -120,14 +120,21 @@ export default defineComponent({
             if (!this.RESOURCE || this.RESOURCE.modality !== 'tab') {
                 return
             }
+            // Look a control up by id rather than array position, so the
+            // descriptor array can be reordered (or grow) without breaking the
+            // per-control build blocks.
+            const control = (controlId: string) => this.tabControls.find(c => c.id === controlId)!
+            const decreaseScale = control('decrease_scale')
+            const selectScale = control('select_scale')
+            const increaseScale = control('increase_scale')
             const currentScale = Object.values(AVAILABLE_SCALES).findIndex(
                 v => v.toFixed(1) === this.RESOURCE.scale.toFixed(1)
             )
-            this.tabControls[0].enabled = this.RESOURCE.scale > 0.5 && currentScale > 0
-            this.tabControls[0].version++
-            this.tabControls[1].options = []
+            decreaseScale.enabled = this.RESOURCE.scale > 0.5 && currentScale > 0
+            decreaseScale.version++
+            selectScale.options = []
             for (const [key, value] of Object.entries(AVAILABLE_SCALES)) {
-                this.tabControls[1].options.push({
+                selectScale.options.push({
                     id: `scale_${key}`,
                     active: this.RESOURCE.scale === value,
                     enabled: true,
@@ -136,16 +143,16 @@ export default defineComponent({
                 })
             }
             if (currentScale > -1) {
-                this.tabControls[1].value = `scale_${Object.keys(AVAILABLE_SCALES)[currentScale]}`
+                selectScale.value = `scale_${Object.keys(AVAILABLE_SCALES)[currentScale]}`
             } else {
-                this.tabControls[1].value = ''
-                this.tabControls[1].placeholder = (this.RESOURCE.scale * 100).toFixed()
+                selectScale.value = ''
+                selectScale.placeholder = (this.RESOURCE.scale * 100).toFixed()
             }
-            this.tabControls[1].enabled = Object.keys(AVAILABLE_SCALES).length > 0
-            this.tabControls[1].version++
-            this.tabControls[2].enabled = this.RESOURCE.scale < 2
-                                          && currentScale < Object.keys(AVAILABLE_SCALES).length - 1
-            this.tabControls[2].version++
+            selectScale.enabled = Object.keys(AVAILABLE_SCALES).length > 0
+            selectScale.version++
+            increaseScale.enabled = this.RESOURCE.scale < 2
+                                    && currentScale < Object.keys(AVAILABLE_SCALES).length - 1
+            increaseScale.version++
             this.controlsLeft.push(...this.tabControls.filter(c => (!c.align || c.align === 'left')))
             this.controlsRight.push(...this.tabControls.filter(c => (c.align === 'right')))
         },

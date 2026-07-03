@@ -127,15 +127,21 @@ export default defineComponent({
             if (!this.RESOURCE || this.RESOURCE.modality !== 'emg') {
                 return
             }
-            if (id === undefined || id === this.emgControls[0].id) {
+            // Look a control up by id rather than array position, so the
+            // descriptor array can be reordered (or grow) without breaking the
+            // per-control build blocks.
+            const control = (controlId: string) => this.emgControls.find(c => c.id === controlId)!
+            const wants = (controlId: string) => id === undefined || id === controlId
+            if (wants('sensitivity')) {
+                const c = control('sensitivity')
                 // Construct sensitivity dropdown.
                 const sensitivity = this.SETTINGS.sensitivity[this.SETTINGS.sensitivityUnit]
                 const scale = sensitivity.scale || 1
                 const availableSensitivities = sensitivity.availableValues
-                this.emgControls[0].options = []
+                c.options = []
                 for (let i=0; i<availableSensitivities.length; i++) {
                     const sens = availableSensitivities[i]
-                    this.emgControls[0].options.push({
+                    c.options.push({
                         id: `sensitivity-${sens}`,
                         enabled: true,
                         label: `${sens < 1000 ? sens : (sens/1000).toFixed(1)}`,
@@ -147,7 +153,7 @@ export default defineComponent({
                 const resourceSensitivity = Math.round(this.RESOURCE.sensitivity/scale)
                 if (!availableSensitivities.includes(resourceSensitivity)) {
                     // Add a "custom" sensitivity option
-                    this.emgControls[0].options.push({
+                    c.options.push({
                         id: `sensitivity-custom`,
                         enabled: false,
                         label: this.$t('*' + resourceSensitivity.toFixed()),
@@ -155,15 +161,16 @@ export default defineComponent({
                     })
                 }
                 if (availableSensitivities.includes(resourceSensitivity)) {
-                    this.emgControls[0].value = `sensitivity-${resourceSensitivity}`
+                    c.value = `sensitivity-${resourceSensitivity}`
                 } else {
-                    this.emgControls[0].value = `sensitivity-custom`
+                    c.value = `sensitivity-custom`
                 }
-                this.emgControls[0].version++
+                c.version++
             }
-            if (id === undefined || id === this.emgControls[1].id) {
+            if (wants('timebase')) {
+                const c = control('timebase')
                 // Construct timebase.
-                this.emgControls[1].groups = []
+                c.groups = []
                 const timebaseTypes = Object.entries(this.SETTINGS.timebase)
                 timebaseTypes.sort((a, b) => a[0].localeCompare(b[0]))
                 for (const [tbName, timebase] of timebaseTypes) {
@@ -183,37 +190,39 @@ export default defineComponent({
                             value: tb,
                         })
                     }
-                    this.emgControls[1].groups.push(tbGroup)
+                    c.groups.push(tbGroup)
                 }
                 if (this.SETTINGS.epochMode.enabled && this.SETTINGS.epochMode.epochLength) {
-                    this.emgControls[1].enabled = false
-                    this.emgControls[1].placeholder = `${this.SETTINGS.epochMode.epochLength}`
-                    this.emgControls[1].value = ''
+                    c.enabled = false
+                    c.placeholder = `${this.SETTINGS.epochMode.epochLength}`
+                    c.value = ''
                 } else {
-                    this.emgControls[1].enabled = true
-                    this.emgControls[1].value = `timebase-${this.RESOURCE.timebaseUnit}-${this.RESOURCE.timebase}`
+                    c.enabled = true
+                    c.value = `timebase-${this.RESOURCE.timebaseUnit}-${this.RESOURCE.timebase}`
                 }
-                this.emgControls[1].version++
+                c.version++
             }
-            if (id === undefined || id === this.emgControls[2].id) {
+            if (wants('inspect')) {
+                const c = control('inspect')
                 const isActive = this.$interface.store.modules.get('emg')!.cursorToolActive === 'inspect'
                 // Inspect tool toggle.
-                this.emgControls[2].value = isActive
-                this.emgControls[2].onclick = [
+                c.value = isActive
+                c.onclick = [
                     'emg.set-cursor-tool',
                     isActive ? null : 'inspect',
                 ]
-                this.emgControls[2].version++
+                c.version++
             }
-            if (id === undefined || id === this.emgControls[3].id) {
+            if (wants('annotations')) {
+                const c = control('annotations')
                 const isActive = this.$interface.store.modules.get('emg')!.openSidebar === 'annotations'
-                // Inspect tool toggle.
-                this.emgControls[3].value = isActive
-                this.emgControls[3].onclick = [
+                // Annotations sidebar toggle.
+                c.value = isActive
+                c.onclick = [
                     'emg.set-open-sidebar',
                     isActive ? null : 'annotations',
                 ]
-                this.emgControls[3].version++
+                c.version++
             }
             if (id === undefined) {
                 this.controlsLeft.push(...this.emgControls.filter(c => (!c.align || c.align === 'left')))

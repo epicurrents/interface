@@ -125,14 +125,21 @@ export default defineComponent({
             if (!this.RESOURCE || this.RESOURCE.modality !== 'htm') {
                 return
             }
+            // Look a control up by id rather than array position, so the
+            // descriptor array can be reordered (or grow) without breaking the
+            // per-control build blocks.
+            const control = (controlId: string) => this.htmControls.find(c => c.id === controlId)!
+            const decreaseScale = control('decrease_scale')
+            const selectScale = control('select_scale')
+            const increaseScale = control('increase_scale')
             const currentScale = Object.values(AVAILABLE_SCALES).findIndex(
                 v => v.toFixed(1) === this.RESOURCE.scale.toFixed(1)
             )
-            this.htmControls[0].enabled = this.RESOURCE.scale > 0.5 && currentScale > 0
-            this.htmControls[0].version++
-            this.htmControls[1].options = []
+            decreaseScale.enabled = this.RESOURCE.scale > 0.5 && currentScale > 0
+            decreaseScale.version++
+            selectScale.options = []
             for (const key in AVAILABLE_SCALES) {
-                this.htmControls[1].options.push({
+                selectScale.options.push({
                     id: `scale_${key}`,
                     active: this.RESOURCE.scale === parseFloat(key) / 100,
                     enabled: true,
@@ -141,16 +148,16 @@ export default defineComponent({
                 })
             }
             if (currentScale > -1) {
-                this.htmControls[1].value = `scale_${Object.keys(AVAILABLE_SCALES)[currentScale]}`
+                selectScale.value = `scale_${Object.keys(AVAILABLE_SCALES)[currentScale]}`
             } else {
-                this.htmControls[1].value = ''
-                this.htmControls[1].placeholder = (this.RESOURCE.scale * 100).toFixed(0)
+                selectScale.value = ''
+                selectScale.placeholder = (this.RESOURCE.scale * 100).toFixed(0)
             }
-            this.htmControls[1].enabled = Object.keys(AVAILABLE_SCALES).length > 0
-            this.htmControls[1].version++
-            this.htmControls[2].enabled = this.RESOURCE.scale < 2
-                                          && currentScale < Object.keys(AVAILABLE_SCALES).length - 1
-            this.htmControls[2].version++
+            selectScale.enabled = Object.keys(AVAILABLE_SCALES).length > 0
+            selectScale.version++
+            increaseScale.enabled = this.RESOURCE.scale < 2
+                                    && currentScale < Object.keys(AVAILABLE_SCALES).length - 1
+            increaseScale.version++
             this.controlsLeft.push(...this.htmControls.filter(c => (!c.align || c.align === 'left')))
             this.controlsRight.push(...this.htmControls.filter(c => (c.align === 'right')))
         },
