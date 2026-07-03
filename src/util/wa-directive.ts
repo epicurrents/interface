@@ -5,11 +5,11 @@
  * @license    Apache-2.0
  */
 
-import type { Directive } from 'vue'
+import { watch, type Directive } from 'vue'
 
 const decimalSep = 1.1.toLocaleString().substring(1, 2)
 
-type ElEntry = { handler: EventListener; eventName: string }
+type ElEntry = { handler: EventListener; eventName: string; stop: () => void }
 const elMap = new WeakMap<HTMLInputElement, ElEntry>()
 
 const setValue = (el: HTMLInputElement, value: unknown) => {
@@ -56,9 +56,16 @@ const waDirective: Directive = {
                 }
             }
         }
-        elMap.set(el, { handler: inputHandler as EventListener, eventName })
         setValue(el, instance[property as keyof typeof instance] ?? '')
         el.addEventListener(eventName, inputHandler as EventListener)
+        // Reflect external changes to the bound property onto the element. The template
+        // references the property only through this directive, not reactively, so a change
+        // would not re-render the component on its own; watch it explicitly.
+        const stop = watch(
+            () => instance[property as keyof typeof instance],
+            (value) => setValue(el, value),
+        )
+        elMap.set(el, { handler: inputHandler as EventListener, eventName, stop })
     },
     updated (el, binding) {
         const instance = binding.instance
@@ -75,6 +82,7 @@ const waDirective: Directive = {
         const entry = elMap.get(el)
         if (entry) {
             el.removeEventListener(entry.eventName, entry.handler)
+            entry.stop()
             elMap.delete(el)
         }
     },

@@ -106,7 +106,7 @@ export default defineComponent({
         // Subscribe to store mutations
         this.unsubscribe = this.$store.subscribe((mutation) => {
             if (mutation.type === 'set-settings-value') {
-                if (mutation.payload.field === this.field) {
+                if (mutation.payload.field === this.field.setting) {
                     if (Array.isArray(mutation.payload.value) && mutation.payload.value.length === 4) {
                         this.color = settingsColorToRgba(mutation.payload.value as SettingsColor)
                     } else if (typeof mutation.payload.value === 'string') {
@@ -123,9 +123,6 @@ export default defineComponent({
                             this.color = value
                         }
                     }
-                    // This is required for the color picker to reflect the new value;
-                    // setting a key to update the component is not enough.
-                    this.$forceUpdate()
                 }
             }
         })

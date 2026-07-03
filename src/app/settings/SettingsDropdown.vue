@@ -96,7 +96,7 @@ export default defineComponent({
         // Subscribe to store mutations
         this.unsubscribe = this.$store.subscribe((mutation) => {
             if (mutation.type === 'set-settings-value') {
-                if (mutation.payload.field === this.field) {
+                if (mutation.payload.field === this.field.setting) {
                     this.selected = mutation.payload.value
                 }
             }
