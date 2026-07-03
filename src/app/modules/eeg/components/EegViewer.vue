@@ -469,6 +469,10 @@ export default defineComponent({
         const unsubscribeActions = ref(null as (() => void) | null)
         // Unsubscribe from interface-scoped settings-change events on the event bus.
         const unsubscribeSettings = ref(null as (() => void) | null)
+        // Unsubscribe from interface-scoped focused-epoch requests on the event bus.
+        const unsubscribeEpochRequest = ref(null as (() => void) | null)
+        // Unsubscribe from interface-scoped step-epoch commands on the event bus.
+        const unsubscribeStepEpoch = ref(null as (() => void) | null)
         // ── Composable setup ─────────────────────────────────────────────────
         const eegCtx = useEegContext(store, 'EegViewer')
         const layout = useBiosignalLayout(
@@ -644,6 +648,8 @@ export default defineComponent({
             // Unsubscribers
             unsubscribe,
             unsubscribeSettings,
+            unsubscribeEpochRequest,
+            unsubscribeStepEpoch,
             unsubscribeActions,
             // Imported methods
             settingsColorToRgba,
@@ -664,6 +670,12 @@ export default defineComponent({
         }
     },
     watch: {
+        // Publish the focused epoch whenever the centered-view geometry changes (entering or
+        // leaving centered display, or paging between epochs). `epochFocusRange` re-evaluates
+        // only on those transitions, so this fires exactly once per real change.
+        epochFocusRange () {
+            this.emitFocusedEpoch()
+        },
         viewerSize (value) {
             if (!this.viewReady && value[0] > 0 && value[1] > 0) {
                 this.viewReady = true
@@ -696,6 +708,14 @@ export default defineComponent({
                 return -1
             }
             return this.plotSelections.indexOf(this.activeSelection)
+        },
+        /**
+         * True while the view shows a focused epoch with faded context (centered semi-epoch
+         * review). Number keys label the focused epoch in this mode, so montage-switch hotkeys
+         * on the same keys are suppressed.
+         */
+        inCenteredEpochReview (): boolean {
+            return this.isInEpochMode && this.SETTINGS.epochMode?.display === 'centered'
         },
         /**
          * Active montage narrowed to `BiosignalCascadeMontage` when it actually is one. Drives
@@ -769,6 +789,42 @@ export default defineComponent({
         },
         Log (event: any) {
             console.log(event)
+        },
+        /**
+         * Publish the currently focused epoch on the interface event bus. Out-of-viewer consumers
+         * (e.g. a project panel that labels epochs) rely on this because the epoch index cannot be
+         * reconstructed from the view start. Emits a null epoch when the view is not in centered
+         * (semi-epoch) display.
+         */
+        emitFocusedEpoch () {
+            const bus = window.__EPICURRENTS__.EVENT_BUS
+            if (!bus) {
+                return
+            }
+            const range = this.epochFocusRange
+            const detail = range
+                ? {
+                    resourceId: this.RESOURCE.id,
+                    epochNumber: this.focusedEpoch,
+                    epochStart: range[0],
+                    epochLength: range[1] - range[0],
+                }
+                : {
+                    resourceId: this.RESOURCE.id,
+                    epochNumber: null,
+                    epochStart: null,
+                    epochLength: null,
+                }
+            bus.dispatchScopedEvent(InterfaceEvents.EPOCH_CHANGED, EventScopes.INTERFACE, 'after', detail)
+        },
+        /** Step the focused epoch in response to an interface-scoped step-epoch command. */
+        handleStepEpoch (e: Event) {
+            const direction = (e as CustomEvent).detail?.direction
+            if (direction === 'backward') {
+                this.goBackward()
+            } else {
+                this.goForward()
+            }
         },
         /**
          * Perform appropriate operations when the active montage changes.
@@ -1078,6 +1134,13 @@ export default defineComponent({
                                 return
                             }
                         }
+                    // In centered semi-epoch review the number keys label epochs (handled by the
+                    // consuming panel), so montage-switch hotkeys on the same keys are suppressed.
+                    } else if (this.inCenteredEpochReview) {
+                        this.hotkeyEvents.montage1 = false
+                        this.hotkeyEvents.montage2 = false
+                        this.hotkeyEvents.montage3 = false
+                        this.hotkeyEvents.montage4 = false
                     // If no modifying hotkey is active, treat this as a default montage selection.
                     } else if (this.isHotkeyMatch('montage1', event)) {
                         this.$store.dispatch('eeg.set-active-montage', this.RESOURCE.montages[0].name)
@@ -1561,6 +1624,26 @@ export default defineComponent({
             EventScopes.INTERFACE,
             'after',
         ) ?? null
+        // Answer focused-epoch requests so a consumer that subscribes after the last change (e.g. a
+        // panel mounting mid-recording) can pull the current epoch instead of waiting for the next
+        // navigation.
+        this.unsubscribeEpochRequest = window.__EPICURRENTS__.EVENT_BUS?.addScopedEventListener(
+            InterfaceEvents.REQUEST_EPOCH,
+            this.emitFocusedEpoch.bind(this),
+            this.ID,
+            EventScopes.INTERFACE,
+            'after',
+        ) ?? null
+        // Let a consumer step the focused epoch (e.g. advance after labelling one).
+        this.unsubscribeStepEpoch = window.__EPICURRENTS__.EVENT_BUS?.addScopedEventListener(
+            InterfaceEvents.STEP_EPOCH,
+            this.handleStepEpoch.bind(this),
+            this.ID,
+            EventScopes.INTERFACE,
+            'after',
+        ) ?? null
+        // Publish the initial epoch for any consumer already listening.
+        this.emitFocusedEpoch()
         this.unsubscribeActions = this.$store.subscribeAction((action) => {
             if (action.type === 'redo-action') {
                 this.redoAction()
@@ -1643,6 +1726,8 @@ export default defineComponent({
         this.unsubscribe?.()
         this.unsubscribeActions?.()
         this.unsubscribeSettings?.()
+        this.unsubscribeEpochRequest?.()
+        this.unsubscribeStepEpoch?.()
         // Cancel possible waiting animation frame
         if (this.nextAnimationFrame) {
             cancelAnimationFrame(this.nextAnimationFrame)
