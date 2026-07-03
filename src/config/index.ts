@@ -14,8 +14,10 @@ import type {
     SettingsValue,
     StateManager,
 } from "@epicurrents/core/types"
+import { dispatchPropertyChange, EventScopes } from "@epicurrents/core"
 import { rgbaToSettingsColor, hexToSettingsColor } from "@epicurrents/core/util"
 import { type PythonInterpreterService } from '@epicurrents/pyodide-service/types'
+import { InterfaceEvents } from '#events/EventTypes'
 import type {
     ApplicationView,
     CommonBiosignalInterfaceSettings,
@@ -289,6 +291,15 @@ const INTERFACE = {
                     local[f] = value
                     Log.debug(`Changed settings field '${field}' value.`, SCOPE)
                     INTERFACE.onPropertyUpdate(field, value, old)
+                    // Broadcast the change on the shared event bus under the interface scope
+                    // so subscribers can react to it.
+                    const bus = window.__EPICURRENTS__.EVENT_BUS
+                    if (bus) {
+                        dispatchPropertyChange(bus, EventScopes.INTERFACE, field, value, old, 'after', {
+                            event: InterfaceEvents.SETTING_CHANGED,
+                            origin: INTERFACE,
+                        })
+                    }
                 }
                 return true
             } else {

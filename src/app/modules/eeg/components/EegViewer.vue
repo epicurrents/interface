@@ -281,6 +281,8 @@ import { useEegContext } from '../'
 import { useStore } from 'vuex'
 import { NUMERIC_ERROR_VALUE } from '@epicurrents/core/util'
 import { NO_POINTER_BUTTON_DOWN } from '#util'
+import { EventScopes } from '@epicurrents/core'
+import { InterfaceEvents } from '#events/EventTypes'
 import { Log } from 'scoped-event-log'
 import type {
     AnnotationEventTemplate,
@@ -465,6 +467,8 @@ export default defineComponent({
         // Unsubscribe from store mutations
         const unsubscribe = ref(null as (() => void) | null)
         const unsubscribeActions = ref(null as (() => void) | null)
+        // Unsubscribe from interface-scoped settings-change events on the event bus.
+        const unsubscribeSettings = ref(null as (() => void) | null)
         // ── Composable setup ─────────────────────────────────────────────────
         const eegCtx = useEegContext(store, 'EegViewer')
         const layout = useBiosignalLayout(
@@ -639,6 +643,7 @@ export default defineComponent({
             pointerLeaveHandlers,
             // Unsubscribers
             unsubscribe,
+            unsubscribeSettings,
             unsubscribeActions,
             // Imported methods
             settingsColorToRgba,
@@ -1271,6 +1276,33 @@ export default defineComponent({
                 this.dataSetupDone = true
             }
         },
+        handleInterfaceSettingChange (e: Event) {
+            const detail = (e as CustomEvent).detail
+            const field = detail?.property as string
+            const value = detail?.newValue
+            if (field === 'eeg.epochMode.enabled' || field === 'eeg.epochMode.epochLength') {
+                this.checkEpochMode()
+                if (value) {
+                    // Epoch mode was enabled or the epoch length was set above zero.
+                    this.applyEpochView()
+                }
+                this.$nextTick(() => {
+                    this.timebaseChanged()
+                })
+            } else if (field === 'eeg.epochMode.onlyFullEpochs' && value) {
+                // Make sure we're not outside the epoch range if full epochs are required.
+                this.applyEpochView()
+            } else if (field === 'eeg.epochMode.display' || field === 'eeg.epochMode.contextEpochs') {
+                // Keep the focused epoch; re-centre the view for the new context and resize
+                // the page (secPerPage) to match.
+                if (this.isInEpochMode) {
+                    this.applyEpochView()
+                }
+                this.$nextTick(() => {
+                    this.timebaseChanged()
+                })
+            }
+        },
         timebaseChanged () {
             // RESOURCE.timebase and RESOURCE.timebaseUnit are routing-aware getters — they
             // surface the active montage's override values when `applyToMontage` is true
@@ -1510,33 +1542,6 @@ export default defineComponent({
                         this.resizeElements()
                     })
                 } else if (
-                    mutation.payload.field === 'eeg.epochMode.enabled'
-                    || mutation.payload.field === 'eeg.epochMode.epochLength'
-                ) {
-                    this.checkEpochMode()
-                    if (mutation.payload.value) {
-                        // Either epoch mode was enable or epoch length was set to over zero.
-                        this.applyEpochView()
-                    }
-                    this.$nextTick(() => {
-                        this.timebaseChanged()
-                    })
-                } else if (mutation.payload.field === 'eeg.epochMode.onlyFullEpochs' && mutation.payload.value) {
-                    // Make sure we're not outside the epoch range if full epochs are required.
-                    this.applyEpochView()
-                } else if (
-                    mutation.payload.field === 'eeg.epochMode.display'
-                    || mutation.payload.field === 'eeg.epochMode.contextEpochs'
-                ) {
-                    // Keep the focused epoch; re-centre the view for the new context and
-                    // resize the page (secPerPage) to match.
-                    if (this.isInEpochMode) {
-                        this.applyEpochView()
-                    }
-                    this.$nextTick(() => {
-                        this.timebaseChanged()
-                    })
-                } else if (
                     mutation.payload.field.startsWith('eeg.majorGrid.') ||
                     mutation.payload.field.startsWith('eeg.minorGrid.')
                 ) {
@@ -1546,6 +1551,16 @@ export default defineComponent({
                 }
             }
         })
+        // Epoch-mode reactivity is driven by the interface-scoped `setting-changed` event that
+        // INTERFACE.setFieldValue emits, so dialog changes and external setFieldValue calls
+        // both reach here.
+        this.unsubscribeSettings = window.__EPICURRENTS__.EVENT_BUS?.addScopedEventListener(
+            InterfaceEvents.SETTING_CHANGED,
+            this.handleInterfaceSettingChange.bind(this),
+            this.ID,
+            EventScopes.INTERFACE,
+            'after',
+        ) ?? null
         this.unsubscribeActions = this.$store.subscribeAction((action) => {
             if (action.type === 'redo-action') {
                 this.redoAction()
@@ -1627,6 +1642,7 @@ export default defineComponent({
         // Unsubscribe from store
         this.unsubscribe?.()
         this.unsubscribeActions?.()
+        this.unsubscribeSettings?.()
         // Cancel possible waiting animation frame
         if (this.nextAnimationFrame) {
             cancelAnimationFrame(this.nextAnimationFrame)
