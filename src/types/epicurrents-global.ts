@@ -26,10 +26,16 @@ export type EpicurrentsGlobal = {
      * banners, etc.). The viewer ships as a UMD bundle with its own embedded
      * `scoped-event-log` singleton, so a host page's `Log.addEventListener`
      * fires on a different registry and never sees viewer events. The viewer
-     * forwards `Log.announce` events to this callback instead; the host
-     * decides how to render. Unset = standalone mode, no host-side rendering.
+     * forwards its callouts to this callback instead; the host decides how to
+     * render. Unset = standalone mode, where the viewer renders its own toast
+     * stack. The `variant` is the toast colour variant so the host can render
+     * success / neutral / warning / danger callouts, not only errors. An array
+     * `message` uses its first line as a bold topic and the rest as the body.
      */
-    announce?: (message: string, level: 'ERROR' | 'WARN') => void
+    announce?: (
+        message: string | string[],
+        variant: 'brand' | 'success' | 'neutral' | 'warning' | 'danger',
+    ) => void
     /**
      * Master event bus for broadcasting application events.
      */

@@ -167,25 +167,8 @@
         ></log-dialog>
         <!-- Welcome dialog -->
         <welcome-dialog :open="!$store.state.INTERFACE.app.disclaimerAccepted"></welcome-dialog>
-        <!-- Toasts are displayed over everything else -->
-        <wa-toast placement="bottom-end">
-            <wa-toast-item v-for="callout in callouts" :key="`callout-${callout.id}`"
-                :duration="10000"
-                size="s"
-                :variant="getCalloutVariant(callout.role)"
-                @wa-after-hide="removeCallout(callout.id)"
-            >
-                <app-icon slot="icon" :name="getCalloutIcon(callout.role)"></app-icon>
-                <div v-for="(line, idx) in callout.message" :key="`callout-${callout.id}-line-${idx}`"
-                    :class="{
-                        'message-topic': callout.message.length > 1 &&  !idx,
-                        'message-text': callout.message.length > 1 &&  idx,
-                    }"
-                >
-                    {{ line }}
-                </div>
-            </wa-toast-item>
-        </wa-toast>
+        <!-- Standalone-viewer toast stack. When embedded, callouts route to the host and this stays empty. -->
+        <toast-stack></toast-stack>
         <!-- File inputs for opening a select file or folder dialog -->
         <input type="file" ref="open-file" style="visibility:hidden" multiple="true" @change="handleFileSelect" />
         <input type="file" ref="open-folder" style="visibility:hidden" webkitdirectory="true" directory="true" multiple="true" @change="handleFolderSelect" />
@@ -225,9 +208,11 @@ import PointerEventsOverlay from '#app/overlays/PointerEventOverlay.vue'
 import ReloadDialog from '#app/overlays/ReloadDialog.vue'
 import SettingsDialog from '#app/settings/SettingsDialog.vue'
 import SplitPanelView from '#app/views/SplitPanelView.vue'
+import ToastStack from '#app/ToastStack.vue'
 import UrlLoaderDialog from '#app/overlays/UrlLoaderDialog.vue'
 import WelcomeDialog from "#app/overlays/WelcomeDialog.vue"
 import { loadAsyncComponent } from '#util'
+import { showToast, type ToastVariant } from '#lib/toast'
 import DefaultInterface from './views/default/DefaultInterface.vue'
 
 // All interface views are async components, so their chunks (including the heavy
@@ -239,8 +224,6 @@ const VIEWS = {
     MediaInterface: loadAsyncComponent(() => import('#app/views/media/MediaInterface.vue')),
     RadiologyInterface: loadAsyncComponent(() => import('#app/views/radiology/RadiologyInterface.vue')),
 } as { [key: string]: ReturnType<typeof loadAsyncComponent> }
-
-let _calloutId = 0
 
 export default defineComponent({
     name: 'App',
@@ -256,6 +239,7 @@ export default defineComponent({
         ReloadDialog,
         SettingsDialog,
         SplitPanelView,
+        ToastStack,
         UrlLoaderDialog,
         WelcomeDialog,
         ...VIEWS,
@@ -263,11 +247,6 @@ export default defineComponent({
     setup () {
         const overrideBrowser = window.location.href.match(/[&?]override(&|$)/) !== null
         const browserValid = ref(overrideBrowser || window.chrome !== undefined)
-        const callouts = ref([] as {
-            id: number
-            message: string[]
-            role: 'confirm' | 'error' | 'warning'
-        }[])
         const dialogs = reactive({
             connector: {
                 open: false,
@@ -307,7 +286,6 @@ export default defineComponent({
         const placeholder = ref<HTMLDivElement>() as Ref<HTMLDivElement>
         return {
             browserValid,
-            callouts,
             dialogs,
             fileContext,
             hotkeyEvents,
@@ -342,11 +320,24 @@ export default defineComponent({
         $t: function (key: string, params = {}, capitalized = false) {
             return T(key, this.$options.name, params, capitalized)
         },
-        addCallout (message: string[], role: 'confirm' | 'error' | 'warning') {
-            this.callouts.push({ id: _calloutId++, message, role })
-        },
-        removeCallout (id: number) {
-            this.callouts = this.callouts.filter(c => c.id !== id)
+        /**
+         * Surface a user-facing callout. When embedded, it routes to the host's toast surface (e.g. the platform's
+         * ToastStack, via `window.__EPICURRENTS__.announce`); standalone, it renders in the viewer's own toast stack.
+         * @param message - Message line(s); multiple lines are joined into a single toast.
+         * @param role - Semantic role, mapped to a toast colour variant.
+         */
+        notify (message: string[], role: 'confirm' | 'error' | 'warning') {
+            const variant: ToastVariant = role === 'confirm'
+                ? 'success'
+                : role === 'error'
+                    ? 'danger'
+                    : 'warning'
+            const text = message.join(' ')
+            if (typeof window.__EPICURRENTS__?.announce === 'function') {
+                window.__EPICURRENTS__.announce(text, variant)
+            } else {
+                showToast(text, variant)
+            }
         },
         /**
          * Add new styles to the shadow root.
@@ -412,38 +403,6 @@ export default defineComponent({
             }
             this.placeholder.style.display = 'none'
             this.app.style.display = 'block'
-        },
-        getCalloutIcon (variant: 'confirm' | 'error' | 'warning'): string {
-            switch (variant) {
-                case 'confirm': {
-                    return 'check-circle'
-                }
-                case 'error': {
-                    return 'exclamation-octagon'
-                }
-                case 'warning': {
-                    return 'exclamation-triangle'
-                }
-                default: {
-                    return 'info-circle'
-                }
-            }
-        },
-        getCalloutVariant (variant: 'confirm' | 'error' | 'warning'): string {
-            switch (variant) {
-                case 'confirm': {
-                    return 'success'
-                }
-                case 'error': {
-                    return 'danger'
-                }
-                case 'warning': {
-                    return 'warning'
-                }
-                default: {
-                    return 'brand'
-                }
-            }
         },
         /**
          * Handle study folder selection.
@@ -792,7 +751,7 @@ export default defineComponent({
         // Listen to some action broadcasts.
         this.$store.subscribeAction((action) => {
             if (action.type === 'display-callout') {
-                this.addCallout(action.payload.message, action.payload.role)
+                this.notify(action.payload.message, action.payload.role)
             }
         })
         // Listen to style update requests.
@@ -824,18 +783,11 @@ export default defineComponent({
         window.addEventListener('keyup', this.handleKeyup, false)
         // Cancel all hotkey events if user leaves the tab.
         window.addEventListener('blur', this.cancelHotkeyEvents, false)
-        // Log.announce events route through `window.__EPICURRENTS__.announce`,
-        // a host-provided callback that owns the toast surface. The viewer
-        // ships as a UMD bundle that embeds its own `scoped-event-log`
-        // singleton, so a Log.addEventListener call on the host side fires
-        // on a different listener registry and never catches viewer-internal
-        // events. The callback hop is the only way the two singletons can
-        // rendezvous without a shared module.
-        //
-        // When no callback is registered (standalone viewer use), nothing
-        // happens — the host is responsible for providing whatever surface
-        // it wants the announce to render on. The viewer's wa-toast element
-        // stays mounted for the `display-callout` Vuex action below.
+        // Announce-flagged Log events surface as toasts through `notify`, which routes to the host's toast surface
+        // (via `window.__EPICURRENTS__.announce`) when embedded, or the viewer's own toast stack when standalone. The
+        // viewer ships as a UMD bundle with its own `scoped-event-log` singleton, so a host-side `Log.addEventListener`
+        // would fire on a different registry and never catch viewer-internal events — the callback hop is the only way
+        // the two singletons rendezvous without a shared module.
         Log.addEventListener(['ERROR', 'WARN'], (level, event) => {
             if (!event?.announce) {
                 return
@@ -843,9 +795,7 @@ export default defineComponent({
             const text = typeof event.announce === 'string'
                 ? event.announce
                 : Array.isArray(event.message) ? event.message.join(' ') : String(event.message ?? '')
-            if (typeof window.__EPICURRENTS__?.announce === 'function') {
-                window.__EPICURRENTS__.announce(text, level as 'ERROR' | 'WARN')
-            }
+            this.notify([text], level === 'ERROR' ? 'error' : 'warning')
         })
         // Bind methods to page elements.
         this.$store.subscribeAction((action) => {
@@ -1148,25 +1098,6 @@ WebAwesome style overrides
     --height: 1.5em;
     --thumb-size: 1em;
 }
-/* WA-TOAST */
-.epicv-app wa-toast {
-    position: absolute;
-    z-index: 9999;
-    --width: 33vw;
-}
-    .epicv-app wa-toast-item::part(button),
-    .epicv-app wa-toast-item::part(content),
-    .epicv-app wa-toast-item::part(icon) {
-        padding: var(--wa-space-m);
-    }
-    .epicv-app wa-toast-item::part(content) {
-        padding-left: 0;
-        padding-right: 0;
-    }
-    .epicv-app wa-toast-item .message-topic {
-        font-weight: bold;
-    }
-
 /*******************
 
 App component styles

@@ -2,7 +2,7 @@
     <wa-icon data-component="app-icon"
         :class="appearance ? `wa-${appearance}` : undefined"
         :label="label"
-        library="epicurrents"
+        :library="library"
         :name="name"
         :style="{
             transform: [
@@ -38,6 +38,11 @@ export default defineComponent({
         /** Accessible label for the icon. */
         label: {
             type: String,
+        },
+        /** WebAwesome icon library to resolve the icon from. Defaults to the app's `epicurrents` library. */
+        library: {
+            type: String,
+            default: 'epicurrents',
         },
         /** Name of the icon to display. Accepts both FA kebab-case and Material snake_case names. */
         name: {
