@@ -47,6 +47,7 @@
         >
             <app-menubar
                 v-on:add-connector="toggleDialog('connector', true, $event)"
+                v-on:export-file="exportFileClick($event)"
                 v-on:external-url="importExternalUrl($event)"
                 v-on:import-dataset="importDatasetClick($event)"
                 v-on:import-file="importFileClick($event)"
@@ -657,6 +658,49 @@ export default defineComponent({
             ;(this.$refs['open-file'] as HTMLInputElement).dispatchEvent(
                 new MouseEvent('click')
             )
+        },
+        /**
+         * Export the active recording via the given exporter context: encode an anonymized EDF, download it, then
+         * offer the original-metadata sidecar as a second download.
+         */
+        async exportFileClick (context: StudyContext) {
+            const exporter = this.$store.state.APP.studyExporters.get(context.protocol)?.loader?.studyExporter as
+                unknown as {
+                    exportActiveResource?: (
+                        options?: { anonymize?: boolean, anonymizeSidecar?: boolean }
+                    ) => Promise<{ edf: ArrayBuffer, sidecar: string, fileName: string } | null>
+                } | undefined
+            if (!exporter?.exportActiveResource) {
+                this.notify([this.$t('No exporter is available for this recording.')], 'error')
+                return
+            }
+            const result = await exporter.exportActiveResource()
+            if (!result) {
+                this.notify([this.$t('Exporting the recording failed.')], 'error')
+                return
+            }
+            this.downloadBlob(result.edf, `${result.fileName}.edf`, 'application/octet-stream')
+            // Offer the sidecar (original subject metadata) as a separate, deliberate second download.
+            const wantSidecar = window.confirm(
+                this.$t('The EDF file has been anonymized. Also download the sidecar file with the original metadata?')
+            )
+            if (wantSidecar) {
+                this.downloadBlob(result.sidecar, `${result.fileName}.edf.json`, 'application/json')
+            }
+        },
+        /**
+         * Trigger a browser download of the given data.
+         */
+        downloadBlob (data: BlobPart, fileName: string, mimeType: string) {
+            const blob = new Blob([data], { type: mimeType })
+            const url = URL.createObjectURL(blob)
+            const anchor = document.createElement('a')
+            anchor.href = url
+            anchor.download = fileName
+            document.body.appendChild(anchor)
+            anchor.click()
+            anchor.remove()
+            URL.revokeObjectURL(url)
         },
         /**
          * Trigger a click on the open folder input to display the folder picker.

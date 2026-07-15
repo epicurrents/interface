@@ -26,7 +26,7 @@ import * as docModule from '@epicurrents/doc-module'
 import * as eegModule from '@epicurrents/eeg-module'
 // Readers / importers.
 import { CsvImporter, CsvWorkerSubstitute } from '@epicurrents/csv-reader'
-import { EdfImporter, EdfWorkerSubstitute } from '@epicurrents/edf-reader'
+import { EdfExporter, EdfImporter, EdfWorkerSubstitute } from '@epicurrents/edf-reader'
 import { DicomImporter, DicomWorkerSubstitute } from '@epicurrents/dicom-reader'
 import { HtmImporter, MarkdownWorkerSubstitute } from '@epicurrents/htm-reader'
 import { PdfImporter } from '@epicurrents/pdf-reader'
@@ -73,6 +73,9 @@ const dcmWorker = () => inlineWorker('DicomWorker', dcmWorkerSrc).create()
 // EDF.
 import edfWorkerSrc from '#root/dist/workers/edf.worker.js?raw'
 const edfWorker = () => inlineWorker('EdfWorker', edfWorkerSrc).create()
+// EDF writer (export) — the exporter runs the heavy encode off the main thread and transfers the bytes back.
+import edfWriterWorkerSrc from '#root/dist/workers/edf.writer.worker.js?raw'
+const edfWriterWorker = () => inlineWorker('EdfWriterWorker', edfWriterWorkerSrc).create()
 // CSV.
 import csvWorkerSrc from '#root/dist/workers/csv.worker.js?raw'
 const csvWorker = () => inlineWorker('CsvWorker', csvWorkerSrc).create()
@@ -130,14 +133,20 @@ const registerAllModules = ({ app, useSAB, setup, registerInterfaceModule }: Set
             }
             return new EdfWorkerSubstitute()
         })
+        // The EDF exporter turns the active recording into an anonymized EDF file plus a metadata sidecar. It runs
+        // the encode in the writer worker (transferring the result back for the main thread to download).
+        const edfExporter = new EdfExporter()
+        edfExporter.setWorkerOverride(edfWriterWorker)
         const eegLoader = new eegModule.EegStudyLoader(
             'EegEdfLoader',
             ['eeg'],
-            edfLoader
+            edfLoader,
+            edfExporter
         )
         app.registerStudyImporter('eeg/edf-file', 'Open EDF file', 'file', eegLoader)
         app.registerStudyImporter('eeg/edf-folder', 'Open EDF files from folder', 'folder', eegLoader)
         app.registerStudyImporter('eeg/edf-url', 'Open EDF from URL', 'url', eegLoader)
+        app.registerStudyExporter('eeg/edf-export', 'Export as anonymized EDF', 'file', eegLoader)
         // DICOM reader is in development stage.
         const dcmLoader = new DicomImporter()
         dcmLoader.setWorkerOverride('eeg', () => {
