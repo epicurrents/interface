@@ -235,6 +235,29 @@ export default defineComponent({
             this.pointerEventHandlers[operation].push(handler)
         },
         /**
+         * Extra time in seconds to request past the view end: one sample period of the slowest
+         * visible channel. A half-open view holds no datapoint at its end, so a line can only be
+         * drawn to the right edge by reading one datapoint beyond it — imperceptible at EEG rates,
+         * but a low-rate channel (e.g. a 1 Hz trend) would otherwise stop up to a whole period
+         * short. The surplus falls outside the view and is dropped by the trace's own allocation.
+         * Zero when no visible channel has a rate. Resolved per call rather than cached, since the
+         * visible channel set changes with the active montage.
+         */
+        edgePadding (): number {
+            const channels = this.RESOURCE.activeMontage?.channels || this.RESOURCE.channels
+            const useRaw = !this.RESOURCE.activeMontage
+            let minRate = 0
+            for (const chan of channels as BiosignalChannel[]) {
+                if (!shouldDisplayChannel(chan, useRaw, this.SETTINGS)) {
+                    continue
+                }
+                if (chan.samplingRate > 0 && (!minRate || chan.samplingRate < minRate)) {
+                    minRate = chan.samplingRate
+                }
+            }
+            return minRate ? 1/minRate : 0
+        },
+        /**
          * Add (or reset) all visible plot traces.
          */
         addTraces () {
@@ -274,7 +297,10 @@ export default defineComponent({
                 const dispPol = chan.displayPolarity || this.SETTINGS.displayPolarity
                 const sensitivity = chan.sensitivity || this.RESOURCE.sensitivity
                 const scale = chan.scale || 0
-                const sigLen = this.viewRange*chan.samplingRate/this.downSampleFactor
+                // Allocate room for every datapoint the view can contain, plus one past its edge:
+                // rounding down would truncate the last in-range sample, and the surplus point lets
+                // the line reach the edge (`initData` gives it its true, clipped x).
+                const sigLen = Math.ceil(this.viewRange*chan.samplingRate/this.downSampleFactor) + 1
                 const samplesPerPx = Math.floor(this.viewRange*chan.samplingRate/this.downSampleFactor)/this.plot.offsetWidth
                 const line = new WebGlPlotTrace(
                     this.wglPlot,
@@ -286,7 +312,8 @@ export default defineComponent({
                     this.downSampleFactor,
                     dispPol,
                     scale,
-                    chan.offset?.baseline || 0
+                    chan.offset?.baseline || 0,
+                    this.viewRange
                 )
                 if (chan.isOriginal) {
                     // Use reduced opacity only when the primary (corrected) channel is also
@@ -849,7 +876,13 @@ export default defineComponent({
             }
             // Y-axis values for each channel
             // TODO: ampScale and sensitivity into trace properties?
-            const range = [this.RESOURCE.viewStart, this.RESOURCE.viewStart + this.viewRange]
+            // Request one sample period of the slowest visible channel past the view end so every
+            // trace has a datapoint at or beyond the edge (see `edgePadding`). Samples outside the
+            // view are positioned by time and clipped by the renderer.
+            const range = [
+                this.RESOURCE.viewStart,
+                this.RESOURCE.viewStart + this.viewRange + this.edgePadding(),
+            ]
             // The method returns raw signals if no montage is set
             this.RESOURCE.getAllSignals(range).then((response) => {
                 if (!this.wglPlot || !response || this.destroyed) {

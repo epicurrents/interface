@@ -212,7 +212,7 @@ export default class WebGlPlot implements BiosignalPlot {
             const segments = line.colorSegments
             if (!segments?.length) {
                 applyColor(line.color)
-                gl.drawArrays(gl.LINE_STRIP, 0, line.length)
+                gl.drawArrays(gl.LINE_STRIP, 0, line.pointCount)
             } else {
                 this._drawSegmentedLine(gl, line, segments, applyColor)
             }
@@ -234,7 +234,7 @@ export default class WebGlPlot implements BiosignalPlot {
         segments: WebGlTraceColorSegment[],
         applyColor: (color: WebGlCompatibleColor) => void,
     ) {
-        const last = line.length - 1
+        const last = line.pointCount - 1
         if (last < 1) {
             return
         }

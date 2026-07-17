@@ -101,10 +101,16 @@ export type BiosignalTrace = {
     color: WebGlCompatibleColor
     /** TODO: What is this value supposed to be used for? */
     coordinates: number
-    /** Signal length, i.e. number of datapoints in the trace. */
+    /** Signal length, i.e. number of datapoints allocated for the trace. */
     length: number
     /** Offset from the bottom of the trace (zero line). */
     offset: number
+    /**
+     * Number of leading datapoints that actually hold signal data (never more than `length`).
+     * The renderer draws only these, so a trace holding fewer samples than it has room for ends
+     * where its data ends instead of trailing a filler line.
+     */
+    pointCount: number
     /**
      * Opacity multiplier for this trace (range 0–1, default 1).
      * Traces with opacity < 1 are drawn first so they appear behind fully opaque traces.
