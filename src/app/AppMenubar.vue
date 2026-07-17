@@ -18,9 +18,10 @@
                 <template v-for="(item, idy) in menu.items"
                     :key="`epicv-${$store.state.APP.id}-menubar-menu-${idx}-item-${idy}`"
                 >
-                    <h2 v-if="item.type === 'header' && item.visible !== false">{{ item.label }}</h2>
+                    <h2 v-if="item.type === 'header' && item.visible !== false" class="menu-subtitle">{{ item.label }}</h2>
                     <wa-divider v-else-if="item.type === 'divider' && item.visible !== false"></wa-divider>
                     <wa-dropdown-item v-else-if="item.type !== 'header' && item.type !== 'divider' && item.visible !== false"
+                        :class="{ 'menu-leaf': item.type !== 'menu' }"
                         :data-keep-open="item.keepOpen ? 'true' : undefined"
                         :disabled="item.enabled === false"
                         :type="item.checkbox ? 'checkbox' : ''"
@@ -119,11 +120,13 @@ import { T } from "#i18n"
 import { MenuItem, MenubarItem } from "#types/interface"
 import { EpiCStore } from "#store"
 
-type FileContext = {
+// The subset of a study importer / exporter context the file menu reads. Kept structural so both
+// the importer and exporter maps (which differ only in their `mode` union) satisfy it.
+type MenuEntryContext = {
     modalities: string[],
-    header: string,
-    headerDone: boolean,
-    groups: { fileExtensions: string[], items: any[], label: string, type: string }[],
+    label: string,
+    mode: string,
+    loader: { studyImporter?: { fileTypes?: unknown, onlyAcceptedTypes?: unknown } | null },
 }
 
 export default defineComponent({
@@ -140,192 +143,105 @@ export default defineComponent({
             label: T('File', 'AppMenubar'),
             open: false,
         }
-        const importerNames = Array.from(APP.studyImporters.keys())
-        const fileContexts = []
-        if (importerNames.some(k => k.includes('doc/'))) {
-            const docCtx = {
-                modalities: ['htm', 'pdf'],
-                header: 'Document',
-                headerDone: false,
-                groups: [],
-            } as FileContext
-            if (importerNames.some(k => k.includes('doc/htm-') || k.includes('/pdf-'))) {
-                docCtx.groups.push({
-                    fileExtensions: ['.md', '.markdown'],
-                    items: [] as any[],
-                    label: T('Open markdown document', 'AppMenubar'),
-                    type: 'menu',
-                })
-            }
-            if (importerNames.some(k => k.includes('doc/pdf-'))) {
-                docCtx.groups.push({
-                    fileExtensions: ['.pdf'],
-                    items: [] as any[],
-                    label: T('Open PDF document', 'AppMenubar'),
-                    type: 'menu',
-                })
-            }
-            fileContexts.push(docCtx)
-        }
-        if (importerNames.some(k => k.includes('acc/'))) {
-            const accCtx = {
-                modalities: ['acc'],
-                header: 'Accelerometry',
-                headerDone: false,
-                groups: [],
-            } as FileContext
-            if (importerNames.some(k => k.includes('acc/csv-'))) {
-                accCtx.groups.push({
-                    fileExtensions: ['.csv', '.tsv'],
-                    items: [] as any[],
-                    label: T('Open ACC from CSV', 'AppMenubar'),
-                    type: 'menu',
-                })
-            }
-            fileContexts.push(accCtx)
-        }
-        if (importerNames.some(k => k.includes('eeg/'))) {
-            const eegCtx = {
-                modalities: ['eeg'],
-                header: 'EEG',
-                headerDone: false,
-                groups: [],
-            } as FileContext
-            if (importerNames.some(k => k.includes('eeg/edf-'))) {
-                eegCtx.groups.push({
-                    fileExtensions: ['.edf'],
-                    items: [] as any[],
-                    label: T('Open EEG from EDF', 'AppMenubar'),
-                    type: 'menu',
-                })
-            }
-            if (importerNames.some(k => k.includes('eeg/dcm-'))) {
-                eegCtx.groups.push({
-                    fileExtensions: ['.dcm'],
-                    items: [] as any[],
-                    label: T('Open EEG from DICOM', 'AppMenubar'),
-                    type: 'menu',
-                })
-            }
-            fileContexts.push(eegCtx)
-        }
-        if (importerNames.some(k => k.includes('emg/'))) {
-            const emgCtx = {
-                modalities: ['emg'],
-                header: 'EMG',
-                headerDone: false,
-                groups: [],
-            } as FileContext
-            if (importerNames.some(k => k.includes('emg/wav-'))) {
-                emgCtx.groups.push({
-                    fileExtensions: ['.wav'],
-                    items: [] as any[],
-                    label: T('Open EMG from WAV', 'AppMenubar'),
-                    type: 'menu',
-                })
-            }
-            fileContexts.push(emgCtx)
-        }
-        if (importerNames.some(k => k.includes('ncs/'))) {
-            const ncsCtx = {
-                modalities: ['ncs'],
-                header: 'NCS',
-                headerDone: false,
-                groups: [],
-            } as FileContext
-            fileContexts.push(ncsCtx)
-        }
-        // Go through available study contexts.
-        for (const fileCtx of fileContexts) {
-            // Add file importers to the file menu.
-            for (const [key, context] of APP.studyImporters) {
-                // Extract all accepted file extensions by this loader.
-                const loaderExtensions = [] as string[]
-                for (const fTypes of (context.loader.studyImporter?.fileTypes || [])) {
-                    for (const aExts of Object.values(fTypes.accept)) {
-                        for (const ext of aExts) {
-                            if (!loaderExtensions.includes(ext)) {
-                                loaderExtensions.push(ext)
-                            }
-                        }
-                    }
-                }
-                if (context.modalities.some(m => fileCtx.modalities.includes(m))) {
-                    if (!fileCtx.headerDone) {
-                        fileMenu.items.push({
-                            label: T(fileCtx.header, 'AppMenubar'),
-                            type: 'header',
-                        })
-                        fileCtx.headerDone = true
-                    }
-                    const ctxGroups = fileCtx.groups.filter(g => g.fileExtensions.some(e => loaderExtensions.includes(e)))
-                    for (const ctxG of ctxGroups) {
-                        // Add loader to each matching loader group.
-                        ctxG.items.push({
-                            id: key,
-                            enabled: true,
-                            closeParent: true,
-                            label: T(context.label, 'AppMenubar'),
-                            onclick: () => emit(
-                                `import-${context.mode}`,
-                                {
-                                    protocol: key,
-                                    types: context.loader.studyImporter?.fileTypes || [],
-                                    excludeAll: context.loader.studyImporter?.onlyAcceptedTypes,
-                                }
-                            ),
-                        })
-                    }
-                    /*
-                    {
-                        label: T('Datasets', 'AppMenubar'),
-                        type: 'header'
-                    },
-                    {
-                        id: 'open-dataset',
-                        enabled: true,
-                        closeParent: true,
-                        label: T('Open folder as a dataset', 'AppMenubar'),
-                        onclick: () => emit('open-dataset'),
-                    },
-                    */
+        // Build the file-open menu from the registered importers and exporters. One section per
+        // modality, ordered alphabetically by the module's full name; the header and the
+        // modality→name mapping come from the interface module's `moduleName` (matched on its
+        // `code`), never a hard-coded list. Within a section the file/folder/URL modes of one format
+        // share an id stem (`eeg/edf-file|folder|url`) and collapse into one submenu, labelled by the
+        // shared prefix of their own labels — so the menu never re-declares a reader's extensions or
+        // labels, and a newly registered module or reader appears here without editing this component.
+        const moduleFullName = (code: string): string => {
+            for (const mod of store.state.INTERFACE.modules.values()) {
+                const moduleName = (mod as { moduleName?: { code?: string, full?: string } }).moduleName
+                if (moduleName?.code === code && moduleName.full) {
+                    return moduleName.full
                 }
             }
-            // Add possible file exporters to context groups.
-            for (const [key, context] of APP.studyExporters) {
-                // Extract all accepted file extensions by this exporter.
-                const exporterExtensions = [] as string[]
-                for (const fTypes of (context.loader.studyImporter?.fileTypes || [])) {
-                    for (const aExts of Object.values(fTypes.accept)) {
-                        for (const ext of aExts) {
-                            if (!exporterExtensions.includes(ext)) {
-                                exporterExtensions.push(ext)
-                            }
-                        }
-                    }
+            return code
+        }
+        // Longest shared prefix of a group's labels, trimmed of a trailing partial word — turns
+        // "Open EDF file" / "…files from folder" / "…from URL" into the submenu label "Open EDF".
+        const sharedLabel = (labels: string[]): string => {
+            let prefix = labels[0] || ''
+            for (const label of labels) {
+                let i = 0
+                while (i < prefix.length && prefix[i] === label[i]) {
+                    i++
                 }
-                if (context.modalities.some(m => fileCtx.modalities.includes(m))) {
-                    const ctxGroups = fileCtx.groups.filter(g => g.fileExtensions.some(e => exporterExtensions.includes(e)))
-                    for (const ctxG of ctxGroups) {
-                        // Add exporter to each matching loader group.
-                        ctxG.items.push({
-                            id: key,
-                            enabled: true,
-                            closeParent: true,
-                            label: T(context.label, 'AppMenubar'),
-                            onclick: () => emit(
-                                `export-${context.mode}`,
-                                {
-                                    protocol: key,
-                                    types: context.loader.studyImporter?.fileTypes || [],
-                                    excludeAll: context.loader.studyImporter?.onlyAcceptedTypes,
-                                }
-                            ),
-                        })
+                prefix = prefix.slice(0, i)
+            }
+            return (prefix.replace(/\s*\S*$/, '') || prefix).trim()
+        }
+        type MenuEntry = { key: string, context: MenuEntryContext, direction: 'import' | 'export' }
+        // Terse label for a mode inside a format submenu, whose own label already names the format:
+        // "From file" / "From folder" / "From URL" (or "To …" for an exporter).
+        const modeLabel = (direction: 'import' | 'export', mode: string): string =>
+            `${direction === 'export' ? 'To' : 'From'} ${mode === 'url' ? 'URL' : mode}`
+        const buildItem = (entry: MenuEntry, label: string) => ({
+            id: entry.key,
+            enabled: true,
+            closeParent: true,
+            label,
+            onclick: () => emit(
+                `${entry.direction}-${entry.context.mode}`,
+                {
+                    protocol: entry.key,
+                    types: entry.context.loader.studyImporter?.fileTypes || [],
+                    excludeAll: entry.context.loader.studyImporter?.onlyAcceptedTypes,
+                }
+            ),
+        })
+        const sections = new Map<string, { full: string, groups: Map<string, MenuEntry[]> }>()
+        const collect = (contexts: Iterable<[string, MenuEntryContext]>, direction: 'import' | 'export') => {
+            for (const [key, context] of contexts) {
+                for (const modality of context.modalities) {
+                    let section = sections.get(modality)
+                    if (!section) {
+                        section = { full: moduleFullName(modality), groups: new Map() }
+                        sections.set(modality, section)
+                    }
+                    // The id stem is the id without its trailing `-<mode>` segment: the modes of one
+                    // format collapse to the same stem; other readers and exporters keep their own.
+                    const stem = key.endsWith(`-${context.mode}`) ? key.slice(0, -(context.mode.length + 1)) : key
+                    const group = section.groups.get(stem)
+                    if (group) {
+                        group.push({ key, context, direction })
+                    } else {
+                        section.groups.set(stem, [{ key, context, direction }])
                     }
                 }
             }
-            fileMenu.items.push(...fileCtx.groups)
+        }
+        collect(APP.studyImporters, 'import')
+        collect(APP.studyExporters, 'export')
+        for (const section of Array.from(sections.values()).sort((a, b) => a.full.localeCompare(b.full))) {
+            const entries = [] as { direction: 'import' | 'export', item: any }[]
+            for (const group of section.groups.values()) {
+                // A group is built from importers or exporters, never both, so its direction is shared.
+                const direction = group[0].direction
+                let item: any
+                if (group.length === 1) {
+                    // A lone mode (or an exporter) has no submenu to carry context: keep its full label.
+                    item = buildItem(group[0], T(group[0].context.label, 'AppMenubar'))
+                } else {
+                    // Collapse the format's modes into a submenu labelled by their shared prefix; the
+                    // items inside can be terse because the submenu label already names the format.
+                    const label = sharedLabel(group.map(entry => T(entry.context.label, 'AppMenubar')))
+                    const items = group.map(entry =>
+                        buildItem(entry, T(modeLabel(entry.direction, entry.context.mode), 'AppMenubar'))
+                    )
+                    item = { type: 'menu', label, items }
+                }
+                entries.push({ direction, item })
+            }
+            // Importers first, exporters last; alphabetical within each.
+            entries.sort((a, b) =>
+                a.direction !== b.direction
+                    ? (a.direction === 'export' ? 1 : -1)
+                    : (a.item.label || '').localeCompare(b.item.label || '')
+            )
+            fileMenu.items.push({ label: T(section.full, 'AppMenubar'), type: 'header' })
+            fileMenu.items.push(...entries.map(entry => entry.item))
         }
         // Connector.
         fileMenu.items.push({
@@ -892,6 +808,14 @@ export default defineComponent({
             font-size: 0.8rem;
             padding: 0 0.7rem;
         }
+            /* Caret-less items (exporters, single-mode readers) and section subtitles get extra
+               right padding so their label ends clearly left of a sibling submenu's caret. */
+            [data-component="app-menubar"] wa-dropdown-item.menu-leaf {
+                padding-right: 2rem;
+            }
+            [data-component="app-menubar"] :deep(h2.menu-subtitle) {
+                padding-right: 2rem;
+            }
             [data-component="app-menubar"] wa-dropdown-item::part(submenu) {
                 /* Reset font size to preserve styles in submenus. */
                 font-size: 1rem;
