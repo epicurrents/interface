@@ -1,14 +1,16 @@
 /**
- * Epicurrents Interface standalone setup script.
+ * Epicurrents Interface standalone setup — EXAMPLE ONLY.
  *
- * The all-in demo / library build: the reference consumer of the framework
- * setup (`setups/index.ts`). It imports every bundled module, importer, service
- * and worker and registers them through the framework's `register` callback,
- * honouring `SETUP.activeModules` so the platform can still subset the build.
+ * This is a worked reference consumer of the framework setup (`setups/index.ts`),
+ * kept for illustration. It is no longer the official build entry: the production
+ * build now originates from the app/builder repo, whose config-driven setup
+ * registers only the active edition's modules. See the builder's `setup/` and its
+ * `vite.config.lib.ts`.
  *
- * For a lean build that registers only what a consumer asks for, consumers write
- * their own small setup against `createEpicurrentsApp` from `setups/index.ts`
- * instead of importing this file (see ROADMAP.md).
+ * As an example it imports every bundled module, importer, service and worker and
+ * registers them through the framework's `register` callback, honouring
+ * `SETUP.activeModules`. A real consumer writes its own small setup against
+ * `createEpicurrentsApp` from `setups/index.ts` rather than importing this file.
  *
  * @package    epicurrents/interface
  * @copyright  2024 Sampsa Lohi

@@ -16,7 +16,7 @@ const EXCLUDE_MODULES = (process.env.EXCLUDE_MODULES || '')
                         .filter(name => name.length > 0)
 const SETUP_PATH = process.env.SETUP
                  ? 'setups/' + process.env.SETUP
-                 : 'setups/standalone'
+                 : 'setups/standalone.example'
 // Only display each excluded module once in the console, even if it is imported multiple times.
 const excludedModules = new Set<string>()
 

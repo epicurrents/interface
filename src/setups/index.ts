@@ -68,8 +68,9 @@
  *   | 'pdf'   | PDF document viewer                  | PDF              | @epicurrents/doc-module, pdf-reader
  *   | pyodide | Python-in-browser analysis service   | —                | @epicurrents/pyodide-service
  *
- * The all-in `setups/standalone.ts` is the reference consumer: it registers
- * every entry above and is the standalone demo / library build.
+ * The all-in `setups/standalone.example.ts` is the reference consumer: it
+ * registers every entry above as a worked example (the official build is the
+ * app/builder's config-driven setup).
  */
 
 // Make sure global is defined.
