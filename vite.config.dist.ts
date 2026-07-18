@@ -48,6 +48,7 @@ export default defineConfig({
                 'modules/eeg': fileURLToPath(new URL('./src/app/modules/eeg/index.ts', import.meta.url)),
                 'modules/acc': fileURLToPath(new URL('./src/app/modules/acc/index.ts', import.meta.url)),
                 'modules/doc': fileURLToPath(new URL('./src/app/modules/doc/index.ts', import.meta.url)),
+                'modules/emg': fileURLToPath(new URL('./src/app/modules/emg/index.ts', import.meta.url)),
                 'modules/pdf': fileURLToPath(new URL('./src/app/modules/pdf/index.ts', import.meta.url)),
             },
             external: (id) => {

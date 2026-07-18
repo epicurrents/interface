@@ -44,6 +44,10 @@
       "import": "./dist/modules/doc.js",
       "default": "./dist/modules/doc.js"
     },
+    "./modules/emg": {
+      "import": "./dist/modules/emg.js",
+      "default": "./dist/modules/emg.js"
+    },
     "./modules/pdf": {
       "import": "./dist/modules/pdf.js",
       "default": "./dist/modules/pdf.js"
