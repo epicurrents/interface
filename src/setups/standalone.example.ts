@@ -41,19 +41,21 @@ import * as interfaceEegModule from '#app/modules/eeg'
 import * as interfacePdfModule from '#app/modules/pdf'
 
 /*
- * Worker bundles are pre-built UMD files copied into `dist/workers/` by
- * `scripts/workers.mjs` (run during `npm run start` / `npm run build:lib`). We
- * load each one as a raw source string via Vite's `?raw` query and hand it to
- * `inlineWorker`, which wraps the string in a Blob URL and spawns a CLASSIC
- * worker. Two reasons not to use Vite's `?worker&inline` instead:
- *   1. Vite's `?worker` spawns module workers in dev regardless of
- *      `worker.format: 'iife'`. The Pyodide worker calls `importScripts(...)`
- *      to load its WASM runtime and module workers don't support that — they
- *      fail with "Module scripts don't support importScripts()".
- *   2. Even when module workers work syntactically, Vite's dev server fetches
- *      the worker source and each transitive import separately — cold paths can
- *      take tens of seconds. The pre-built UMD bundles are self-contained, so
- *      the Blob-URL approach sidesteps both Vite re-processing and the cascade.
+ * Worker bundles are pre-built files copied into `dist/workers/` by
+ * `scripts/workers.mjs` (run during `npm run start` / the build). We load each one
+ * as a raw source string via Vite's `?raw` query and hand it to `inlineWorker`,
+ * which wraps the string in a Blob URL and spawns a Worker.
+ *
+ * Most are CLASSIC workers (self-contained UMD bundles). The Pyodide worker is the
+ * exception — spawned as a MODULE worker (`inlineWorker(..., 'module')`): Pyodide
+ * ≥0.27/314 ships an ES module and dynamic-imports `pyodide.mjs` at runtime, and
+ * classic workers / `importScripts` are no longer supported by Pyodide. Its bundle
+ * is therefore built as ESM (see pyodide-service webpack.config.js).
+ *
+ * We use raw text + Blob URLs rather than Vite's `?worker&inline` because the
+ * pre-built bundles are self-contained: Vite's dev server would otherwise fetch the
+ * worker source and each transitive import separately, and cold paths can take tens
+ * of seconds.
  */
 import memWorkerSrc from '#root/dist/workers/memory-manager.worker.js?raw'
 const memWorker = () => inlineWorker('MemoryManagerWorker', memWorkerSrc).create()
@@ -67,7 +69,8 @@ const mdWorker = () => inlineWorker('MarkdownWorker', mdWorkerSrc).create()
 // Pyodide — the virtual compiler has significant startup cost, so the worker is
 // created once at module load and reused across all overrides that target it.
 import pyoWorkerSrc from '#root/dist/workers/pyodide.worker.js?raw'
-const pwrk = inlineWorker('PyodideWorker', pyoWorkerSrc).create()
+// 'module': Pyodide 314 requires an ES-module worker (it dynamic-imports pyodide.mjs).
+const pwrk = inlineWorker('PyodideWorker', pyoWorkerSrc, 'module').create()
 const pyoWorker = () => pwrk
 // DICOM (for testing purposes).
 import dcmWorkerSrc from '#root/dist/workers/dicom.worker.js?raw'
