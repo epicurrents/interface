@@ -23,6 +23,13 @@
                     <div class="toast-message" :class="{ 'has-topic': toast.topic }" :title="toast.message">
                         {{ toast.message }}
                     </div>
+                    <a
+                        v-if="toast.action"
+                        class="toast-action"
+                        href="#"
+                        role="button"
+                        @click.stop.prevent="runAction(toast)"
+                    >{{ toast.action.label }}</a>
                 </div>
             </wa-callout>
             <div
@@ -45,8 +52,15 @@
 
 import { onMounted } from 'vue'
 import { dismissToast, pauseToast, resumeToast, showToast, toasts } from '../lib/toast'
-import type { ToastVariant } from '../lib/toast'
+import type { Toast, ToastVariant } from '../lib/toast'
 import AppIcon from './AppIcon.vue'
+
+// Run a toast's action link, then dismiss the toast. `@click.stop` on the link keeps this from also firing the
+// toast's outer click-to-dismiss, so the action always runs.
+function runAction (toast: Toast): void {
+    toast.action?.run()
+    dismissToast(toast.id)
+}
 
 const props = withDefaults(
     defineProps<{
@@ -103,7 +117,7 @@ onMounted(() => {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    max-width: min(400px, calc(100vw - 2rem));
+    max-width: min(32rem, calc(100vw - 2rem));
     pointer-events: none;
     position: absolute;
     right: 1rem;
@@ -147,6 +161,17 @@ onMounted(() => {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* Action link (e.g. "Reload") — an inline call-to-action under the message. Underlined and bold so it reads as
+   the actionable element within the otherwise click-to-dismiss toast. */
+.toast-action {
+    color: inherit;
+    cursor: pointer;
+    display: inline-block;
+    font-weight: var(--wa-font-weight-bold, 700);
+    margin-top: 0.25rem;
+    text-decoration: underline;
 }
 
 /* Countdown bar at the bottom edge; pauses on hover in sync with the JS pause/resume timer. */

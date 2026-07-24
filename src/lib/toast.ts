@@ -10,6 +10,14 @@ import { reactive } from 'vue'
 
 export type ToastVariant = 'brand' | 'success' | 'neutral' | 'warning' | 'danger'
 
+/** Optional clickable action rendered as a link inside a toast. */
+export type ToastAction = {
+    /** Link text shown in the toast (e.g. "Reload"). */
+    label: string
+    /** Invoked when the link is clicked; the toast is dismissed afterwards. */
+    run: () => void
+}
+
 export type Toast = {
     id: number
     /** Optional bold topic line shown above the message. */
@@ -17,6 +25,8 @@ export type Toast = {
     message: string
     variant: ToastVariant
     duration: number
+    /** Optional action link. */
+    action?: ToastAction
 }
 
 export const toasts = reactive<Toast[]>([])
@@ -50,18 +60,21 @@ function _startTimer(id: number, ms: number): void {
  *                   as the message body.
  * @param variant  - Toast colour variant (default: 'neutral').
  * @param duration - Override auto-derived duration; 0 = never dismiss.
+ * @param action   - Optional action link rendered inside the toast (e.g. a "Reload" prompt). Pair with
+ *                   `duration: 0` for prompts that must persist until the user acts.
  */
 export function showToast(
     message: string | string[],
     variant: ToastVariant = 'neutral',
     duration?: number,
+    action?: ToastAction,
 ): void {
     const lines = (Array.isArray(message) ? message : [message]).filter(line => line.length)
     const topic = lines.length > 1 ? lines[0] : undefined
     const body = lines.length > 1 ? lines.slice(1).join(' ') : (lines[0] ?? '')
     const id = _nextId++
     const actualDuration = duration ?? computeDuration(topic ? `${topic} ${body}` : body)
-    toasts.push({ id, topic, message: body, variant, duration: actualDuration })
+    toasts.push({ id, topic, message: body, variant, duration: actualDuration, action })
     if (actualDuration > 0) {
         _startTimer(id, actualDuration)
     }
