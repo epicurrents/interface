@@ -276,7 +276,7 @@ export default defineComponent({
             )
             if (!setup) {
                 const err = this.sourceLoc.lastError.value ?? ''
-                if (err.includes('No cached lead field') || err.includes('No lead field')) {
+                if (this.sourceLoc.leadFieldUnavailable.value) {
                     this.statusMessage = this.$t(
                         'Lead field model for {montage} is not available on this server. '
                         + 'Contact an administrator to compute it.',

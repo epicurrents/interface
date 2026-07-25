@@ -17,7 +17,7 @@ import type { BiosignalMontageTemplate, ConfigBiosignalSetup, Modify } from "@ep
 import type { EegResource, EegModuleSettings } from "@epicurrents/eeg-module/types"
 import { schemas, settings } from "./config"
 import { useContext } from "#config"
-import type { EegInterfaceSettings, EegModuleConfiguration } from "./types"
+import type { EegInterfaceSettings, EegModuleConfiguration, LeadFieldProvider } from "./types"
 
 const SCOPE = 'interface-eeg-module'
 
@@ -96,6 +96,7 @@ export const runtime = {
     },
     cursorToolActive: null as string | null,
     isReportOpen: false,
+    leadFieldProvider: null as LeadFieldProvider | null,
     openSidebar: null as string | null,
     selectedTrend: DEFAULT_TREND as string,
     trendVisible: false,
@@ -174,6 +175,11 @@ export const runtime = {
                 settings.extraSetups.push(setup)
             }
         }
+        // Lead-field source for the source-localisation tool. The interface owns no URLs for it;
+        // the host injects a provider and keeps its own fetching strategy to itself.
+        if (config.leadFieldProvider) {
+            runtime.leadFieldProvider = config.leadFieldProvider
+        }
         // Hotkeys.
         if (config.hotkeys?.annotation) {
             settings.hotkeys.annotation = config.hotkeys.annotation
@@ -234,6 +240,9 @@ export const runtime = {
     cursorToolActive: string | null
     /** Is the report currently open. */
     isReportOpen: boolean
+    /** Host-injected source of pre-computed lead fields, null when the host supplied none (in
+     *  which case the source-localisation tool reports itself unavailable). */
+    leadFieldProvider: LeadFieldProvider | null
     /** Name of the sidebar that is currently open, null if no sidebar is open. */
     openSidebar: string | null
     /** Identifier of the currently selected trend type (e.g. `'aeeg'`). Single-selection — the
@@ -276,3 +285,4 @@ export const useEegContext = (store: EpiCStore, component?: string) => {
 }
 
 export { schemas, settings }
+export type { EegModuleConfiguration, LeadFieldData, LeadFieldProvider } from "./types"

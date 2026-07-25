@@ -11,10 +11,10 @@
  *    the Pyodide worker (idempotent; PyodideService caches the loaded state).
  *
  * 2. **Setup** — `fetchAndMatchLeadField(montageName, recordingChannels, opts)`
- *    fetches the pre-computed lead field from the backend, intersects its
- *    channel list with the recording's active channels, and sub-selects the
- *    relevant lead-field rows.  The result is cached at module scope so that
- *    a second call for the same montage is instant.
+ *    obtains the pre-computed lead field from the host, intersects its channel
+ *    list with the recording's active channels, and sub-selects the relevant
+ *    lead-field rows.  The result is cached at module scope so that a second
+ *    call for the same montage is instant.
  *    Then `setup(service, lfSetup, options)` pushes the matched lead field and
  *    method parameters into the Pyodide worker.
  *
@@ -23,12 +23,14 @@
  *    extracts the epoch signals, ships them to Python, and triggers the inverse
  *    solve + canvas render.
  *
- * Lead-field binary download format (mirrors the backend API contract)
- * --------------------------------------------------------------------
- *   bytes 0 … X-LeadField-Bytes-1   →  lead field  (n_ch × n_src × n_orient, float64, little-endian)
- *   bytes X-LeadField-Bytes … end   →  src_pos      (n_src × 3,              float64, little-endian)
- *   shape info in response headers:  X-N-Channels, X-N-Sources, X-N-Orient,
- *                                    X-LeadField-Bytes, X-SrcPos-Bytes
+ * Lead-field source
+ * -----------------
+ * Lead fields are large, deployment-specific artifacts, so this composable does
+ * not fetch them.  The host supplies one through
+ * `SETUP.modules.eeg.leadFieldProvider` and keeps its own URLs, credentials and
+ * caching strategy behind that call; `LeadFieldProvider` in the module's `types`
+ * states the contract and `LeadFieldData` the shape it returns.  With no
+ * provider configured the tool reports itself unavailable.
  *
  * @package    epicurrents/interface
  * @copyright  2026 Sampsa Lohi
@@ -37,6 +39,8 @@
 
 import { ref } from 'vue'
 import sourceLocalizeScript from '#app/modules/eeg/scripts/source_localize.py?raw'
+import { runtime } from '#app/modules/eeg'
+import type { LeadFieldData } from '#app/modules/eeg/types'
 import type { BiosignalResource } from '@epicurrents/core/types'
 import type { PythonInterpreterService, RunCodeResult } from '@epicurrents/pyodide-service/types'
 
@@ -51,18 +55,7 @@ export type SourceLocMethod    = 'sloreta' | 'eloreta' | 'dspm' | 'mne' | 'dipol
 export type SourceLocPlotMode  = '2d' | '3d'
 export type SourceLocPolarity  = 'negative' | 'positive'
 
-/** Raw lead-field data as downloaded from the backend, keyed for the cache. */
-export type LeadFieldData = {
-    /** Full lead-field matrix, shape (nChannels, nSources × nOrient), row-major float64. */
-    leadField:    Float64Array
-    /** Source positions, shape (nSources, 3), in metres, float64. */
-    srcPos:       Float64Array
-    nChannels:    number
-    nSources:     number
-    nOrient:      number
-    /** Channel names in the order the lead-field rows are stored. */
-    channelNames: string[]
-}
+export type { LeadFieldData, LeadFieldProvider } from '#app/modules/eeg/types'
 
 /**
  * Result of `fetchAndMatchLeadField` — the lead-field sub-selected to the
@@ -125,6 +118,8 @@ export function useSourceLocalization () {
     const scriptLoaded  = ref(false)
     const computing     = ref(false)
     const lastError     = ref<string | null>(null)
+    /** Set when the last lead-field lookup came back empty rather than broken. */
+    const leadFieldUnavailable = ref(false)
 
     // ── Phase 1: script loading ───────────────────────────────────────────────
 
@@ -178,6 +173,7 @@ export function useSourceLocalization () {
         const nOrient  = opts.nOrient  ?? 1
         const gridResMm = opts.gridResMm ?? 7.5
         lastError.value = null
+        leadFieldUnavailable.value = false
 
         // Fetch (or retrieve from module cache).
         const lfData = await _fetchLeadField(montageName, nOrient, gridResMm)
@@ -424,6 +420,14 @@ export function useSourceLocalization () {
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
+    /**
+     * Ask the host's lead-field provider for the matrix matching the given
+     * parameters, memoising the result at module scope.
+     *
+     * Sets `lastError` and `leadFieldUnavailable` on failure and returns null;
+     * the two flags let the caller tell "this deployment has no lead field for
+     * that montage" (nothing to retry) from "the lookup broke" (retry may help).
+     */
     async function _fetchLeadField (
         montageName: string,
         nOrient:     number,
@@ -434,52 +438,27 @@ export function useSourceLocalization () {
             return _lfCache.get(cacheKey)!
         }
 
-        // Fetch metadata first — gives channel_names before downloading binary.
-        const metaUrl = `/compute/api/v1/eeg/leadfield/${encodeURIComponent(montageName)}/`
-            + `?n_orient=${nOrient}&grid_resolution_mm=${gridResMm}`
-        const metaResp = await fetch(metaUrl, { credentials: 'same-origin' })
-        if (!metaResp.ok) {
-            lastError.value = metaResp.status === 404
-                ? `No lead field cached for montage '${montageName}' `
-                  + `(n_orient=${nOrient}, ${gridResMm} mm). `
-                  + 'Ask a staff user to compute it via POST /compute/api/v1/eeg/leadfield/.'
-                : `Lead field metadata fetch failed: HTTP ${metaResp.status}.`
-            return null
-        }
-        const meta = await metaResp.json() as {
-            channel_names: string[]
-            n_channels:    number
-            n_sources:     number
-            n_orient:      number
-        }
-
-        // Download binary blob.
-        const dataUrl = `/compute/api/v1/eeg/leadfield/${encodeURIComponent(montageName)}/data/`
-            + `?n_orient=${nOrient}&grid_resolution_mm=${gridResMm}`
-        const dataResp = await fetch(dataUrl, { credentials: 'same-origin' })
-        if (!dataResp.ok) {
-            lastError.value = `Lead field binary download failed: HTTP ${dataResp.status}.`
+        const provider = runtime.leadFieldProvider
+        if (!provider) {
+            lastError.value = 'No lead field provider is configured for this application.'
+            leadFieldUnavailable.value = true
             return null
         }
 
-        const lfBytes  = parseInt(dataResp.headers.get('X-LeadField-Bytes') ?? '0')
-        const nSrc     = parseInt(dataResp.headers.get('X-N-Sources')        ?? '0')
-        const nOri     = parseInt(dataResp.headers.get('X-N-Orient')         ?? '1')
-        const nCh      = parseInt(dataResp.headers.get('X-N-Channels')       ?? '0')
-
-        const buf      = await dataResp.arrayBuffer()
-        // Float64Array views into the same ArrayBuffer — no copy.
-        const leadField = new Float64Array(buf, 0, lfBytes / 8)
-        const srcPos    = new Float64Array(buf, lfBytes, nSrc * 3)
-
-        const data: LeadFieldData = {
-            leadField,
-            srcPos,
-            nChannels:    nCh,
-            nSources:     nSrc,
-            nOrient:      nOri,
-            channelNames: meta.channel_names,
+        let data: LeadFieldData | null
+        try {
+            data = await provider(montageName, nOrient, gridResMm)
+        } catch (e) {
+            lastError.value = `Lead field lookup failed: ${(e as Error).message}`
+            return null
         }
+        if (!data) {
+            lastError.value = `No lead field is available for montage '${montageName}' `
+                            + `(n_orient=${nOrient}, ${gridResMm} mm).`
+            leadFieldUnavailable.value = true
+            return null
+        }
+
         _lfCache.set(cacheKey, data)
         return data
     }
@@ -493,6 +472,12 @@ export function useSourceLocalization () {
         computing,
         /** Last error message, or null. Cleared at the start of each operation. */
         lastError,
+        /**
+         * True when `fetchAndMatchLeadField` failed because this deployment has no lead field for
+         * the requested montage (or no provider at all), as opposed to the lookup breaking.
+         * Retrying will not help; an administrator has to make the lead field available.
+         */
+        leadFieldUnavailable,
         ensureScriptLoaded,
         fetchAndMatchLeadField,
         setup,

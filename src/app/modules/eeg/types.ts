@@ -13,6 +13,46 @@ import type {
 
 export type EegInterfaceSchemas = InterfaceSchema
 
+/**
+ * A lead-field matrix and the source grid it was computed for, as delivered by the host's
+ * {@link LeadFieldProvider}.
+ *
+ * `leadField` and `srcPos` are little-endian float64 in C order; they may be views into the same
+ * `ArrayBuffer` (the interface never writes to either).
+ */
+export type LeadFieldData = {
+    /** Full lead-field matrix, shape (nChannels, nSources × nOrient), row-major float64. */
+    leadField:    Float64Array
+    /** Source positions, shape (nSources, 3), in metres, float64. */
+    srcPos:       Float64Array
+    nChannels:    number
+    nSources:     number
+    nOrient:      number
+    /** Channel names in the order the lead-field rows are stored. */
+    channelNames: string[]
+}
+
+/**
+ * Host-supplied source for pre-computed lead fields, used by the source-localisation tool.
+ *
+ * The interface never knows where lead fields come from — a host injects this through
+ * `SETUP.modules.eeg.leadFieldProvider` and owns every URL, credential and fallback decision
+ * behind it. Without a provider the tool reports source localisation as unavailable.
+ *
+ * Resolve to `null` when no lead field exists for the requested parameters (a normal, expected
+ * outcome the tool surfaces as "not available on this server"). Reject with an `Error` when the
+ * lookup itself failed — a network error, a malformed payload — so the tool can offer a retry.
+ *
+ * @param montageName - MNE standard montage name, e.g. `'standard_1020'`.
+ * @param nOrient - Dipole orientations per source: 1 (fixed) or 3 (free).
+ * @param gridResMm - Source grid spacing in millimetres.
+ */
+export type LeadFieldProvider = (
+    montageName: string,
+    nOrient:     number,
+    gridResMm:   number,
+) => Promise<LeadFieldData | null>
+
 export type EegInterfaceSettings = CommonBiosignalInterfaceSettings & {
     /** Per-trend display settings — keyed by trend id (`aeeg`, `ratio`, `pdbsi`,
      *  future trend types). Display-only knobs live here, not in
@@ -244,6 +284,11 @@ export type EegModuleConfiguration = ModuleConfiguration & {
     }
     extraSetups?: (ConfigBiosignalSetup | string)[]
     hotkeys?: Partial<EegInterfaceSettings['hotkeys']>
+    /**
+     * Source of pre-computed lead fields for the source-localisation tool. Omit it and the tool
+     * reports source localisation as unavailable. See {@link LeadFieldProvider}.
+     */
+    leadFieldProvider?: LeadFieldProvider
     skipDefaultSetups?: boolean
     navigator?: Partial<EegInterfaceSettings['navigator']>
     tools?: Partial<EegInterfaceSettings['tools']>
