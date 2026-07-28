@@ -124,6 +124,7 @@ export default defineComponent({
             /** Active touch start event. */
             touch: null as TouchEvent | null,
         })
+        const pendingViewRedraw = ref(false)
         const updateOnViewRange = ref(false)
         const updatingPlot = ref(false)
         const viewDataAvailable = ref(false)
@@ -161,6 +162,13 @@ export default defineComponent({
              * time the plot is refreshed.
              */
             plotRefreshResolve,
+            /**
+             * True when the last `updateTraces` could not draw because the rolling cache did not
+             * yet cover the requested view. The `signalCacheStatus` listener re-runs
+             * `updateTraces` while this is set, so the view fills in as soon as the slide lands
+             * instead of being blanked to flat lines.
+             */
+            pendingViewRedraw,
             /** Currently active pointer down and/or touch start events. */
             start,
             /**
@@ -885,10 +893,33 @@ export default defineComponent({
             ]
             // The method returns raw signals if no montage is set
             this.RESOURCE.getAllSignals(range).then((response) => {
-                if (!this.wglPlot || !response || this.destroyed) {
-                    // Mostly for TypeScript
+                if (!this.wglPlot || this.destroyed) {
                     return
                 }
+                if (!response) {
+                    // A null response means the reader could not serve the range — typically a
+                    // navigator jump landing in the invalidation window of a non-overlapping slide,
+                    // where the signal ranges are momentarily reset before the reload lands. Keep
+                    // the current frame and mark the view pending so the `signalCacheStatus`
+                    // listener retries once the slide completes, rather than leaving the view stuck.
+                    this.pendingViewRedraw = true
+                    return
+                }
+                // Coverage gate: when the rolling cache has not yet caught up to the requested
+                // view, the montage returns a part with no samples (or one whose end falls short
+                // of the view). Drawing it would blank every trace to a flat line. Instead, keep
+                // the current frame and mark the view as pending — the `signalCacheStatus`
+                // listener re-runs this method as soon as the slide lands, so the traces fill in
+                // rather than flickering to zero. A part covering the view end with at least one
+                // channel of samples is treated as drawable.
+                const viewEnd = this.RESOURCE.viewStart + this.viewRange
+                const hasSamples = response.signals.some((s) => (s?.data?.length ?? 0) > 0)
+                const coversViewEnd = typeof response.end !== 'number' || response.end >= viewEnd - 0.001
+                if (!hasSamples || !coversViewEnd) {
+                    this.pendingViewRedraw = true
+                    return
+                }
+                this.pendingViewRedraw = false
                 // Check that component width hasn't changed
                 if (this.wglPlot.width !== this.plot.offsetWidth) {
                     this.wglPlot.resetWidth()
@@ -1072,32 +1103,36 @@ export default defineComponent({
          * Check if the cache status has changed and if the view data is available.
          */
         const checkCacheState = () => {
-            if (
-                (
-                    this.RESOURCE.signalCacheStatus[0] !== prevStart ||
-                    this.RESOURCE.signalCacheStatus[1] !== prevEnd
-                ) &&
-                (
-                    prevStart > this.RESOURCE.viewStart ||
-                    prevEnd < this.RESOURCE.viewStart + this.viewRange
-                )
-            ) {
-                if (!this.cacheHasData) {
-                    this.cacheHasData = true
-                }
-                prevStart = this.RESOURCE.signalCacheStatus[0]
-                prevEnd = this.RESOURCE.signalCacheStatus[1]
-                if (
-                    !this.viewDataAvailable
-                    && prevStart <= this.RESOURCE.viewStart
-                    && prevEnd >= this.RESOURCE.viewStart + this.viewRange
-                ) {
+            const cacheStart = this.RESOURCE.signalCacheStatus[0]
+            const cacheEnd = this.RESOURCE.signalCacheStatus[1]
+            if (cacheStart === prevStart && cacheEnd === prevEnd) {
+                // No change since the last check.
+                return
+            }
+            prevStart = cacheStart
+            prevEnd = cacheEnd
+            if (!this.cacheHasData && cacheEnd) {
+                this.cacheHasData = true
+            }
+            // Redraw whenever a cache update now covers the current view. This is the single robust
+            // trigger for the "draw after the slide lands" case: a navigator jump (or any viewStart
+            // change) fires `updateTraces` synchronously, before the rolling window has slid, so the
+            // first draw fails and either blanks or sets `pendingViewRedraw`. The slide then loads
+            // asynchronously and updates `signalCacheStatus`. Keying the redraw off coverage — rather
+            // than off `pendingViewRedraw`, whose async assignment can land after this handler has
+            // already run for the same status change — closes that race. `updateTraces`'s own
+            // coverage gate re-checks before drawing, so a spurious call here is harmless.
+            const covers = cacheEnd > 0
+                           && cacheStart <= this.RESOURCE.viewStart
+                           && cacheEnd >= this.RESOURCE.viewStart + this.viewRange
+            if (covers) {
+                if (!this.viewDataAvailable) {
                     this.viewDataAvailable = true
-                    // Allow a beat for the montage worker to reach to cache status change.
-                    this.$nextTick(() => {
-                        this.updateTraces()
-                    })
                 }
+                // Allow a beat for the montage worker to react to the cache status change.
+                this.$nextTick(() => {
+                    this.updateTraces()
+                })
             }
         }
         this.RESOURCE.onPropertyChange('signalCacheStatus', checkCacheState, this.ID)
