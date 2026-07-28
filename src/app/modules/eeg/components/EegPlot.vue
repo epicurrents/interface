@@ -89,7 +89,6 @@ export default defineComponent({
     },
     setup () {
         const store = useStore()
-        const cacheHasData = ref(false)
         const canvas = ref<HTMLCanvasElement>() as Ref<HTMLCanvasElement>
         const clickCountResetTimer = 0
         const consecutiveClickCount = ref(0)
@@ -125,10 +124,8 @@ export default defineComponent({
             /** Active touch start event. */
             touch: null as TouchEvent | null,
         })
-        const pendingViewRedraw = ref(false)
         const updateOnViewRange = ref(false)
         const updatingPlot = ref(false)
-        const viewDataAvailable = ref(false)
         const visibleChannels = ref(0)
         const wheelDelta = ref(0)
         const wglPlot = ref<WebGlPlot | null>(null)
@@ -136,7 +133,6 @@ export default defineComponent({
         // Unsubscribe from store mutations
         const unsubscribe = ref(null as (() => void) | null)
         return {
-            cacheHasData,
             canvas,
             clickCountResetTimer,
             consecutiveClickCount,
@@ -163,13 +159,6 @@ export default defineComponent({
              * time the plot is refreshed.
              */
             plotRefreshResolve,
-            /**
-             * True when the last `updateTraces` could not draw because the rolling cache did not
-             * yet cover the requested view. The `signalCacheStatus` listener re-runs
-             * `updateTraces` while this is set, so the view fills in as soon as the slide lands
-             * instead of being blanked to flat lines.
-             */
-            pendingViewRedraw,
             /** Currently active pointer down and/or touch start events. */
             start,
             /**
@@ -179,8 +168,6 @@ export default defineComponent({
              */
             updateOnViewRange,
             updatingPlot,
-            /** Has the initial view data been available yet. */
-            viewDataAvailable,
             visibleChannels,
             /** How much the pointer wheel has rotated since last triggered event. */
             wheelDelta,
@@ -885,51 +872,42 @@ export default defineComponent({
                 this.RESOURCE.viewStart,
                 this.RESOURCE.viewStart + this.viewRange + this.edgePadding(),
             ]
+            this.updatingPlot = true
             if (!this.RESOURCE.activeMontage) {
                 // Raw mode runs on the view-anchored request protocol: the request either returns
                 // the covered data or an explicit pending handle that resolves once the rolling
                 // window has slid over the view — no cache-status polling, no coverage gate.
-                this.updatingPlot = true
                 this.requestAndDrawTraces(range)
                 return
             }
-            if (!this.cacheHasData || !this.viewDataAvailable) {
-                // Nothing to draw
+            this.requestAndDrawMontageTraces(range)
+        },
+        /**
+         * Montage-mode trace update: drive the rolling window over the view with a coordinated
+         * slide, then read the derived signals — the montage worker computes them under a single
+         * input-lock hold, so the response is either consistent data or an honest empty part.
+         * Empty and failed reads keep the current frame; the next view change or covering cache
+         * update issues a fresh read.
+         */
+        async requestAndDrawMontageTraces (range: number[]) {
+            const covered = await this.RESOURCE.cacheSignals()
+            if (this.destroyed || !this.wglPlot) {
                 return
             }
-            if (!this.updatingPlot) {
-                this.updatingPlot = true
+            if (!covered) {
+                Log.warn(`Sliding the signal cache over the view failed.`, 'EegPlot')
+                return
             }
-            this.RESOURCE.getAllSignals(range).then((response) => {
-                if (!this.wglPlot || this.destroyed) {
-                    return
-                }
-                if (!response) {
-                    // A null response means the reader could not serve the range — typically a
-                    // navigator jump landing in the invalidation window of a non-overlapping slide,
-                    // where the signal ranges are momentarily reset before the reload lands. Keep
-                    // the current frame and mark the view pending so the `signalCacheStatus`
-                    // listener retries once the slide completes, rather than leaving the view stuck.
-                    this.pendingViewRedraw = true
-                    return
-                }
-                // Coverage gate: when the rolling cache has not yet caught up to the requested
-                // view, the montage returns a part with no samples (or one whose end falls short
-                // of the view). Drawing it would blank every trace to a flat line. Instead, keep
-                // the current frame and mark the view as pending — the `signalCacheStatus`
-                // listener re-runs this method as soon as the slide lands, so the traces fill in
-                // rather than flickering to zero. A part covering the view end with at least one
-                // channel of samples is treated as drawable.
-                const viewEnd = this.RESOURCE.viewStart + this.viewRange
-                const hasSamples = response.signals.some((s) => (s?.data?.length ?? 0) > 0)
-                const coversViewEnd = typeof response.end !== 'number' || response.end >= viewEnd - 0.001
-                if (!hasSamples || !coversViewEnd) {
-                    this.pendingViewRedraw = true
-                    return
-                }
-                this.pendingViewRedraw = false
-                this.drawSignalPart(response)
-            })
+            const response = await this.RESOURCE.getAllSignals(range)
+            if (this.destroyed || !this.wglPlot) {
+                return
+            }
+            if (!response || !response.signals.some((s) => (s?.data?.length ?? 0) > 0)) {
+                // Superseded, or the window moved off the view before the read — the newer
+                // update (or the covering cache update) draws in this one's place.
+                return
+            }
+            this.drawSignalPart(response)
         },
         /**
          * Raw-mode trace update via the view-anchored request protocol. Draws the resident part
@@ -1135,67 +1113,33 @@ export default defineComponent({
         })
         // Trigger element resize in parent component once this component is done loading
         this.$emit('loaded')
-        // Wait for the signals to be cached before loading the first frame.
-        let prevStart = this.RESOURCE.signalCacheStatus[0]
-        let prevEnd = this.RESOURCE.signalCacheStatus[1]
-        let cacheAlreadyReady = false
-        if (prevStart !== prevEnd) {
-            this.cacheHasData = true
-            if (prevStart <= this.RESOURCE.viewStart && prevEnd >= this.RESOURCE.viewStart + this.viewRange) {
-                this.viewDataAvailable = true
-                cacheAlreadyReady = true
-            }
-        }
-        /**
-         * Check if the cache status has changed and if the view data is available.
-         */
-        const checkCacheState = () => {
+        // Redraw when a cache update covers the current view. The request protocol answers with
+        // whatever is resident at the moment of the request, so during a progressive (full-load)
+        // caching pass the first frames can be short of the view; each covering status advance
+        // issues one more update until the view is fully drawn. Spurious calls are cheap — a
+        // covered view resolves in a single coordinated read.
+        let prevCacheEnd = -1
+        this.RESOURCE.onPropertyChange('signalCacheStatus', () => {
             const cacheStart = this.RESOURCE.signalCacheStatus[0]
             const cacheEnd = this.RESOURCE.signalCacheStatus[1]
-            if (cacheStart === prevStart && cacheEnd === prevEnd) {
-                // No change since the last check.
+            if (cacheEnd === prevCacheEnd) {
                 return
             }
-            prevStart = cacheStart
-            prevEnd = cacheEnd
-            if (!this.cacheHasData && cacheEnd) {
-                this.cacheHasData = true
-            }
-            // Redraw whenever a cache update now covers the current view. This is the single robust
-            // trigger for the "draw after the slide lands" case: a navigator jump (or any viewStart
-            // change) fires `updateTraces` synchronously, before the rolling window has slid, so the
-            // first draw fails and either blanks or sets `pendingViewRedraw`. The slide then loads
-            // asynchronously and updates `signalCacheStatus`. Keying the redraw off coverage — rather
-            // than off `pendingViewRedraw`, whose async assignment can land after this handler has
-            // already run for the same status change — closes that race. `updateTraces`'s own
-            // coverage gate re-checks before drawing, so a spurious call here is harmless.
+            prevCacheEnd = cacheEnd
             const covers = cacheEnd > 0
                            && cacheStart <= this.RESOURCE.viewStart
                            && cacheEnd >= this.RESOURCE.viewStart + this.viewRange
             if (covers) {
-                if (!this.viewDataAvailable) {
-                    this.viewDataAvailable = true
-                }
-                // Allow a beat for the montage worker to react to the cache status change.
                 this.$nextTick(() => {
                     this.updateTraces()
                 })
             }
-        }
-        this.RESOURCE.onPropertyChange('signalCacheStatus', checkCacheState, this.ID)
+        }, this.ID)
         this.$nextTick(() => {
             this.drawPlot()
-            checkCacheState()
-            // If the cache was already fully populated before this component
-            // mounted, checkCacheState() above detects no change and skips
-            // updateTraces(). Call it explicitly so the plot is not left blank.
-            // This happens with small single-record files (e.g. epoch slices)
-            // that finish loading before the EEG view component is mounted.
-            if (cacheAlreadyReady) {
-                this.$nextTick(() => {
-                    this.updateTraces()
-                })
-            }
+            // Initial frame: the request paths wait for coverage internally, so the first
+            // update can be issued directly regardless of the cache state at mount.
+            this.updateTraces()
         })
         /**
          * Anomation frame processer to update the plot if necessary.

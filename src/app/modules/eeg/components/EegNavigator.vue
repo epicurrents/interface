@@ -400,6 +400,16 @@ export default defineComponent({
                 context.fillStyle = settingsColorToRgba(this.SETTINGS.navigator.interruptionColor)
                 context.fillRect(xPos, 0, xLen, this.navigator.height)
             }
+            // Mask the span beyond the trusted-navigation frontier: on a discontinuous recording
+            // without a complete interruption table the timing of unexplored positions is unknown,
+            // and navigation is clamped to the boundary — the overlay shows why. Browsing forward
+            // at the boundary pushes it onward.
+            const exploredEnd = this.RESOURCE.exploredEnd
+            if (exploredEnd >= 0 && exploredEnd < this.RESOURCE.totalDuration) {
+                const xPos = Math.floor(exploredEnd*durWidth)
+                context.fillStyle = settingsColorToRgba(this.SETTINGS.navigator.offLimitsColor)
+                context.fillRect(xPos, 0, this.navigator.width - xPos, this.navigator.height)
+            }
             // Viewbox is drawn on a separate overlay canvas via drawViewbox().
             this.drawViewbox()
         },
@@ -567,6 +577,7 @@ export default defineComponent({
         // Add property update handlers
         this.RESOURCE.onPropertyChange('activeMontage', this.montageChanged, this.ID)
         this.RESOURCE.onPropertyChange('events', this.drawNavigator, this.ID)
+        this.RESOURCE.onPropertyChange('exploredEnd', this.drawNavigator, this.ID)
         this.RESOURCE.onPropertyChange('interruptions', this.drawNavigator, this.ID)
         // View-position changes only repaint the lightweight viewbox overlay layer (separate
         // canvas) so scrolling doesn't trigger the full navigator redraw.

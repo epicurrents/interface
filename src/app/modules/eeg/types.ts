@@ -183,6 +183,8 @@ export type EegInterfaceSettings = CommonBiosignalInterfaceSettings & {
         interruptionColor: SettingsColor
         loadedColor: SettingsColor
         loadingColor: SettingsColor
+        /** Overlay for the span beyond the trusted-navigation frontier on restricted recordings. */
+        offLimitsColor: SettingsColor
         theme: string
         tickColor: SettingsColor
         viewBoxColor: SettingsColor

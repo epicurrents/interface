@@ -633,6 +633,7 @@ export const settings: EegInterfaceSettings = safeObjectFrom({
         interruptionColor: [0, 0, 0, 0.1] as SettingsColor,
         loadedColor: [0, 0.35, 0, 0.5] as SettingsColor,
         loadingColor: [0.05, 0.20, 0.05, 0.5] as SettingsColor,
+        offLimitsColor: [0.8, 0.1, 0.1, 0.8] as SettingsColor,
         theme: 'default',
         tickColor: [0, 0, 0, 0.2] as SettingsColor,
         viewBoxColor: [1, 0.2, 0.2, 0.25] as SettingsColor,
