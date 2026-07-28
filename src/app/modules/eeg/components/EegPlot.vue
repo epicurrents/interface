@@ -19,7 +19,8 @@
 import { defineComponent, PropType, reactive, Ref, ref } from "vue"
 import { T } from "#i18n"
 import { BiosignalChannel, MontageChannel } from "@epicurrents/core/types"
-import type { BiosignalCascadeMontage } from "@epicurrents/core/types"
+import type { BiosignalCascadeMontage, SignalCachePart } from "@epicurrents/core/types"
+import { Log } from "scoped-event-log"
 import { useStore } from "vuex"
 import { settingsColorToRgba, shouldDisplayChannel } from "@epicurrents/core/util"
 import { NUMERIC_ERROR_VALUE } from "@epicurrents/core/util"
@@ -875,13 +876,6 @@ export default defineComponent({
             if (!this.viewRange) {
                 return
             }
-            if (!this.cacheHasData || !this.viewDataAvailable) {
-                // Nothing to draw
-                return
-            }
-            if (!this.updatingPlot) {
-                this.updatingPlot = true
-            }
             // Y-axis values for each channel
             // TODO: ampScale and sensitivity into trace properties?
             // Request one sample period of the slowest visible channel past the view end so every
@@ -891,7 +885,21 @@ export default defineComponent({
                 this.RESOURCE.viewStart,
                 this.RESOURCE.viewStart + this.viewRange + this.edgePadding(),
             ]
-            // The method returns raw signals if no montage is set
+            if (!this.RESOURCE.activeMontage) {
+                // Raw mode runs on the view-anchored request protocol: the request either returns
+                // the covered data or an explicit pending handle that resolves once the rolling
+                // window has slid over the view — no cache-status polling, no coverage gate.
+                this.updatingPlot = true
+                this.requestAndDrawTraces(range)
+                return
+            }
+            if (!this.cacheHasData || !this.viewDataAvailable) {
+                // Nothing to draw
+                return
+            }
+            if (!this.updatingPlot) {
+                this.updatingPlot = true
+            }
             this.RESOURCE.getAllSignals(range).then((response) => {
                 if (!this.wglPlot || this.destroyed) {
                     return
@@ -920,58 +928,97 @@ export default defineComponent({
                     return
                 }
                 this.pendingViewRedraw = false
-                // Check that component width hasn't changed
-                if (this.wglPlot.width !== this.plot.offsetWidth) {
-                    this.wglPlot.resetWidth()
-                    if (this.pxPerSecond) {
-                        // We also need to recreate the traces to fit the new signal length
-                        this.addTraces()
-                    }
-                }
-                // Either fetch raw signals or montage signals
-                const chans = this.RESOURCE.activeMontage?.channels || this.RESOURCE.channels
-                const useRaw = !this.RESOURCE.activeMontage
-                let i = 0
-                lineloop:
-                for (const line of this.wglPlot.traces) {
-                    while (!shouldDisplayChannel(chans[i], useRaw, this.SETTINGS)) {
-                        i++
-                        if (i === response.signals.length) {
-                            break lineloop
-                        }
-                    }
-                    const chan = chans[i]
-                    if (!chan) {
-                        i++
-                        if (i === response.signals.length) {
-                            break lineloop
-                        }
-                        continue
-                    }
-                    // Update properties if needed
-                    const dispPol = chan.displayPolarity || this.SETTINGS.displayPolarity
-                    if (line.polarity !== dispPol) {
-                        line.polarity = dispPol
-                    }
-                    const scale = chan.scale || 0
-                    if (line.scale !== scale) {
-                        line.scale = scale
-                    }
-                    const sensitivity = (chan as MontageChannel).sensitivity || this.RESOURCE.sensitivity
-                    if (line.sensitivity !== sensitivity) {
-                        line.sensitivity = sensitivity
-                    }
-                    if (!response.signals[i]?.data.length) {
-                        // Error response from worker, set all signals to zero
-                        line.setData(0, this.downSampleFactor)
-                    } else {
-                        line.setData(response.signals[i].data, this.downSampleFactor)
-                    }
-                    i++
-                }
-                this.applyEpochFade()
-                this.newSignalData = true
+                this.drawSignalPart(response)
             })
+        },
+        /**
+         * Raw-mode trace update via the view-anchored request protocol. Draws the resident part
+         * of a partial response immediately, awaits the terminal state, and draws on `ready`.
+         * A superseded request is a no-op (the newer request draws in its place); an error keeps
+         * the current frame — the next view change or cache update issues a fresh request.
+         */
+        async requestAndDrawTraces (range: number[]) {
+            const request = await this.RESOURCE.requestSignals(range)
+            if (this.destroyed || !this.wglPlot) {
+                return
+            }
+            if (request.status === 'partial') {
+                this.drawSignalPart(request.part)
+            }
+            const outcome = request.status === 'pending' || request.status === 'partial'
+                            ? await request.ready
+                            : request
+            if (this.destroyed || !this.wglPlot) {
+                return
+            }
+            if (outcome.status === 'ready') {
+                this.drawSignalPart(outcome.part)
+            } else if (outcome.status === 'error') {
+                Log.warn(
+                    `Signal request for range [${range[0]}, ${range[1]}] failed: ${outcome.reason}`,
+                    'EegPlot'
+                )
+            }
+        },
+        /**
+         * Push one view-anchored signal part to the WebGL traces. Channel arrays are indexed with
+         * sample 0 at the view start; an empty channel array is drawn as an explicit zero line.
+         */
+        drawSignalPart (response: SignalCachePart) {
+            if (!this.wglPlot) {
+                return
+            }
+            // Check that component width hasn't changed
+            if (this.wglPlot.width !== this.plot.offsetWidth) {
+                this.wglPlot.resetWidth()
+                if (this.pxPerSecond) {
+                    // We also need to recreate the traces to fit the new signal length
+                    this.addTraces()
+                }
+            }
+            // Either fetch raw signals or montage signals
+            const chans = this.RESOURCE.activeMontage?.channels || this.RESOURCE.channels
+            const useRaw = !this.RESOURCE.activeMontage
+            let i = 0
+            lineloop:
+            for (const line of this.wglPlot.traces) {
+                while (!shouldDisplayChannel(chans[i], useRaw, this.SETTINGS)) {
+                    i++
+                    if (i === response.signals.length) {
+                        break lineloop
+                    }
+                }
+                const chan = chans[i]
+                if (!chan) {
+                    i++
+                    if (i === response.signals.length) {
+                        break lineloop
+                    }
+                    continue
+                }
+                // Update properties if needed
+                const dispPol = chan.displayPolarity || this.SETTINGS.displayPolarity
+                if (line.polarity !== dispPol) {
+                    line.polarity = dispPol
+                }
+                const scale = chan.scale || 0
+                if (line.scale !== scale) {
+                    line.scale = scale
+                }
+                const sensitivity = (chan as MontageChannel).sensitivity || this.RESOURCE.sensitivity
+                if (line.sensitivity !== sensitivity) {
+                    line.sensitivity = sensitivity
+                }
+                if (!response.signals[i]?.data.length) {
+                    // Error response from worker, set all signals to zero
+                    line.setData(0, this.downSampleFactor)
+                } else {
+                    line.setData(response.signals[i].data, this.downSampleFactor)
+                }
+                i++
+            }
+            this.applyEpochFade()
+            this.newSignalData = true
         },
         /**
          * Fade each trace outside the focused epoch when centered (semi-epoch) display is
