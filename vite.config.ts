@@ -12,7 +12,7 @@ DotenvConfig()
 
 process.env.SETUP_PATH = process.env.SETUP
                        ? 'setups/' + process.env.SETUP
-                       : 'setups/standalone.example'
+                       : 'setups/full.example'
 process.env.ASSET_PATH = process.env.ASSET_PATH || '/'
 // Modality allowlist (see vite.config.lib.ts). Empty means include every module.
 const INCLUDE_MODULES = (process.env.INCLUDE_MODULES || '').split(',')
