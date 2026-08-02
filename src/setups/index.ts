@@ -125,11 +125,15 @@ const SETUP: Required<ApplicationInterfaceConfig> = Object.assign(
 // Create the global Epicurrents object if not available.
 if (typeof window.__EPICURRENTS__ === 'undefined') {
     window.__EPICURRENTS__ = {
+        APP: null,
         EVENT_BUS: null,
         RUNTIME: null,
         SETUP: SETUP,
     }
 } else {
+    if (typeof window.__EPICURRENTS__.APP === 'undefined') {
+        window.__EPICURRENTS__.APP = null
+    }
     if (typeof window.__EPICURRENTS__.EVENT_BUS === 'undefined') {
         window.__EPICURRENTS__.EVENT_BUS = null
     }

@@ -1,19 +1,19 @@
 /**
- * Ambient global declarations for the viewer (`window.__EPICURRENTS__` plus the
- * Chrome / FileSystemAPI surface). Split out from {@link ./globals.d.ts} so
- * host pages that `import type { EpicurrentsGlobal } from './epicurrents-global'`
- * — which transitively reaches globals.d.ts via `ApplicationInterfaceConfig`
- * — don't pull in this ambient block. Pulling it in causes declaration
- * merging on the host's own `Window.__EPICURRENTS__` declaration and clashes
- * the host's looser `SETUP: Record<string, unknown>` against the viewer's
- * strict `SETUP: ApplicationInterfaceConfig`.
+ * Ambient global declarations for the viewer. The `window.__EPICURRENTS__` slot itself is declared by
+ * `@epicurrents/core` (and the interface's `announce` field is merged in by {@link ./core-global-augment}), so
+ * this file only declares the bare `__EPICURRENTS__` alias for non-`window` access and the Chrome /
+ * FileSystemAPI surface the viewer relies on.
+ *
+ * Kept separate from {@link ./globals.d.ts} so host pages that `import type { EpicurrentsGlobal }` from
+ * {@link ./epicurrents-global} don't pull in this ambient block; pulling it in would declaration-merge onto a
+ * host's own `Window` declarations.
  *
  * @package    epicurrents/interface
  * @copyright  2026 Sampsa Lohi
  * @license    Apache-2.0
  */
 
-import type { EpicurrentsGlobal } from './epicurrents-global'
+import type { EpicurrentsGlobal as ViewerEpicurrentsGlobal } from './epicurrents-global'
 
 /* eslint-disable */
 
@@ -41,14 +41,11 @@ type SaveFileOptions = {
 
 declare global {
     /**
-     * Epicurrents global properties.
-     * - EVENT_BUS: Master event bus for broadcasting application events.
-     * - RUNTIME: Runtime state manager of the initiated application.
-     * - SETUP: Initial setup properties.
+     * Bare (non-`window`) alias of the global. `@epicurrents/core` declares `Window.__EPICURRENTS__`; this
+     * covers code that reads `__EPICURRENTS__` without the `window.` prefix.
      */
-    declare const __EPICURRENTS__: EpicurrentsGlobal
+    const __EPICURRENTS__: ViewerEpicurrentsGlobal
     interface Window {
-        __EPICURRENTS__: EpicurrentsGlobal
         chrome: unknown
         global: Window
         PUBLIC_URL: string
