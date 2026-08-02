@@ -10,7 +10,11 @@ import { viteSingleFile } from 'vite-plugin-singlefile'
 DotenvConfig()
 
 process.env.ASSET_PATH = process.env.ASSET_PATH || '/static/'
-const EXCLUDE_MODULES = (process.env.EXCLUDE_MODULES || '')
+// Modality allowlist: names of the `src/app/modules/<name>/` UI dirs to include in the build. Empty means
+// include every module (a full build); set e.g. `INCLUDE_MODULES=eeg` for a targeted distro and every other
+// modality UI is externalised out of the bundle. Inverted from the former EXCLUDE_MODULES blocklist, which grew
+// unwieldy as modules were added.
+const INCLUDE_MODULES = (process.env.INCLUDE_MODULES || '')
                         .split(',')
                         .map(name => name.trim())
                         .filter(name => name.length > 0)
@@ -33,14 +37,15 @@ export default defineConfig({
         outDir: join('build', 'lib'),
         rollupOptions: {
             external: (id) => {
-                for (const moduleName of EXCLUDE_MODULES) {
-                    if (id.includes(`/app/modules/${moduleName}/`)) {
+                if (INCLUDE_MODULES.length) {
+                    const match = id.match(/\/app\/modules\/([^/]+)\//)
+                    if (match && !INCLUDE_MODULES.includes(match[1])) {
                         if (!excludedModules.has(id)) {
                             if (excludedModules.size === 0) {
                                 // Finish the 'transforming...' log line to get messages on their own lines.
                                 console.debug('')
                             }
-                            console.warn(`✖ Excluding module '${moduleName}' from build.`)
+                            console.warn(`✖ Excluding module '${match[1]}' from build (not in INCLUDE_MODULES).`)
                             excludedModules.add(id)
                         }
                         return true

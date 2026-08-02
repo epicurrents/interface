@@ -14,7 +14,8 @@ process.env.SETUP_PATH = process.env.SETUP
                        ? 'setups/' + process.env.SETUP
                        : 'setups/standalone.example'
 process.env.ASSET_PATH = process.env.ASSET_PATH || '/'
-const EXCLUDE_MODULES = (process.env.EXCLUDE_MODULES || '').split(',')
+// Modality allowlist (see vite.config.lib.ts). Empty means include every module.
+const INCLUDE_MODULES = (process.env.INCLUDE_MODULES || '').split(',')
                                                            .map(name => name.trim())
                                                            .filter(name => name.length > 0)
 // Only display each excluded module once in the console, even if it is imported multiple times.
@@ -49,16 +50,18 @@ export default defineConfig({
             // make sure to externalize deps that shouldn't be bundled
             // into your library
             external: (id) => {
-                for (const moduleName of EXCLUDE_MODULES) {
-                    if (id === `vue` || id.startsWith(`vue/`)) {
-                        return true
-                    } else if (id.includes(`/app/modules/${moduleName}/`)) {
+                if (id === `vue` || id.startsWith(`vue/`)) {
+                    return true
+                }
+                if (INCLUDE_MODULES.length) {
+                    const match = id.match(/\/app\/modules\/([^/]+)\//)
+                    if (match && !INCLUDE_MODULES.includes(match[1])) {
                         if (!excludedModules.has(id)) {
                             if (excludedModules.size === 0) {
                                 // Finish the 'transforming...' log line to get messages on their own lines.
                                 console.debug('')
                             }
-                            console.warn(`✖ Excluding module '${moduleName}' from build.`)
+                            console.warn(`✖ Excluding module '${match[1]}' from build (not in INCLUDE_MODULES).`)
                             excludedModules.add(id)
                         }
                         return true
