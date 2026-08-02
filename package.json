@@ -7,25 +7,16 @@
     "build": "node scripts/typecheck.mjs && vite build --config vite.config.dist.ts",
     "build:app": "node scripts/typecheck.mjs && vite build --config vite.config.app.ts",
     "build:custom": "node scripts/typecheck.mjs && vite build --config vite.config.custom.ts",
-    "typecheck": "node scripts/typecheck.mjs",
     "build:dist": "vite build --config vite.config.dist.ts",
-    "copy:umd": "cp node_modules/@epicurrents/core/umd/* public/epicurrents/ && cp node_modules/@epicurrents/edf-reader/umd/* public/edf-reader/ && cp node_modules/@epicurrents/pyodide-service/umd/* public/pyodide-service/",
-    "copy:workers": "node scripts/workers.mjs",
-    "deps:build": "node scripts/build.mjs",
-    "deps:clean": "node scripts/clean.mjs",
-    "deps:init": "node scripts/init.mjs",
-    "deps:install": "node scripts/install.mjs",
-    "deps:prepare": "npm run deps:update && npm run deps:install && npm run deps:clean && npm run deps:build",
-    "deps:update": "node scripts/update.mjs",
     "dev": "vite --force",
     "lint": "npm run lint:src",
     "lint:src": "eslint src",
     "prepack": "npm run build",
     "preview": "vite preview",
-    "setup": "node scripts/setup.mjs",
-    "start": "npm run copy:workers && vite --force",
+    "start": "vite --force",
     "test": "npm run test:unit",
-    "test:unit": "jest --coverage --verbose --runInBand"
+    "test:unit": "jest --coverage --verbose --runInBand",
+    "typecheck": "node scripts/typecheck.mjs"
   },
   "exports": {
     ".": {

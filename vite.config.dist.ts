@@ -25,8 +25,8 @@ DotenvConfig()
 export default defineConfig({
     mode: 'production',
     build: {
-        // dist/ also holds the pre-built worker bundles (scripts/workers.mjs) and
-        // copied vendor assets — never wipe them when emitting the package output.
+        // dist/ is the published package output; keep emptyOutDir off so a rebuild does not wipe any
+        // co-located assets placed here outside the vite build.
         outDir: 'dist',
         emptyOutDir: false,
         // Ship readable source; consumers minify in their own application build.
