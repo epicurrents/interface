@@ -4,9 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "build": "vue-tsc && vite build --config vite.config.lib.ts",
-    "build:app": "vue-tsc && vite build --config vite.config.app.ts",
-    "build:custom": "vue-tsc && vite build --config vite.config.custom.ts",
+    "build": "node scripts/typecheck.mjs && vite build --config vite.config.lib.ts",
+    "build:app": "node scripts/typecheck.mjs && vite build --config vite.config.app.ts",
+    "build:custom": "node scripts/typecheck.mjs && vite build --config vite.config.custom.ts",
+    "typecheck": "node scripts/typecheck.mjs",
     "build:dist": "vite build --config vite.config.dist.ts",
     "copy:umd": "cp node_modules/@epicurrents/core/umd/* public/epicurrents/ && cp node_modules/@epicurrents/edf-reader/umd/* public/edf-reader/ && cp node_modules/@epicurrents/pyodide-service/umd/* public/pyodide-service/",
     "copy:workers": "node scripts/workers.mjs",
