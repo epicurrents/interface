@@ -14,7 +14,7 @@ process.env.SETUP_PATH = process.env.SETUP
                        ? 'setups/' + process.env.SETUP
                        : 'setups/full.example'
 process.env.ASSET_PATH = process.env.ASSET_PATH || '/'
-// Modality allowlist (see vite.config.lib.ts). Empty means include every module.
+// Modality allowlist (see vite.config.app.ts). Empty means include every module.
 const INCLUDE_MODULES = (process.env.INCLUDE_MODULES || '').split(',')
                                                            .map(name => name.trim())
                                                            .filter(name => name.length > 0)

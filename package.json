@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "build": "node scripts/typecheck.mjs && vite build --config vite.config.lib.ts",
+    "build": "node scripts/typecheck.mjs && vite build --config vite.config.dist.ts",
     "build:app": "node scripts/typecheck.mjs && vite build --config vite.config.app.ts",
     "build:custom": "node scripts/typecheck.mjs && vite build --config vite.config.custom.ts",
     "typecheck": "node scripts/typecheck.mjs",

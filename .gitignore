@@ -24,7 +24,6 @@ package-lock.json
 /src/setups/*
 vite.config.*.ts
 !vite.config.app.ts
-!vite.config.lib.ts
 !vite.config.dist.ts
 !/src/setups/index.ts
 !/src/setups/standalone.ts

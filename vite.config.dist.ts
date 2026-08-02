@@ -17,10 +17,10 @@ DotenvConfig()
  * …) without pulling the others into its bundle. Code shared between entries is
  * emitted once as a shared chunk; third-party dependencies are externalized.
  *
- * This is distinct from the two app/demo builds:
- *   - `vite.config.lib.ts`  — single all-in UMD bundle (`build/lib`), `setups/full.example`.
+ * This is distinct from the app build:
  *   - `vite.config.app.ts`  — the standalone web app (`build/app`).
- * Those bundle everything; this one is the consumer-facing, splittable package.
+ * The all-in single-file lib is produced by the builder per edition (from this package's `dist/`),
+ * not in the interface. This build is the consumer-facing, splittable package.
  */
 export default defineConfig({
     mode: 'production',
