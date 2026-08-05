@@ -28,6 +28,7 @@
             ></canvas>
             <navigator-timeline
                 :duration="RESOURCE.totalDuration"
+                :relativeTime="relativeTime"
                 :startTime="getTimeAtPosition(0)"
                 :stepSize="timelineStepSize"
                 :width="canvasWidth"
@@ -158,19 +159,24 @@ export default defineComponent({
         },
     },
     setup () {
+        const context = useEegContext(useStore(), 'EegNavigator')
         const highlights = ref([] as { color: SettingsColor, highlights: [number, number][], interval: number }[])
         const navigator = ref<HTMLCanvasElement>() as Ref<HTMLCanvasElement>
         const viewbox = ref<HTMLCanvasElement>() as Ref<HTMLCanvasElement>
+        // The settings objects are deliberately not reactive, so the time mode is mirrored into a
+        // local ref that the template and the drawing methods can depend on.
+        const relativeTime = ref(context.SETTINGS.navigator.relativeTime)
         const timeValue = reactive([] as string[])
         const unsubscribe = ref(null as (() => void) | null)
         return {
             highlights,
             navigator,
+            relativeTime,
             timeValue,
             viewbox,
             // Unsubscribers
             unsubscribe,
-            ...useEegContext(useStore(), 'EegNavigator'),
+            ...context,
         }
     },
     computed: {
@@ -221,6 +227,10 @@ export default defineComponent({
             this.$nextTick(() => {
                 this.drawNavigator()
             })
+        },
+        relativeTime () {
+            this.parseCursorTime()
+            this.drawNavigator()
         },
         selectionBound () {
             this.drawNavigator()
@@ -445,7 +455,15 @@ export default defineComponent({
                 this.canvasHeight
             )
         },
+        /**
+         * Get the time to display for a `position` given as seconds from the recording start.
+         * Returns the position unchanged in relative-time mode, and the recording's wall-clock
+         * time of day at that position otherwise.
+         */
         getTimeAtPosition (position: number) {
+            if (this.relativeTime) {
+                return position
+            }
             const startSeconds = this.RESOURCE.startTime ? + this.RESOURCE.startTime.getHours()*60*60
                                                             + this.RESOURCE.startTime.getMinutes()*60
                                                             + this.RESOURCE.startTime.getSeconds()
@@ -471,7 +489,12 @@ export default defineComponent({
             this.RESOURCE.activeMontage?.onPropertyChange('highlights', this.updateHighlights, this.ID)
             this.updateHighlights()
         },
-        parseCursorTime (relative = false) {
+        /**
+         * Format the cursor read-out into `timeValue`. Relative time is rendered at millisecond
+         * precision, absolute time at tenths of a second.
+         */
+        parseCursorTime () {
+            const relative = this.relativeTime
             let time = [] as string[]
             const timeParts = secondsToTimeString(
                                     Math.floor(relative ? this.cursorPos : this.getTimeAtPosition(this.cursorPos)),
@@ -494,6 +517,9 @@ export default defineComponent({
             fraction += this.cursorPos.toFixed(fractionDigits).split('.')[1]
             this.timeValue.splice(0)
             this.timeValue.push(fraction, ...time)
+        },
+        relativeTimeChanged () {
+            this.relativeTime = this.SETTINGS.navigator.relativeTime
         },
         toggleControls () {
             this.$emit('toggle-controls', !this.controlsOpen)
@@ -584,6 +610,7 @@ export default defineComponent({
         this.RESOURCE.onPropertyChange('displayViewStart', this.drawViewbox, this.ID)
         this.RESOURCE.onPropertyChange('signalCacheStatus', this.drawNavigator, this.ID)
         this.RESOURCE.activeMontage?.onPropertyChange('highlights', this.updateHighlights, this.ID)
+        this.addPropertyChangeHandler('eeg.navigator.relativeTime', this.relativeTimeChanged)
         // Trigger element resize in parent component once this component is done loading
         this.$emit('loaded')
         // Trigger first navigator draw
@@ -594,6 +621,7 @@ export default defineComponent({
     },
     beforeUnmount () {
         // Remove property update handlers
+        this.removePropertyChangeHandlers()
         this.RESOURCE.removeAllEventListeners(this.ID)
         this.RESOURCE.activeMontage?.removeAllEventListeners(this.ID)
         this.$store.state.SERVICES.get('ONNX')?.removeAllEventListeners(this.ID)

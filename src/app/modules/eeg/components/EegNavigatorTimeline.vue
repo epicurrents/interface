@@ -17,6 +17,11 @@ export default defineComponent({
             type: Number,
             required: true,
         },
+        /** Whether the labels display time elapsed from the recording start instead of time of day. */
+        relativeTime: {
+            type: Boolean,
+            default: false,
+        },
         startTime: {
             type: Number,
             default: 0,
@@ -37,6 +42,18 @@ export default defineComponent({
         }
     },
     watch: {
+        duration () {
+            this.printLabels()
+        },
+        relativeTime () {
+            this.printLabels()
+        },
+        startTime () {
+            this.printLabels()
+        },
+        stepSize () {
+            this.printLabels()
+        },
         width () {
             this.printLabels()
         },
@@ -70,18 +87,11 @@ export default defineComponent({
                 const secs: number = absTime%60
                 const mins: number = ((absTime-secs)%3600)/60
                 const hrs: number = ((absTime-mins*60-secs)%86400)/3600
-                let timestamp = ''
-                if (hrs) {
-                    timestamp = hrs.toString() + ':' + mins.toString().padStart(2, '0')
-                } else if (this.startTime) {
-                    // Print a leading zero hour always if displaying absolute time.
-                    timestamp = '0:' + mins.toString().padStart(2, '0')
-                } else {
-                    // Relative time: mm without a leading hour slot — seconds appended below.
-                    timestamp = mins.toString().padStart(2, '0')
-                }
-                // Only display seconds if startTime is zero (displaying relative time) and duration less than an hour.
-                if (!this.startTime && this.duration < 3600) {
+                // The hour slot is always printed, so label width does not jump when the recording
+                // crosses the first full hour.
+                let timestamp = hrs.toString() + ':' + mins.toString().padStart(2, '0')
+                // Only display seconds when using relative time and duration is less than an hour.
+                if (this.relativeTime && this.duration < 3600) {
                     timestamp += ':' + secs.toString().padStart(2, '0')
                 }
                 const label = document.createElement('div')
