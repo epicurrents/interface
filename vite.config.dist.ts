@@ -31,6 +31,14 @@ export default defineConfig({
         emptyOutDir: false,
         // Ship readable source; consumers minify in their own application build.
         minify: false,
+        // No preload directives in the published package. Vite otherwise bakes a table of this
+        // build's own `chunks/*.js` filenames into each dynamic import, and a consumer that
+        // re-bundles the package — the builder's single-file edition does exactly that — inlines
+        // the chunk modules while the table survives as string literals. The lazy import then
+        // fetches sibling files that its own output directory never contained, and rejects. Where
+        // to preload is an application-level decision anyway, made against the consumer's own
+        // chunk layout rather than this one.
+        modulePreload: false,
         target: 'esnext',
         // Bundle all component styles into a single stylesheet the consumer
         // imports once (`@epicurrents/interface/style.css`) — see assetFileNames.
