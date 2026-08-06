@@ -432,9 +432,10 @@ export const useContext = (store: Pick<EpiCStore, "state">, context: string, com
         /** Is memory manager and SharedArrayBuffer support available. */
         usesMemoryManager: window.__EPICURRENTS__?.RUNTIME?.SETTINGS?.app?.useMemoryManager || false as boolean,
     }
+    const contextId = `${component || 'Component'}-${store.state.APP.runningId++}`
     return {
         /** A unique id created for this method call. */
-        ID: `${component || 'Component'}-${store.state.APP.runningId++}`,
+        ID: contextId,
         /** Epicurrents runtime state manager. */
         RUNTIME: window.__EPICURRENTS__.RUNTIME as StateManager,
         /** Possibe Pyodide service properties. */
@@ -442,6 +443,21 @@ export const useContext = (store: Pick<EpiCStore, "state">, context: string, com
         SCOPE: context,
         SCHEMAS: activeSchemas,
         SETTINGS: settingsProxy as AppSettings['app'] & { [key: string]: unknown },
+        /**
+         * Utility method to watch the given settings `field` for changes, in the interface settings or,
+         * if the field is not declared there, in the core app settings. Updates to the field and any of
+         * its children trigger the handler. Handlers are registered under this context's `ID`, so
+         * `removePropertyChangeHandlers` removes every handler added through this context.
+         * @param field - Name of the settings field, scope included (e.g. `eeg.navigator.relativeTime`).
+         * @param handler - Method to call when the field updates.
+         */
+        addPropertyChangeHandler: (field: string, handler: PropertyChangeHandler) => {
+            if (INTERFACE.getFieldValue(field) !== undefined) {
+                INTERFACE.addPropertyChangeHandler(field, handler, contextId)
+            } else {
+                store.state.SETTINGS.addPropertyUpdateHandler(field, handler, contextId)
+            }
+        },
         /**
          * Utility method to get the value of the given settings `field` primarily from the interface settings
          * or failing that the core app settings.
@@ -455,6 +471,14 @@ export const useContext = (store: Pick<EpiCStore, "state">, context: string, com
                 return intfValue
             }
             return store.state.SETTINGS.getFieldValue(field, depth)
+        },
+        /**
+         * Utility method to remove every property change handler added through this context, from both
+         * the interface settings and the core app settings.
+         */
+        removePropertyChangeHandlers: () => {
+            INTERFACE.removeAllPropertyChangeHandlersFor(contextId)
+            store.state.SETTINGS.removeAllPropertyUpdateHandlersFor(contextId)
         },
         /**
          * Utility method to set the `value` of the given settings `field` primarily in the interface settings
