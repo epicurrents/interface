@@ -53,6 +53,46 @@ export const applicationViews = new Map<string, ApplicationView>([
     ['radiology', radiologyViewConfig],
 ])
 
+/** True for a mergeable configuration branch — a plain object, not an array or a null. */
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/**
+ * Write a configuration fragment into the **core** settings of the module identified by `moduleCode`
+ * (`SETTINGS.modules.<moduleCode>`), recursing into plain-object branches so a host that names one
+ * knob leaves its siblings at their module defaults. Arrays replace wholesale — a partial list of
+ * derivations or electrode pairs is never what a host means.
+ *
+ * The settings a module declares in its own `config.ts` are the interface-side tree, and
+ * {@link useContext} keeps the two trees separate rather than merging them. Resource classes in the
+ * `@epicurrents/*-module` packages read the module-side tree, so anything a resource consults while
+ * building itself has to be written here or it silently has no effect.
+ * @param moduleCode - Code of the module to configure, e.g. `eeg`.
+ * @param values - Configuration fragment to merge into the module's core settings.
+ */
+export const applyModuleSettings = (moduleCode: string, values: Record<string, unknown>) => {
+    const moduleSettings = window.__EPICURRENTS__.RUNTIME?.SETTINGS
+                                 .modules[moduleCode] as unknown as Record<string, unknown> | undefined
+    if (!moduleSettings) {
+        Log.warn(
+            `Cannot apply settings to the module '${moduleCode}' before it is registered.`,
+        SCOPE)
+        return
+    }
+    const merge = (target: Record<string, unknown>, source: Record<string, unknown>) => {
+        for (const [key, value] of Object.entries(source)) {
+            const current = target[key]
+            if (isPlainObject(value) && isPlainObject(current)) {
+                merge(current, value)
+            } else {
+                target[key] = value
+            }
+        }
+    }
+    merge(moduleSettings, values)
+}
+
 /**
  * Get the setting `field` value corresponding to an `input` value. Checks if field can be altered by the user
  * and takes into account possible mapped values. Can be used to convert a value of an input field to a value
