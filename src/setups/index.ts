@@ -246,8 +246,25 @@ export const createEpicurrentsApp = async (
     /** Application core. */
     const coreApp = new Epicurrents()
     // Check for SharedArrayBuffer support and the initial config value for the memory manager.
-    const USE_SAB = typeof SharedArrayBuffer !== 'undefined' && SETUP.useSAB && !sabDisabledByFlag
-    Log.debug(USE_SAB ? 'Using shared memory features.' : 'Shared memory features are disabled.', 'entry')
+    // `crossOriginIsolated` is part of the test, not just the constructor's presence: browsers keep
+    // `SharedArrayBuffer` defined on a non-isolated document but refuse to transfer one to a
+    // worker. Registering the shared-memory workers on that promise produces a half-configured app
+    // that falls back to main-thread caching — which looks like a frozen UI, not a failed check.
+    const USE_SAB = typeof SharedArrayBuffer !== 'undefined' && window.crossOriginIsolated
+                    && SETUP.useSAB && !sabDisabledByFlag
+    if (USE_SAB) {
+        Log.debug('Using shared memory features.', 'entry')
+    } else if (SETUP.useSAB && !sabDisabledByFlag) {
+        // Requested but unavailable — the deployment is missing the COOP/COEP header pair. Warn
+        // rather than debug: signal caching silently drops onto the main thread when this happens.
+        Log.warn(
+            'Shared memory features are unavailable — the document is not cross-origin isolated. ' +
+            'Signal caching will run on the main thread.',
+            'entry'
+        )
+    } else {
+        Log.debug('Shared memory features are disabled.', 'entry')
+    }
     // Apply pre-launch configuration.
     coreApp.configure({
         'app.logThreshold': SETUP.logThreshold,

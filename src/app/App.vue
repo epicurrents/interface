@@ -565,11 +565,15 @@ export default defineComponent({
          * Display an open file dialog and handle the selection.
          */
         async importFile (file: File, loader: string, _types: AssociatedFileType[]) {
+            // The URL is minted here because this is the layer that revokes it; the File travels
+            // alongside it so the reader can slice the file directly instead of requesting byte
+            // ranges over the object URL.
             const fileUrl = URL.createObjectURL(file)
             try {
                 const study = await this.$store.dispatch(
-                    'load-study-url',
+                    'load-study-file',
                     {
+                        file: file,
                         loader: loader,
                         name: file.name,
                         url: fileUrl,
@@ -768,8 +772,6 @@ export default defineComponent({
                 }
             } else if (mutation.type === 'display-viewer') {
                 Log.debug(`Displaying main viewer.`, this.$options.name!)
-            } else {
-                Log.debug(`Store commit event ${mutation.type}.`, this.$options.name!)
             }
         })
         // Check if we need to store user credentials.

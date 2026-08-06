@@ -233,6 +233,20 @@ export const DefaultInterface: DefaultInterfaceModuleConstructor = class Epicurr
                 epicApp.loadStudy(study.loader, study.folder, study.name).then(() => {
                     promise.resolve()
                 })
+            } else if (mutation.type === 'load-study-file') {
+                const study = mutation.payload.study
+                const promise = mutation.payload.promise
+                // The File is handed over as-is (rather than as the object URL minted for it), so the
+                // reader can slice it instead of fetching byte ranges from a `blob:` URL over the
+                // very same bytes. The URL rides along for the caller that has to revoke it.
+                epicApp.loadStudy(study.loader, study.file, { name: study.name, url: study.url })
+                       .then(recording => {
+                           if (recording) {
+                               promise.resolve(recording)
+                           } else {
+                               promise.reject()
+                           }
+                       })
             } else if (mutation.type === 'load-study-url') {
                 const study = mutation.payload.study
                 const promise = mutation.payload.promise

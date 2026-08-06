@@ -56,7 +56,7 @@ export type Mutations<S = State> = {
     [MutationTypes.ADD_STYLES] (state: S, payload: { component: string, styles: string[] }): void
     [MutationTypes.HIDE_OVERLAY] (state: S): void
     [MutationTypes.LOAD_DATASET_FOLDER] (state: S, payload: { folder: { folder: FileSystemItem, name?: string, context?: string }, promise: any }): void
-    [MutationTypes.LOAD_STUDY_FILE] (state: S, payload: { study: { file: FileSystemItem, loader: string, name?: string }, promise: any }): void
+    [MutationTypes.LOAD_STUDY_FILE] (state: S, payload: { study: { file: File, loader: string, name?: string, url?: string }, promise: any }): void
     [MutationTypes.LOAD_STUDY_FOLDER] (state: S, payload: { study: { folder: FileSystemItem, loader: string, name?: string, context?: string }, promise: any }): void
     [MutationTypes.LOAD_STUDY_URL] (state: S, payload: { study: { loader: string, url: string, name?: string }, promise: Promise<void> }): void
     [MutationTypes.REMOVE_CONNECTOR] (state: S, payload: string): void

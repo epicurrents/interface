@@ -7,9 +7,11 @@ import type { CommonBiosignalInterfaceSettings, HotkeyProperties, RecursiveParti
 import type { ModuleConfiguration } from '#types/globals'
 import type {
     BiosignalMontageTemplate,
+    CommonBiosignalSettings,
     ConfigBiosignalSetup,
     SettingsColor,
 } from '@epicurrents/core/types'
+import type { EegModuleSettings } from '@epicurrents/eeg-module/types'
 
 export type EegInterfaceSchemas = InterfaceSchema
 
@@ -185,6 +187,14 @@ export type EegInterfaceSettings = CommonBiosignalInterfaceSettings & {
         loadingColor: SettingsColor
         /** Overlay for the span beyond the trusted-navigation frontier on restricted recordings. */
         offLimitsColor: SettingsColor
+        /**
+         * Express navigator tick labels and the cursor read-out as time elapsed from the start of
+         * the recording (`true`) instead of the recording's wall-clock time of day (`false`).
+         * Relative time is the default: it is meaningful for every recording, whereas the time of
+         * day depends on the source file carrying a trustworthy start timestamp — which
+         * de-identified recordings deliberately do not.
+         */
+        relativeTime: boolean
         theme: string
         tickColor: SettingsColor
         viewBoxColor: SettingsColor
@@ -279,6 +289,14 @@ export type EegInterfaceSettings = CommonBiosignalInterfaceSettings & {
  * Additional setup for the EEG module.
  */
 export type EegModuleConfiguration = ModuleConfiguration & {
+    /**
+     * Derivations the aEEG trend resolves against a recording's setup, and the fallback for
+     * {@link ratio} and {@link spectrogram} when those declare none. The module defaults name
+     * 10-20 electrodes, so a deployment whose electrode array does not carry them (a sub-hairline
+     * array, an intracranial grid) must redeclare them here or all three trends silently build
+     * nothing. Merged over the module defaults; `derivations` replaces the default list wholesale.
+     */
+    aeeg?: Partial<NonNullable<EegModuleSettings['aeeg']>>
     cascadeMontages?: EegInterfaceSettings['cascadeMontages']
     epochMode?: EegInterfaceSettings['epochMode']
     extraMontages?: {
@@ -291,10 +309,28 @@ export type EegModuleConfiguration = ModuleConfiguration & {
      * reports source localisation as unavailable. See {@link LeadFieldProvider}.
      */
     leadFieldProvider?: LeadFieldProvider
+    /**
+     * Homologous electrode pairs the pdBSI trend averages over. Same electrode-naming caveat as
+     * {@link aeeg}: pairs that do not resolve against the recording's setup are skipped, and the
+     * trend is not built at all when none of them resolve.
+     */
+    pdbsi?: Partial<NonNullable<EegModuleSettings['pdbsi']>>
+    /**
+     * Derivations for the frequency-ratio trend, when it should not share the aEEG ones. The two
+     * trends read the same signal differently — aEEG wants the widest bipolar span it can get,
+     * while a band-ratio index computed against a common average reference is usually taken from a
+     * single electrode — so an array where that distinction matters declares both.
+     */
+    ratio?: Partial<NonNullable<EegModuleSettings['ratio']>>
     skipDefaultSetups?: boolean
+    /** Derivations for the spectrogram trend, when it should not share the aEEG ones. */
+    spectrogram?: Partial<NonNullable<EegModuleSettings['spectrogram']>>
     navigator?: Partial<EegInterfaceSettings['navigator']>
     tools?: Partial<EegInterfaceSettings['tools']>
     trace?: RecursivePartial<EegInterfaceSettings['trace']>
+    /** Per-trend math knobs (epoch length, frequency bands, referencing). Merged per trend type
+     *  over the module defaults, so naming one knob leaves the rest of that trend's defaults. */
+    trends?: RecursivePartial<NonNullable<CommonBiosignalSettings['trends']>>
 }
 
 export type EegNavigationKey = 'ArrowLeft' | 'ArrowRight' | 'PageDown' | 'PageUp'

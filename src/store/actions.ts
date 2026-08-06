@@ -167,7 +167,7 @@ export type Actions = {
     [ActionTypes.DISPLAY_VIEWER] (): void
     [ActionTypes.LOAD_DATASET_FOLDER] (payload: { folder: FileSystemItem, name?: string, context?: string }): void
     [ActionTypes.LOAD_DATASET_PROGRESS] (payload: { context: 'filesystem' | 'repository', loaded: number, total: number }): void
-    [ActionTypes.LOAD_STUDY_FILE] (payload: { loader: string, file: FileSystemItem, name?: string }): void
+    [ActionTypes.LOAD_STUDY_FILE] (payload: { loader: string, file: File, name?: string, url?: string }): void
     [ActionTypes.LOAD_STUDY_FOLDER] (payload: { loader: string, folder: FileSystemItem, name?: string, context?: string }): void
     [ActionTypes.LOAD_STUDY_URL] (payload: { loader: string, url: string, name?: string }): void
     [ActionTypes.OVERLAY_CLICKED] (): void
@@ -247,7 +247,7 @@ export const actions = {
     },
     [ActionTypes.LOAD_STUDY_FILE] (
         injectee: ActionContext<State, State>,
-        payload: { file: FileSystemItem, loader: string, name?: string }
+        payload: { file: File, loader: string, name?: string, url?: string }
     ) {
         let promiseResolve, promiseReject
         const promise = new Promise((resolve, reject) => {
