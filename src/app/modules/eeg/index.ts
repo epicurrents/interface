@@ -16,7 +16,7 @@ import { Log } from "scoped-event-log"
 import type { BiosignalMontageTemplate, ConfigBiosignalSetup, Modify } from "@epicurrents/core/types"
 import type { EegResource, EegModuleSettings } from "@epicurrents/eeg-module/types"
 import { schemas, settings } from "./config"
-import { useContext } from "#config"
+import { applyModuleSettings, useContext } from "#config"
 import type { EegInterfaceSettings, EegModuleConfiguration, LeadFieldProvider } from "./types"
 
 const SCOPE = 'interface-eeg-module'
@@ -160,9 +160,28 @@ export const runtime = {
                 }
             }
         }
-        // Skip default setups flag.
+        // Skip default setups flag. Read by EegRecording when it applies its setups, so it has to
+        // land on the module settings.
         if (config.skipDefaultSetups !== undefined) {
-            settings.skipDefaultSetups = config.skipDefaultSetups
+            applyModuleSettings('eeg', { skipDefaultSetups: config.skipDefaultSetups })
+        }
+        // Trend configuration. Every one of these is resolved against the recording's setup by
+        // EegRecording, so they belong to the module settings as well. The aEEG derivations double
+        // as the fallback for the ratio and spectrogram trends.
+        if (config.aeeg) {
+            applyModuleSettings('eeg', { aeeg: config.aeeg })
+        }
+        if (config.pdbsi) {
+            applyModuleSettings('eeg', { pdbsi: config.pdbsi })
+        }
+        if (config.ratio) {
+            applyModuleSettings('eeg', { ratio: config.ratio })
+        }
+        if (config.spectrogram) {
+            applyModuleSettings('eeg', { spectrogram: config.spectrogram })
+        }
+        if (config.trends) {
+            applyModuleSettings('eeg', { trends: config.trends })
         }
         // Additional setups.
         if (config.extraSetups) {
