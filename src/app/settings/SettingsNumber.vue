@@ -36,7 +36,9 @@
  * Calibrator for screen PPI.
  */
 import { PropType, Ref, defineComponent, ref } from "vue"
+import { useStore } from "vuex"
 import { T } from "#i18n"
+import { useAppContext } from "#config"
 import type { InterfaceSettingsCommon, InterfaceSettingsInput } from "#types/config"
 
 export default defineComponent({
@@ -65,8 +67,6 @@ export default defineComponent({
         const component = ref<HTMLDivElement>() as Ref<HTMLDivElement>
         const prevValue = props.default
         const value = ref(props.default)
-        // Store
-        const unsubscribe = ref(null as (() => void) | null)
         // Styles
         /** The width of one number in CSS em units. */
         const NUM_SIZE = 0.6
@@ -82,10 +82,9 @@ export default defineComponent({
             component,
             prevValue,
             value,
-            // Store
-            unsubscribe,
             // Styles
             inputWidth,
+            ...useAppContext(useStore(), 'SettingsNumber'),
         }
     },
     computed: {
@@ -111,6 +110,9 @@ export default defineComponent({
          */
         $t: function (key: string, params = {}, capitalized = false) {
             return T(key, this.$options.name, params, capitalized)
+        },
+        settingChanged () {
+            this.value = this.getFieldValue(this.field.setting) as number
         },
         valueEntered (value: string, processEmpty = false) {
             if (!value.length && !processEmpty) {
@@ -164,22 +166,13 @@ export default defineComponent({
                 }
             }
         })
-        // Subscribe to store mutations
-        this.unsubscribe = this.$store.subscribe((mutation) => {
-            if (mutation.type === 'set-settings-value') {
-                if (mutation.payload.field === this.field.setting) {
-                    this.value = mutation.payload.value
-                }
-            }
-        })
+        this.addPropertyChangeHandler(this.field.setting, this.settingChanged)
         this.$nextTick(() => {
             this.$emit('loaded')
         })
     },
     beforeUnmount () {
-        if (this.unsubscribe) {
-            this.unsubscribe()
-        }
+        this.removePropertyChangeHandlers()
     },
 })
 </script>

@@ -20,7 +20,9 @@
  * Calibrator for screen PPI.
  */
 import { PropType, Ref, defineComponent, ref } from "vue"
+import { useStore } from "vuex"
 import { T } from "#i18n"
+import { useAppContext } from "#config"
 import type { InterfaceSettingsCommon, InterfaceSettingsInput } from "#types/config"
 
 export default defineComponent({
@@ -48,13 +50,10 @@ export default defineComponent({
     setup (props) {
         const checked = ref(props.default)
         const component = ref<HTMLDivElement>() as Ref<HTMLDivElement>
-        // Store
-        const unsubscribe = ref(null as (() => void) | null)
         return {
             checked,
             component,
-            // Store
-            unsubscribe,
+            ...useAppContext(useStore(), 'SettingsCheckbox'),
         }
     },
     computed: {
@@ -76,6 +75,11 @@ export default defineComponent({
          */
         $t: function (key: string, params = {}, capitalized = false) {
             return T(key, this.$options.name, params, capitalized)
+        },
+        settingChanged () {
+            const value = this.getFieldValue(this.field.setting)
+            const mappedVal = this.field.valueMap?.filter(v => v[0] === value)[0]
+            this.checked = mappedVal !== undefined ? mappedVal[1] as boolean : value as boolean
         },
     },
     beforeMount () {
@@ -101,24 +105,13 @@ export default defineComponent({
                 }
             }
         })
-        // Subscribe to store mutations
-        this.unsubscribe = this.$store.subscribe((mutation) => {
-            if (mutation.type === 'set-settings-value') {
-                if (mutation.payload.field === this.field.setting) {
-                    const mappedVal = this.field.valueMap?.filter(v => v[0] === mutation.payload.value)[0]
-                    this.checked = mappedVal !== undefined ? mappedVal[1]
-                                                           : mutation.payload.value
-                }
-            }
-        })
+        this.addPropertyChangeHandler(this.field.setting, this.settingChanged)
         this.$nextTick(() => {
             this.$emit('loaded')
         })
     },
     beforeUnmount () {
-        if (this.unsubscribe) {
-            this.unsubscribe()
-        }
+        this.removePropertyChangeHandlers()
     },
 })
 </script>

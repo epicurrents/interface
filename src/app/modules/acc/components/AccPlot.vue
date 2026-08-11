@@ -120,8 +120,6 @@ export default defineComponent({
         const wheelDelta = ref(0)
         const wglPlot = ref<WebGlPlot | null>(null)
         const wrapper = ref<HTMLDivElement>() as Ref<HTMLDivElement>
-        // Unsubscribe from store mutations
-        const unsubscribe = ref(null as (() => void) | null)
         return {
             cacheHasData,
             canvas,
@@ -169,8 +167,6 @@ export default defineComponent({
             wrapper,
             // Scope properties
             ...useAccContext(store),
-            // Unsubscribers
-            unsubscribe,
         }
     },
     watch: {
@@ -226,6 +222,26 @@ export default defineComponent({
         /**
          * Add (or reset) all visible plot traces.
          */
+        /**
+         * Redraw the whole plot. Bound to the settings that change how traces are rasterised.
+         */
+        reloadPlot () {
+            if (!this.wglPlot) {
+                return
+            }
+            this.$nextTick(() => {
+                this.drawPlot()
+            })
+        },
+        /**
+         * Rebuild the traces in place. Bound to the settings that change trace content or geometry
+         * without invalidating the plot itself.
+         */
+        refreshTraces () {
+            this.$nextTick(() => {
+                this.addTraces()
+            })
+        },
         addTraces () {
             if (!this.wglPlot) {
                 return
@@ -936,30 +952,10 @@ export default defineComponent({
         // Handle key press events
         window.addEventListener('keydown', this.handleKeydown, false)
         window.addEventListener('keyup', this.handleKeyup, false)
-        // Listen to some store state changes
-        this.unsubscribe = this.$store.subscribe((mutation) => {
-            // Reload plot if certain user settings change.
-            const reloadOnFields = [
-                'acc.antialiasing',
-            ]
-            const updateOnFields = [
-                'acc.displayPolarity',
-            ]
-            if (mutation.type === 'set-settings-value') {
-                if (reloadOnFields.includes(mutation.payload.field) && this.wglPlot) {
-                    this.$nextTick(() => {
-                        this.drawPlot()
-                    })
-                } else if (
-                    mutation.payload.field.startsWith('acc.trace.') ||
-                    updateOnFields.includes(mutation.payload.field)
-                ) {
-                    this.$nextTick(() => {
-                        this.addTraces()
-                    })
-                }
-            }
-        })
+        // Reload the plot or refresh its traces when the settings governing either change.
+        this.addPropertyChangeHandler(`${this.SCOPE}.antialiasing`, this.reloadPlot)
+        this.addPropertyChangeHandler(`${this.SCOPE}.displayPolarity`, this.refreshTraces)
+        this.addPropertyChangeHandler(`${this.SCOPE}.trace`, this.refreshTraces)
         // Trigger element resize in parent component once this component is done loading
         this.$emit('loaded')
         // Wait for the signals to be cached before loading the first frame.
@@ -1059,9 +1055,7 @@ export default defineComponent({
             window.clearTimeout(timeout)
         }
         // Unsubscribe from store
-        if (this.unsubscribe) {
-            this.unsubscribe()
-        }
+        this.removePropertyChangeHandlers()
     },
 })
 </script>

@@ -29,7 +29,9 @@
  * Calibrator for screen PPI.
  */
 import { defineComponent, ref, PropType } from "vue"
+import { useStore } from "vuex"
 import { T } from "#i18n"
+import { useAppContext } from "#config"
 import type { InterfaceSettingsCommon, InterfaceSettingsDropdown } from "#types/config"
 
 export default defineComponent({
@@ -56,12 +58,9 @@ export default defineComponent({
     },
     setup (props) {
         const selected = ref(props.default)
-        // Store
-        const unsubscribe = ref(null as (() => void) | null)
         return {
             selected,
-            // Store
-            unsubscribe,
+            ...useAppContext(useStore(), 'SettingsDropdown'),
         }
     },
     computed: {
@@ -86,6 +85,9 @@ export default defineComponent({
         $t: function (key: string, params = {}, capitalized = false) {
             return T(key, this.$options.name, params, capitalized)
         },
+        settingChanged () {
+            this.selected = this.getFieldValue(this.field.setting) as typeof this.selected
+        },
     },
     beforeMount () {
         // Add component styles to shadow root
@@ -93,14 +95,7 @@ export default defineComponent({
             'add-component-styles',
             { component: this.$options.name, styles: this.$options.__scopeId }
         )
-        // Subscribe to store mutations
-        this.unsubscribe = this.$store.subscribe((mutation) => {
-            if (mutation.type === 'set-settings-value') {
-                if (mutation.payload.field === this.field.setting) {
-                    this.selected = mutation.payload.value
-                }
-            }
-        })
+        this.addPropertyChangeHandler(this.field.setting, this.settingChanged)
     },
     mounted () {
         this.$nextTick(() => {
@@ -108,9 +103,7 @@ export default defineComponent({
         })
     },
     beforeUnmount () {
-        if (this.unsubscribe) {
-            this.unsubscribe()
-        }
+        this.removePropertyChangeHandlers()
     },
 })
 </script>

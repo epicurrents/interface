@@ -63,7 +63,6 @@
  * in-plot dashed line.
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useStore } from 'vuex'
 import { T } from '#i18n'
 import { settingsColorToRgba } from '@epicurrents/core/util'
 import { useTrendController } from '../useTrendController'
@@ -94,9 +93,9 @@ const t = (key: string, params: Record<string, unknown> = {}) => T(key, SCOPE, p
 const trendCanvas = ref<HTMLCanvasElement | null>(null)
 const viewboxCanvas = ref<HTMLCanvasElement | null>(null)
 
-const store = useStore()
 const controller = useTrendController(SCOPE, 'pdbsi', () => drawTrend())
-const { ID, RESOURCE, SETTINGS, trends } = controller
+const { ID, RESOURCE, SETTINGS, addPropertyChangeHandler, removePropertyChangeHandlers,
+        trends } = controller
 
 const rightReservedWidth = computed(() => props.controlsOpen ? 210 : 30)
 const canvasHeight = computed(() => Math.max(0, props.height - TOP_PADDING))
@@ -105,9 +104,8 @@ const canvasWidth = computed(() =>
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 // SETTINGS is a non-reactive proxy — Vue computeds wrapping reads from it never
-// invalidate when the store changes (the values land in the INTERFACE singleton,
-// not in reactive state). Mirror them into refs and refresh on the
-// `set-settings-value` action; same pattern as `AeegRenderer.vue`.
+// invalidate when a value changes. Mirror them into refs and refresh from a settings
+// property-change handler; same pattern as `AeegRenderer.vue`.
 
 type PdbsiSettings = { showFill?: boolean; showThreshold?: boolean; threshold?: number }
 const readPdbsiSettings = (): PdbsiSettings =>
@@ -125,17 +123,9 @@ const refreshSettings = () => {
     threshold.value     = s.threshold ?? 0.52
 }
 
-const unsubscribeAction = store.subscribeAction({
-    after: (action) => {
-        if (
-            action.type === 'set-settings-value'
-            && typeof action.payload?.field === 'string'
-            && action.payload.field.startsWith('eeg.trends.pdbsi.')
-        ) {
-            refreshSettings()
-            drawTrend()
-        }
-    },
+addPropertyChangeHandler('eeg.trends.pdbsi', () => {
+    refreshSettings()
+    drawTrend()
 })
 
 // ── Color ─────────────────────────────────────────────────────────────────────
@@ -382,7 +372,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-    unsubscribeAction()
+    removePropertyChangeHandlers()
     RESOURCE.removeAllEventListeners(ID)
 })
 </script>

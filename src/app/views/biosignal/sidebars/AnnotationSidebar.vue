@@ -244,7 +244,6 @@ export default defineComponent({
         const tabs = ref<WaTabGroup>() as Ref<WaTabGroup>
         const newText = ref<WaTextarea>() as Ref<WaTextarea>
         const newClass = ref(context.SETTINGS.annotations.classes?.default.quickCode ?? -1)
-        const unsubscribe = ref<(() => void) | null>(null)
         return {
             cannotWriteMessageDisplayed,
             comments,
@@ -260,7 +259,6 @@ export default defineComponent({
             // Methods
             secondsToTimeString,
             timePartsToShortString,
-            unsubscribe,
             ...context,
         }
     },
@@ -494,17 +492,10 @@ export default defineComponent({
     },
     mounted () {
         this.RESOURCE.onPropertyChange(['events', 'labels'], this.annotationsUpdated, this.ID)
-        this.unsubscribe = this.$store.subscribe((mutation) => {
-            // Reload plot if certain user settings change.
-            const updateOnFields = [
-                `${this.RESOURCE.modality}.annotations.saveToDataset`
-            ]
-            if (mutation.type === 'set-settings-value') {
-                if (updateOnFields.includes(mutation.payload.field)) {
-                    this.annotationsUpdated()
-                }
-            }
-        })
+        this.addPropertyChangeHandler(
+            `${this.RESOURCE.modality}.annotations.saveToDataset`,
+            this.annotationsUpdated,
+        )
         requestAnimationFrame(() => {
             if (this.drawer) {
                 this.drawer.style.width = `${this.width}px`
@@ -514,7 +505,7 @@ export default defineComponent({
     },
     beforeUnmount () {
         this.RESOURCE.removeAllEventListeners(this.ID)
-        this.unsubscribe?.()
+        this.removePropertyChangeHandlers()
     },
 })
 </script>

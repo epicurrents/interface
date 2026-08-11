@@ -91,7 +91,6 @@
  * the `useTrendController` composable.
  */
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
-import { useStore } from 'vuex'
 import { T } from '#i18n'
 import { settingsColorToRgba } from '@epicurrents/core/util'
 import { useTrendController } from '../useTrendController'
@@ -155,22 +154,17 @@ type RenderedTrend = {
 const trendCanvas = ref<HTMLCanvasElement | null>(null)
 const viewboxCanvas = ref<HTMLCanvasElement | null>(null)
 
-const store = useStore()
 const controller = useTrendController(SCOPE, 'amplitude', () => drawTrends())
-const { ID, RESOURCE, SETTINGS, trends } = controller
+const { ID, RESOURCE, SETTINGS, addPropertyChangeHandler, removePropertyChangeHandlers,
+        trends } = controller
 
 // Local reactive mirror of SETTINGS.trends.aeeg.displayMode. SETTINGS is a non-reactive proxy
 // so Vue computed can't track mutations; sync via a store action subscription instead.
 const settingsDisplayMode = ref<'separate' | 'superimposed'>(
     SETTINGS.trends?.aeeg?.displayMode || 'separate'
 )
-const unsubscribeAction = store.subscribeAction({
-    after: (action) => {
-        if (action.type === 'set-settings-value'
-            && action.payload?.field === 'eeg.trends.aeeg.displayMode') {
-            settingsDisplayMode.value = SETTINGS.trends?.aeeg?.displayMode || 'separate'
-        }
-    },
+addPropertyChangeHandler('eeg.trends.aeeg.displayMode', () => {
+    settingsDisplayMode.value = SETTINGS.trends?.aeeg?.displayMode || 'separate'
 })
 
 const labelGutterWidth = 80
@@ -599,7 +593,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-    unsubscribeAction()
+    removePropertyChangeHandlers()
     // Trend-list and per-trend listeners are torn down by useTrendController; only the
     // viewbox-related subscriptions are owned here.
     RESOURCE.removeAllEventListeners(ID)

@@ -28,7 +28,9 @@
  * Calibrator for screen PPI.
  */
 import { defineComponent, ref, PropType, Ref } from "vue"
+import { useStore } from "vuex"
 import { T } from "#i18n"
+import { useAppContext } from "#config"
 import { rgbaToSettingsColor, settingsColorToRgba } from "@epicurrents/core/util"
 import type { SettingsColor } from "@epicurrents/core/types"
 import type { InterfaceSettingsCommon, InterfaceSettingsInput } from "#types/config"
@@ -67,13 +69,10 @@ export default defineComponent({
         }
         const color = ref(settingsColorToRgba(initialColor))
         const component = ref<HTMLDivElement>() as Ref<HTMLDivElement>
-        // Store
-        const unsubscribe = ref(null as (() => void) | null)
         return {
             color,
             component,
-            // Store
-            unsubscribe,
+            ...useAppContext(useStore(), 'SettingsColorpicker'),
         }
     },
     computed: {
@@ -95,6 +94,29 @@ export default defineComponent({
         $t: function (key: string, params = {}, capitalized = false) {
             return T(key, this.$options.name, params, capitalized)
         },
+        settingChanged () {
+            const value = this.getFieldValue(this.field.setting)
+            if (Array.isArray(value) && value.length === 4) {
+                this.color = settingsColorToRgba(value as SettingsColor)
+                return
+            }
+            if (typeof value !== 'string') {
+                return
+            }
+            const parsed = value.replace(/\s+/i, '')
+            if (parsed.startsWith('#')) {
+                // Normalise to an alpha-carrying form; the picker only accepts 4- and 8-digit hex.
+                if (parsed.length === 9 || parsed.length === 5) {
+                    this.color = parsed
+                } else if (parsed.length === 7) {
+                    this.color = parsed + 'ff'
+                } else if (parsed.length === 4) {
+                    this.color = parsed + 'f'
+                }
+            } else if (parsed.startsWith('rgba(')) {
+                this.color = parsed
+            }
+        },
     },
     beforeMount () {
         // Add component styles to shadow root
@@ -102,30 +124,7 @@ export default defineComponent({
             'add-component-styles',
             { component: this.$options.name, styles: this.$options.__scopeId }
         )
-        // Watch field changes
-        // Subscribe to store mutations
-        this.unsubscribe = this.$store.subscribe((mutation) => {
-            if (mutation.type === 'set-settings-value') {
-                if (mutation.payload.field === this.field.setting) {
-                    if (Array.isArray(mutation.payload.value) && mutation.payload.value.length === 4) {
-                        this.color = settingsColorToRgba(mutation.payload.value as SettingsColor)
-                    } else if (typeof mutation.payload.value === 'string') {
-                        const value = mutation.payload.value.replace(/\s+/i, '')
-                        if (value.startsWith('#')) {
-                            if (value.length === 9 || value.length === 5) {
-                                this.color = value
-                            } else if (value.length === 7) {
-                                this.color = value + 'ff'
-                            } else if (value.length === 4) {
-                                this.color = value + 'f'
-                            }
-                        } else if (value.startsWith('rgba(')) {
-                            this.color = value
-                        }
-                    }
-                }
-            }
-        })
+        this.addPropertyChangeHandler(this.field.setting, this.settingChanged)
     },
     mounted () {
         requestAnimationFrame(() => {
@@ -142,9 +141,7 @@ export default defineComponent({
         })
     },
     beforeUnmount () {
-        if (this.unsubscribe) {
-            this.unsubscribe()
-        }
+        this.removePropertyChangeHandlers()
     },
 })
 </script>

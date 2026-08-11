@@ -77,7 +77,6 @@
  * canvas and would misalign in separate mode where each slot occupies half.
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useStore } from 'vuex'
 import { T } from '#i18n'
 import { settingsColorToRgba } from '@epicurrents/core/util'
 import { useTrendController } from '../useTrendController'
@@ -108,9 +107,9 @@ const t = (key: string, params: Record<string, unknown> = {}) => T(key, SCOPE, p
 const trendCanvas = ref<HTMLCanvasElement | null>(null)
 const viewboxCanvas = ref<HTMLCanvasElement | null>(null)
 
-const store = useStore()
 const controller = useTrendController(SCOPE, 'ratio', () => drawTrends())
-const { ID, RESOURCE, SETTINGS, trends } = controller
+const { ID, RESOURCE, SETTINGS, addPropertyChangeHandler, removePropertyChangeHandlers,
+        trends } = controller
 
 const rightReservedWidth = computed(() => props.controlsOpen ? 210 : 30)
 const canvasHeight = computed(() => Math.max(0, props.height - TOP_PADDING))
@@ -119,12 +118,10 @@ const canvasWidth = computed(() =>
 
 // ── Display settings ──────────────────────────────────────────────────────────
 // SETTINGS is a non-reactive proxy — Vue computeds wrapping reads from it never
-// invalidate when the store changes (the values land in the INTERFACE singleton,
-// not in reactive state). The pattern used here mirrors `AeegRenderer.vue`:
-// hold each setting in a plain ref, seeded from SETTINGS at mount and refreshed
-// by an action subscription whenever `set-settings-value` fires for one of our
-// trend's fields. Watchers (or the subscription handler itself) then trigger a
-// redraw.
+// invalidate when a value changes. The pattern used here mirrors `AeegRenderer.vue`:
+// hold each setting in a plain ref, seeded from SETTINGS at mount and refreshed by a
+// property-change handler on the trend's settings branch. Watchers (or the handler
+// itself) then trigger a redraw.
 type RatioSettings = {
     displayMode?: 'separate' | 'superimposed'
     mirrorMode?: boolean
@@ -151,17 +148,9 @@ const refreshSettings = () => {
     threshold.value      = s.threshold ?? 0.26
 }
 
-const unsubscribeAction = store.subscribeAction({
-    after: (action) => {
-        if (
-            action.type === 'set-settings-value'
-            && typeof action.payload?.field === 'string'
-            && action.payload.field.startsWith('eeg.trends.ratio.')
-        ) {
-            refreshSettings()
-            drawTrends()
-        }
-    },
+addPropertyChangeHandler('eeg.trends.ratio', () => {
+    refreshSettings()
+    drawTrends()
 })
 
 const labelMode = computed<'separate' | 'superimposed'>(() =>
@@ -525,7 +514,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-    unsubscribeAction()
+    removePropertyChangeHandlers()
     RESOURCE.removeAllEventListeners(ID)
 })
 </script>

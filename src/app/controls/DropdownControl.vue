@@ -147,14 +147,10 @@ export default defineComponent({
         const RESOURCE = store.getters.getActiveResource() as DataResource
         //const active = ref<HTMLDivElement>() as Ref<HTMLDivElement>
         const control = ref<HTMLDivElement>() as Ref<HTMLDivElement>
-        // Unsubscribe from store mutations
-        const unsubscribe = ref([] as (() => void)[])
         return {
             control,
-            // Unsubscribers
-            unsubscribe,
             RESOURCE,
-            ...useActiveContext(useStore()),
+            ...useActiveContext(useStore(), 'DropdownControl'),
         }
     },
     computed: {
@@ -247,17 +243,9 @@ export default defineComponent({
             }
             const ONNX = this.$store.state.SERVICES.get('ONNX')
             if (scope === 'settings') {
-                this.unsubscribe.push(
-                    this.$store.subscribe((mutation) => {
-                        const matchSubProps = prop.endsWith('.')
-                        if (
-                            mutation.type === 'set-settings-value' &&
-                            (matchSubProps ? mutation.payload.field.startsWith(prop) : mutation.payload.field === prop)
-                        ) {
-                            this.reloadComponent()
-                        }
-                    })
-                )
+                // A trailing dot marks a branch to watch; handlers match the named field and all of
+                // its descendants either way.
+                this.addPropertyChangeHandler(prop.replace(/\.$/, ''), this.reloadComponent)
             } else if (scope === 'resource') {
                 this.RESOURCE.onPropertyChange(prop as keyof typeof this.RESOURCE, this.reloadComponent, this.ID)
             } else if (scope === 'onnx' && ONNX) {
@@ -267,11 +255,9 @@ export default defineComponent({
     },
     beforeUnmount () {
         // Remove property update handlers
-        this.$store.state.SETTINGS.removeAllPropertyUpdateHandlersFor(this.ID)
+        this.removePropertyChangeHandlers()
         this.RESOURCE?.removeAllEventListeners(this.ID)
         this.$store.state.SERVICES.get('ONNX')?.removeAllEventListeners(this.ID)
-        // Unsubscribe from actions
-        this.unsubscribe.forEach((unsub) => unsub())
     }
 })
 </script>

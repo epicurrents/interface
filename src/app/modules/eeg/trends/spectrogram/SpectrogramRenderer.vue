@@ -73,7 +73,6 @@
  * stacked vertically, matching the aEEG / ratio strip layout.
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useStore } from 'vuex'
 import { settingsColorToRgba } from '@epicurrents/core/util'
 import { useTrendController } from '../useTrendController'
 import { useTrendCanvas } from '../useTrendCanvas'
@@ -97,9 +96,9 @@ const emit = defineEmits<{ navigation: [position: number] }>()
 const trendCanvas  = ref<HTMLCanvasElement | null>(null)
 const viewboxCanvas = ref<HTMLCanvasElement | null>(null)
 
-const store = useStore()
 const controller = useTrendController(SCOPE, 'spectrogram', () => drawTrends())
-const { ID, RESOURCE, SETTINGS, trends } = controller
+const { ID, RESOURCE, SETTINGS, addPropertyChangeHandler, removePropertyChangeHandlers,
+        trends } = controller
 const trendBacking = useTrendCanvas()
 
 type SpectrogramCfg = { displayMode?: string; mode?: string }
@@ -112,24 +111,18 @@ const spectrogramMode = ref<'power' | 'proportion'>(
     (spectrogramCfg().mode as 'power' | 'proportion') ?? 'proportion'
 )
 
-const unsubscribeAction = store.subscribeAction({
-    after: (action) => {
-        if (action.type === 'eeg.set-spectrogram-display-mode' ||
-            action.type === 'eeg.set-spectrogram-mode'         ||
-            action.type === 'set-settings-value') {
-            const prevMode        = spectrogramMode.value
-            const prevDisplayMode = settingsDisplayMode.value
-            spectrogramMode.value     = (spectrogramCfg().mode as 'power' | 'proportion') ?? 'proportion'
-            settingsDisplayMode.value = spectrogramCfg().displayMode as 'separate' | 'superimposed' || 'separate'
-            // Only do a full invalidating redraw when a VISUAL setting changes.
-            // epochLength changes don't affect the current rendering; they require a
-            // manual recompute and must not trigger an O(n) full redraw on every keystroke.
-            if (spectrogramMode.value !== prevMode || settingsDisplayMode.value !== prevDisplayMode) {
-                invalidate()
-            }
-            drawTrends()
-        }
-    },
+addPropertyChangeHandler('eeg.trends.spectrogram', () => {
+    const prevMode        = spectrogramMode.value
+    const prevDisplayMode = settingsDisplayMode.value
+    spectrogramMode.value     = (spectrogramCfg().mode as 'power' | 'proportion') ?? 'proportion'
+    settingsDisplayMode.value = spectrogramCfg().displayMode as 'separate' | 'superimposed' || 'separate'
+    // Only do a full invalidating redraw when a VISUAL setting changes.
+    // epochLength changes don't affect the current rendering; they require a
+    // manual recompute and must not trigger an O(n) full redraw on every keystroke.
+    if (spectrogramMode.value !== prevMode || settingsDisplayMode.value !== prevDisplayMode) {
+        invalidate()
+    }
+    drawTrends()
 })
 
 const rightReservedWidth = computed(() => props.controlsOpen ? 210 : 30)
@@ -481,7 +474,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-    unsubscribeAction()
+    removePropertyChangeHandlers()
     RESOURCE.removeAllEventListeners(ID)
 })
 </script>

@@ -33,8 +33,6 @@ export default defineComponent({
         // DOM
         const component = ref<HTMLDivElement>() as Ref<HTMLDivElement>
         const cursor = ref<HTMLDivElement>() as Ref<HTMLDivElement>
-        // Unsubscribe from store mutations
-        const unsubscribe = ref(null as (() => void) | null)
         return {
             isCursorMoved,
             isDragging,
@@ -44,8 +42,6 @@ export default defineComponent({
             cursor,
             // Imported methods
             settingsColorToRgba,
-            // Unsubscribers
-            unsubscribe,
             ...useBiosignalContext(store, 'PositionCursor')
         }
     },
@@ -131,20 +127,9 @@ export default defineComponent({
         )
     },
     mounted () {
-        // Listen to setting changes.
-        this.unsubscribe = this.$store.subscribe((mutation) => {
-            if (
-                mutation.type === 'set-settings-value'
-                && mutation.payload.field.includes('.cursor.active.')
-            ) {
-            }
-        })
     },
     beforeUnmount () {
         this.RESOURCE.removeAllEventListeners(this.ID)
-        if (this.unsubscribe) {
-            this.unsubscribe()
-        }
     }
 })
 </script>

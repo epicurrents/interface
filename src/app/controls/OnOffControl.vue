@@ -104,7 +104,7 @@ export default defineComponent({
             control,
             // Unsubscribers
             unsubscribe,
-            ...useBiosignalContext(store)
+            ...useBiosignalContext(store, 'OnOffControl')
         }
     },
     computed: {
@@ -160,17 +160,9 @@ export default defineComponent({
             }
             const ONNX = this.$store.state.SERVICES.get('ONNX')
             if (scope === 'settings') {
-                this.unsubscribe.push(
-                    this.$store.subscribe((mutation) => {
-                        const matchSubProps = prop.endsWith('.')
-                        if (
-                            mutation.type === 'set-settings-value' &&
-                            (matchSubProps ? mutation.payload.field.startsWith(prop) : mutation.payload.field === prop)
-                        ) {
-                            this.reloadComponent()
-                        }
-                    })
-                )
+                // A trailing dot marks a branch to watch; handlers match the named field and all of
+                // its descendants either way.
+                this.addPropertyChangeHandler(prop.replace(/\.$/, ''), this.reloadComponent)
             } else if (scope === 'resource') {
                 this.RESOURCE.onPropertyChange(prop as keyof typeof this.RESOURCE, this.reloadComponent, this.ID)
             } else if (scope === 'onnx' && ONNX) {
@@ -190,6 +182,7 @@ export default defineComponent({
         // Remove property update handlers
         this.RESOURCE?.removeAllEventListeners(this.ID)
         this.$store.state.SERVICES.get('ONNX')?.removeAllEventListeners(this.ID)
+        this.removePropertyChangeHandlers()
         // Unsubscribe from actions
         this.unsubscribe.forEach((unsub) => unsub())
     }

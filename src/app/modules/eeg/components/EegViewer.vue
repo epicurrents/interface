@@ -464,8 +464,7 @@ export default defineComponent({
         const yaxis = ref<InstanceType<typeof PlotYAxis>>() as Ref<InstanceType<typeof PlotYAxis>>
         // Pointer interaction handlers
         const pointerLeaveHandlers = ref([]) as Ref<((event?: PointerEvent) => void)[]>
-        // Unsubscribe from store mutations
-        const unsubscribe = ref(null as (() => void) | null)
+        // Unsubscribe from store actions
         const unsubscribeActions = ref(null as (() => void) | null)
         // Unsubscribe from interface-scoped settings-change events on the event bus.
         const unsubscribeSettings = ref(null as (() => void) | null)
@@ -646,7 +645,6 @@ export default defineComponent({
             // Handlers
             pointerLeaveHandlers,
             // Unsubscribers
-            unsubscribe,
             unsubscribeSettings,
             unsubscribeEpochRequest,
             unsubscribeStepEpoch,
@@ -779,6 +777,23 @@ export default defineComponent({
         },
     },
     methods: {
+        /**
+         * Re-derive the horizontal scale and lay the elements out again.
+         */
+        screenPpiChanged () {
+            this.$nextTick(() => {
+                this.calculatePxPerSecond()
+                this.resizeElements()
+            })
+        },
+        /**
+         * Lay the elements out again against the changed grid geometry.
+         */
+        gridChanged () {
+            this.$nextTick(() => {
+                this.resizeElements()
+            })
+        },
         /**
          * Override the default I18n translate method.
          * Returns a component-specific translation (default) or a
@@ -1596,24 +1611,9 @@ export default defineComponent({
         this.RESOURCE.onPropertyChange('viewStart', this.viewStartChanged, this.ID)
         // keydown and blur are managed by useBiosignalKeyboard; register keyup here.
         window.addEventListener('keyup', this.handleKeyup, false)
-        // Listen to some store state changes
-        this.unsubscribe = this.$store.subscribe((mutation) => {
-            if (mutation.type === 'set-settings-value') {
-                if (mutation.payload.field === 'app.screenPPI') {
-                    this.$nextTick(() => {
-                        this.calculatePxPerSecond()
-                        this.resizeElements()
-                    })
-                } else if (
-                    mutation.payload.field.startsWith('eeg.majorGrid.') ||
-                    mutation.payload.field.startsWith('eeg.minorGrid.')
-                ) {
-                    this.$nextTick(() => {
-                        this.resizeElements()
-                    })
-                }
-            }
-        })
+        // Screen calibration and grid geometry both change how wide a second is drawn.
+        this.addPropertyChangeHandler('app.screenPPI', this.screenPpiChanged)
+        this.addPropertyChangeHandler(`${this.SCOPE}.grid`, this.gridChanged)
         // Epoch-mode reactivity is driven by the interface-scoped `setting-changed` event that
         // INTERFACE.setFieldValue emits, so dialog changes and external setFieldValue calls
         // both reach here.
@@ -1723,7 +1723,7 @@ export default defineComponent({
         // Remove possible hanging promises
         this.resolvePlotUpdate = null
         // Unsubscribe from store
-        this.unsubscribe?.()
+        this.removePropertyChangeHandlers()
         this.unsubscribeActions?.()
         this.unsubscribeSettings?.()
         this.unsubscribeEpochRequest?.()

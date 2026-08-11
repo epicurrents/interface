@@ -64,8 +64,6 @@ export default defineComponent({
         const width = ref(0)
         // DOM
         const component = ref<HTMLDivElement>() as Ref<HTMLDivElement>
-        // Unsubscribe from store mutations
-        const unsubscribe = ref(null as (() => void) | null)
         return {
             height,
             horizontalLines,
@@ -77,8 +75,6 @@ export default defineComponent({
             component,
             // Imported methods
             settingsColorToRgba,
-            // Unsubscribers
-            unsubscribe,
             ...useBiosignalContext(store, 'TimescaleGrid')
         }
     },
@@ -166,33 +162,9 @@ export default defineComponent({
     },
     mounted () {
         // Listen to setting changes.
-        this.unsubscribe = this.$store.subscribe((mutation) => {
-            if (
-                mutation.type === 'set-settings-value'
-                && (
-                    mutation.payload.field === 'app.screenPPI'
-                    || mutation.payload.field.includes('.isoelLine.')
-                    || mutation.payload.field.includes('.majorGrid.')
-                    || mutation.payload.field.includes('.minorGrid.')
-                )
-            ) {
-                this.drawGrid()
-            }
-        })
-        /*
-        this.$store.state.addEventListener(
-            [
-                'app.screenPPI',
-                /.+?\.isoelLine\..+/,
-                /.+?\.majorGrid\..+/,
-                /.+?\.minorGrid\..+/,
-            ],
-            () => {
-                this.drawGrid()
-            },
-            this.ID
-        )
-        */
+        this.addPropertyChangeHandler('app.screenPPI', this.drawGrid)
+        this.addPropertyChangeHandler(`${this.SCOPE}.grid`, this.drawGrid)
+        this.addPropertyChangeHandler(`${this.SCOPE}.isoelLine`, this.drawGrid)
         // Listen to recording property changes.
         this.RESOURCE.onPropertyChange('activeMontage', () => {
             if (this.SETTINGS.isoelLine.show) {
@@ -205,9 +177,7 @@ export default defineComponent({
     },
     beforeUnmount () {
         this.RESOURCE.removeAllEventListeners(this.ID)
-        if (this.unsubscribe) {
-            this.unsubscribe()
-        }
+        this.removePropertyChangeHandlers()
     }
 })
 </script>

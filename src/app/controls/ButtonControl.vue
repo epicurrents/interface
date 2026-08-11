@@ -31,6 +31,7 @@
 import { defineComponent, Ref, ref, PropType } from "vue"
 import { T } from "#i18n"
 import { useStore } from "vuex"
+import { useActiveContext } from "#config"
 import { DataResource } from "@epicurrents/core/types"
 
 export default defineComponent({
@@ -86,21 +87,16 @@ export default defineComponent({
         },
     },
     setup () {
-        const ID = 'ButtonControl-' + useStore().state.APP.runningId++
         // Save a pointer the the active resource. Otherwise it will be inaccessible before we have a
         // chance to clean up (unmount is triggered by the active resource changing).
         const RESOURCE = useStore().getters.getActiveResource() as DataResource
         const control = ref<HTMLDivElement>() as Ref<HTMLDivElement>
         const icon = ref<HTMLDivElement>() as Ref<HTMLDivElement>
-        // Unsubscribe from store mutations
-        const unsubscribe = ref([] as (() => void)[])
         return {
-            ID,
             RESOURCE,
             control,
             icon,
-            // Unsubscribers
-            unsubscribe,
+            ...useActiveContext(useStore(), 'ButtonControl'),
         }
     },
     computed: {
@@ -155,17 +151,9 @@ export default defineComponent({
                 continue
             }
             if (scope === 'settings') {
-                this.unsubscribe.push(
-                    this.$store.subscribe((mutation) => {
-                        const matchSubProps = prop.endsWith('.')
-                        if (
-                            mutation.type === 'set-settings-value' &&
-                            (matchSubProps ? mutation.payload.field.startsWith(prop) : mutation.payload.field === prop)
-                        ) {
-                            this.reloadComponent()
-                        }
-                    })
-                )
+                // A trailing dot marks a branch to watch; handlers match the named field and all of
+                // its descendants either way.
+                this.addPropertyChangeHandler(prop.replace(/\.$/, ''), this.reloadComponent)
             } else if (scope === 'resource') {
                 this.RESOURCE.onPropertyChange(prop as keyof typeof this.RESOURCE, this.reloadComponent, this.ID)
             } else if (scope === 'onnx') {
@@ -178,8 +166,7 @@ export default defineComponent({
         // Remove property update handlers
         this.RESOURCE?.removeAllEventListeners(this.ID)
         this.$store.state.SERVICES.get('ONNX')?.removeAllEventListeners(this.ID)
-        // Unsubscribe from actions
-        this.unsubscribe.forEach((unsub) => unsub())
+        this.removePropertyChangeHandlers()
     }
 })
 </script>
