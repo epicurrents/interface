@@ -2,7 +2,9 @@
 
 This package is the Epicurrents viewer user interface: a Vue 3 + Vuex application that implements the `InterfaceModule` contract from `@epicurrents/core`. It builds either as a standalone app or as an embeddable library that a host page mounts into a container element. It owns no signal processing of its own — it renders whatever modality modules the consumer registered with the core application, resolving each resource's viewer, controls and footer components through the module registry at runtime.
 
-All signal rendering goes through WebGL (`WebGlPlot`), and the Vuex state *is* the core `RuntimeStateManager` instance, so Vue reactivity and the core runtime observe the same object.
+All signal rendering goes through WebGL (`WebGlPlot`), and the Vuex state *is* the core `RuntimeStateManager` instance, so Vue reactivity and the core runtime observe the same object — though only reads are shared, since core writes bypass the reactive proxy (see [Core runtime mutations do not trigger Vue reactivity](#core-runtime-mutations-do-not-trigger-vue-reactivity)).
+
+[README.md](README.md) is the user-facing description (structure, usage, build workflow); [ROADMAP.md](ROADMAP.md) carries design intent rather than current state, and the store described below is being migrated to Pinia along the staging set out there.
 
 ---
 
@@ -80,7 +82,7 @@ Source: [src/DefaultInterface.ts](src/DefaultInterface.ts)
 
 ### Vuex Store ([src/store/index.ts](src/store/index.ts))
 
-**Key design**: The Vuex state **is** the `RuntimeStateManager` instance (the same object). No copying — the store holds a direct reference to the core runtime. This means Vue reactivity and the core runtime state are the same object.
+**Key design**: The Vuex state **is** the `RuntimeStateManager` instance (the same object). No copying — the store holds a direct reference to the core runtime. This means Vue reactivity and the core runtime state are the same object, but the sharing is one-directional: core's own writes never reach the reactive proxy ([Core runtime mutations do not trigger Vue reactivity](#core-runtime-mutations-do-not-trigger-vue-reactivity)).
 
 Interface-specific properties are added directly to `runtime.APP` via `Object.assign`:
 - `activeScope`, `activeModality`, `componentStyles`, `containerId`, `plots` (Map of BiosignalPlot), `settingsOpen`, `shadowRoot`, `showOverlay`, `uiComponentVisible`, `view`
@@ -327,12 +329,20 @@ Every component in the interface calls a variant of this. It returns:
     SCOPE: string,       // e.g. 'eeg'
     SCHEMAS: ...,        // Module-specific JSON schemas
     SETTINGS: Proxy,     // See below
+    addPropertyChangeHandler(field, handler): void,
     getFieldValue(field, depth?): SettingsValue,
+    removePropertyChangeHandlers(): void,
     setFieldValue(field, value): boolean,
 }
 ```
 
-**`SETTINGS` is a `Proxy`**: reads try interface settings first (`INTERFACE.modules.get(context)?.settings`), then core runtime settings (`store.state.SETTINGS.modules[context]`). Writes go to core runtime settings first, then interface settings. This shadow pattern means interface settings always override core without needing to copy values.
+**Watching a settings field**: call `addPropertyChangeHandler(field, handler)` with the fully-qualified dotted path, and `removePropertyChangeHandlers()` once in `beforeUnmount`. The handler fires for the named field *and every descendant of it*, so `('eeg.grid', h)` covers `eeg.grid.major.width`. Registration resolves to whichever settings tree declares the field, so a caller never has to know which of the two owns it, and every handler added through one context is keyed on that context's `ID` — the teardown call removes all of them from both trees at once.
+
+Do **not** subscribe to the `set-settings-value` store mutation to observe a settings change. That route sees only the field the mutation carries, has no tree resolution, and needs its own unsubscriber. `addPropertyChangeHandler` is the read side of settings; the `set-settings-value` dispatch remains the write side, because it is what persists user-definable fields to storage.
+
+Handlers currently take no arguments and re-read through `getFieldValue` when they need the value — `PropertyChangeHandler` is declared as a generic *function* signature (`<T>(newValue?: T, …)`), which only a zero-argument handler can satisfy.
+
+**`SETTINGS` is a `Proxy`**: reads try interface settings first (`INTERFACE.modules.get(context)?.settings`), then core runtime settings (`store.state.SETTINGS.modules[context]`). Writes go to whichever source declares the field, interface first; a field declared in neither is created on the interface settings. Where both sources carry the same key with plain-object values, the returned value is itself a proxy applying the same two-source resolution, so nested keys can live in either source without one shadowing the other. This shadow pattern means interface settings always override core without needing to copy values.
 
 **Specialised variants:**
 - `useAppContext(store)` — context `'app'`, typed to `AppSettings & AppModuleSettings`
@@ -460,6 +470,23 @@ outer (orientation=vertical, primary-slot=end)
 ---
 
 ## Gotchas
+
+### Core runtime mutations do not trigger Vue reactivity
+
+The Vuex state is the `RuntimeStateManager` instance, so reads through `$store.state.APP.x` return a tracked reactive proxy. Writes performed by the core package do not go through it. Every mutating method on the manager writes through the module-level `state` object it closes over rather than through `this`:
+
+```ts
+// @epicurrents/core — src/runtime/index.ts
+export const state: RuntimeState = { APP: APP_MODULE, … }
+addDataset (dataset) { state.APP.datasets.push(dataset) }
+setActiveDataset (dataset) { … state.APP.activeDataset = dataset }
+```
+
+Invoking the method through the reactive proxy does not help, because the body never touches `this`. The practical consequence is that no core-owned field — `activeDataset`, `datasets`, `connectors`, the study registries — ever notifies a template or computed property when core changes it.
+
+Interface code compensates by subscribing to the runtime's own event bus (`state.addEventListener([...], handler, caller)`, used in around a dozen components) or to the relevant store mutation, then re-reading. [DatasetNavigator.vue](src/app/navigator/DatasetNavigator.vue) shows the pattern in its most explicit form: an `updateCounter` ref, referenced inside the `sortedResources` computed purely to create a dependency, and incremented from an `add-resource` / `set-active-dataset` / `set-active-resource` listener.
+
+**When adding a component that displays core-owned state**, drive it from a bus subscription rather than assuming the read is live. Interface-owned fields (those `AppStore`'s constructor assigns onto `runtime.APP`) are written through the proxy by store mutations and *are* reactive.
 
 ### `wa-reposition` fires before wa-split-panel re-renders — `offsetHeight` is stale
 

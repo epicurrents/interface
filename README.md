@@ -117,4 +117,4 @@ If the host application does not use WebAwesome at all, no action is required â€
 ## Dependencies and TODOs
 
 This interface module has a couple of dependencies that may limit its use or are in the process of being replaced:
-- Vuex store for reactive state management in Vue components. This should be replaced with the newer Pinia store, however, the interface currently depends on events from Vuex. The goal is to replace these Vuex events with ones from the Epicurrents event bus (this work is underway) and finally switch from Vuex to Pinia for state management.
+- Vuex store for reactive state management in Vue components. This should be replaced with the newer Pinia store, however, the interface currently depends on events from Vuex. The goal is to replace these Vuex events with ones from the Epicurrents event bus (this work is underway) and finally switch from Vuex to Pinia for state management. The staged plan and its open questions are in [ROADMAP.md](ROADMAP.md).
