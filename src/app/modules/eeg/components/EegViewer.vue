@@ -171,6 +171,7 @@
                                     :selectedIdx="selectedIndex"
                                     :selections="plotSelections"
                                     :tab="analysisWindow.tab"
+                                    :viewRange="viewRange"
                                     v-on:set-cursor-pos="cursors.setCursorPos"
                                 />
                             </window-dialog>
@@ -1203,9 +1204,6 @@ export default defineComponent({
                     }
                     this.hotkeyEvents.notch = false
                 } else if (this.isHotkeyMatch('topogram', event)) {
-                    if (!this.$store.state.SERVICES.get('pyodide')) {
-                        return
-                    }
                     this.analysisWindow.nr++
                     this.analysisWindow.tab = 'topo'
                     if (!this.analysisWindow.open) {

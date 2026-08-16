@@ -347,19 +347,65 @@ export const schemas: InterfaceModuleSchema = safeObjectFrom({
                 width: '5rem',
             },
             {
-                text: 'Pyodide options',
+                text: 'Voltage field topogram',
                 type: 'subtitle',
-                info: 'Options for features depending on the Pyodide service.',
-                service: 'pyodide',
+                info: 'Options for the scalp voltage field map.',
             },
             {
                 component: 'settings-checkbox',
                 height: '2.5rem',
-                setting: 'eeg.services.pyodide.topogramColorbar',
-                text: 'Display a colorbar with voltage scale next to the topogram.',
+                setting: 'eeg.topogram.colorbar',
+                text: 'Display a colour scale with the voltage limit next to the topogram.',
                 type: 'setting',
-                width: '5rem',
-                service: 'pyodide',
+                width: '5.5rem',
+            },
+            {
+                component: 'settings-number',
+                setting: 'eeg.topogram.contours',
+                min: 0,
+                max: 10,
+                text: 'Number of field contour levels either side of zero (0 draws none).',
+                type: 'setting',
+                width: '5.5rem',
+            },
+            {
+                component: 'settings-number',
+                setting: 'eeg.topogram.scale',
+                min: 0,
+                max: 999,
+                text: 'Fixed voltage scale in µV (0 scales each frame to its own maximum).',
+                type: 'setting',
+                width: '5.5rem',
+            },
+            {
+                component: 'settings-number',
+                setting: 'eeg.topogram.intensity',
+                min: 0,
+                max: 100,
+                text: 'Colour saturation of the mid range, 0 (linear) to 100 (most saturated).',
+                type: 'setting',
+                width: '5.5rem',
+            },
+            {
+                component: 'settings-colorpicker',
+                setting: 'eeg.topogram.colors.negative',
+                text: 'Color of the most negative field values.',
+                type: 'setting',
+                width: '5.5rem',
+            },
+            {
+                component: 'settings-colorpicker',
+                setting: 'eeg.topogram.colors.neutral',
+                text: 'Color of a zero field value (keep this neutral).',
+                type: 'setting',
+                width: '5.5rem',
+            },
+            {
+                component: 'settings-colorpicker',
+                setting: 'eeg.topogram.colors.positive',
+                text: 'Color of the most positive field values.',
+                type: 'setting',
+                width: '5.5rem',
             },
         ],
         label: {
@@ -428,6 +474,13 @@ export const settings: EegInterfaceSettings = safeObjectFrom({
         'trace.color.ekg': String,
         'trace.color.eog': String,
         'trace.colorSides': Boolean,
+        'topogram.colorbar': Boolean,
+        'topogram.colors.negative': String,
+        'topogram.colors.neutral': String,
+        'topogram.colors.positive': String,
+        'topogram.contours': Number,
+        'topogram.intensity': Number,
+        'topogram.scale': Number,
         'useMemoryManager': Boolean,
         'unloadOnClose': Boolean,
     },
@@ -674,11 +727,6 @@ export const settings: EegInterfaceSettings = safeObjectFrom({
         },
     },
     sensitivityUnit: 'uVperCm',
-    services: {
-        pyodide: {
-            topogramColorbar: true,
-        },
-    },
     timebase: {
         secPerPage: {
             availableValues: [5, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 25, 30, 35, 40, 45, 50, 55, 60],
@@ -696,6 +744,21 @@ export const settings: EegInterfaceSettings = safeObjectFrom({
     timebaseUnit: 'cmPerSec',
     timeline: {
         labelSpacing: 2,
+    },
+    topogram: {
+        colorbar: true,
+        // The poles stay separable under protanopia and deuteranopia (OKLab dE 25 between them), and there is no hue
+        // at the midpoint. Changing either of those undoes the reason these particular values were chosen.
+        colors: {
+            negative: [0.169, 0.373, 0.816, 1] as SettingsColor,
+            neutral: [0.941, 0.937, 0.925, 1] as SettingsColor,
+            positive: [0.812, 0.184, 0.184, 1] as SettingsColor,
+        },
+        contours: 5,
+        // 0 maps to a ramp gamma of 1, i.e. colour proportional to voltage. Anything higher exaggerates the mid range
+        // and so exaggerates how far a spike appears to spread, which is what the reader is usually judging.
+        intensity: 0,
+        scale: 0,
     },
     tools: {
         cursorLine: {

@@ -207,14 +207,44 @@ export type EegInterfaceSettings = CommonBiosignalInterfaceSettings & {
      *   disabled.
      */
     notchDefaultFrequency: 50 | 60 | 0
-    services: {
-        pyodide: {
-            /** Display the colorbar along the large topogram. */
-            topogramColorbar: boolean
-        }
-    }
     timeline: {
         labelSpacing: number
+    }
+    topogram: {
+        /** Display a colour scale with the voltage limit next to the topogram. */
+        colorbar: boolean
+        /**
+         * Diverging colour ramp for the scalp field. EEG potentials have a meaningful zero and a sign, so `neutral`
+         * belongs at the midpoint and must stay neutral: a third hue there reads as a third category. The poles are
+         * chosen to stay separable under protanopia and deuteranopia, so the sign of the field is never carried by a
+         * red/green distinction.
+         */
+        colors: {
+            negative: SettingsColor
+            neutral: SettingsColor
+            positive: SettingsColor
+        }
+        /** Number of field contour levels either side of zero. 0 draws no contours. */
+        contours: number
+        /**
+         * Colour saturation of the mid range, 0 (linear) to 100 (most saturated).
+         *
+         * The default is 0, on the strength of reading spikes on real recordings. At 0 the colour is proportional to
+         * the voltage, so a focal discharge stands out against a scalp that is near-neutral because it genuinely is
+         * near zero there. Raising it lifts the mid range towards the poles, which inflates how far the discharge
+         * appears to spread — a distortion of the one property the reader is judging.
+         *
+         * Raise it to bring out low-amplitude structure instead: a diffuse asymmetry, a background gradient, the weak
+         * counterpart of a dipole. This shapes the ramp only; it does not alter the underlying values.
+         */
+        intensity: number
+        /**
+         * Voltage in µV mapped to full saturation. 0 scales every frame to its own maximum (i.e. automatically).
+         *
+         * Per-frame scaling is what MNE does and what this tool did before, but it hides amplitude changes entirely:
+         * a flat stretch and a burst render identically. Set a fixed scale to compare across a time window.
+         */
+        scale: number
     }
     tools: CommonBiosignalInterfaceSettings['tools'] & {
         cursorLine: {

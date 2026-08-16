@@ -246,6 +246,52 @@ export type PlotTraceSelection = {
     signal: SignalPart | null
 }
 /**
+ * Appearance and interaction overrides for a scalp field map renderer.
+ *
+ * The lighting fields are exposed for retuning, not for taste. The defaults come from a measured sweep, and the one
+ * change that reliably ruins the image is moving the key light towards the camera: a headlamp lights everything facing
+ * the viewer almost equally and flattens the head to a silhouette.
+ */
+export type ScalpFieldRendererOptions = {
+    /** Flat RGB (0..1) for a selected electrode marker. */
+    activeElectrodeColor?: [number, number, number]
+    /** RGBA (0..1) the canvas is cleared to. Defaults to transparent, so the panel behind shows through. */
+    background?: [number, number, number, number]
+    /** Flat RGB (0..1) for the field contours. */
+    contourColor?: [number, number, number]
+    /** Flat RGB (0..1) for an unselected electrode marker. */
+    electrodeColor?: [number, number, number]
+    /** Whether the renderer attaches its own pointer listeners for rotating the head. */
+    interactive?: boolean
+    /** Key light direction in *view* space, so it stays overhead as the head turns. */
+    light?: [number, number, number]
+    /** Strength of the baked ambient occlusion, 0 to 1. */
+    occlusion?: number
+    /** Ambient, diffuse and wrap terms of the shading model. */
+    shade?: [number, number, number]
+}
+/**
+ * Colour overrides for a 2D topogram canvas.
+ *
+ * Every value is a CSS colour string, and the literal `currentColor` is accepted as well: a canvas context cannot
+ * resolve it, so the class reads the element's computed text colour at draw time instead. Use it for anything drawn
+ * over the panel rather than over the field, or a light theme loses it.
+ */
+export type TopogramCanvasOptions = {
+    /** Fill of a selected electrode marker. */
+    activeElectrodeColor?: string
+    /** Outline of a selected electrode marker. */
+    activeElectrodeEdgeColor?: string
+    /** Stroke of the field contours. Keep it lighter than `outlineColor`. */
+    contourColor?: string
+    /** Fill of an unselected electrode marker. */
+    electrodeColor?: string
+    /** Outline of an unselected electrode marker. */
+    electrodeEdgeColor?: string
+    /** Stroke of the head circle, nose and ears. */
+    outlineColor?: string
+}
+/**
  * Highlight applied to the backdrop of a signal channel/channels.
  */
 export type SignalHighlight = {

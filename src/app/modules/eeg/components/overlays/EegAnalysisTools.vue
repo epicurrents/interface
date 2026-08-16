@@ -52,9 +52,10 @@
                 <template v-if="shouldShowPanel('topo')">
                     <topomap-tool
                         :cursorPos="cursorPos"
-                        :selectedChannels="selectedChannelIndices"
-                        :seriesSpan="seriesSpan"
-                        v-on:series-span="seriesSpan = $event"
+                        :height="topPanelHeight"
+                        :selectedChannels="selectedChannelNames"
+                        :viewRange="viewRange"
+                        :width="panelWidth"
                     />
                     <div class="subtitle">
                         <div>{{ $t(`Cursor position`) }}</div>
@@ -183,6 +184,11 @@ export default defineComponent({
             type: Number,
             default: 0,
         },
+        /** Duration of the plotted page in seconds, i.e. what one trace's data spans. */
+        viewRange: {
+            type: Number,
+            default: 0,
+        },
     },
     components: {
         ExamineTool,
@@ -203,10 +209,11 @@ export default defineComponent({
         const tabs = reactive([
             { code: 'fft', label: 'FFT', requireChannel: true, requireSignal: true, showLegend: true },
             { code: 'examine', label: 'Examine', requireChannel: true, requireSignal: true, showLegend: true },
+            // The topogram computes its own interpolation, so it is available wherever the app is.
+            { code: 'topo', label: 'Topogram', requireChannel: true, requireSignal: true, showLegend: true },
         ] as PanelTabProps[])
         // Add certain tabs only if MNE is enabled.
         if (store.state.SERVICES.get('pyodide')) {
-            tabs.push({ code: 'topo', label: 'Topogram', requireChannel: true, requireSignal: true, showLegend: true })
             tabs.push({ code: 'power', label: 'Power', requireChannel: false, requireSignal: false, showLegend: false })
             tabs.push({ code: 'source-loc', label: 'Source', requireChannel: false, requireSignal: false, showLegend: false })
         }
@@ -214,7 +221,7 @@ export default defineComponent({
         const panelHeight = ref(0)
         const panelWidth = ref (0)
         const rso = null as null | ResizeObserver
-        const selectedChannelIndices = ref([0])
+        const selectedChannelNames = ref([] as string[])
         const seriesSpan = ref(100)
         /** Should the channel name legend be displayed on this tab. */
         const showLegend = ref(false)
@@ -230,7 +237,7 @@ export default defineComponent({
             panelHeight,
             panelWidth,
             rso,
-            selectedChannelIndices,
+            selectedChannelNames,
             seriesSpan,
             showLegend,
             tabgroup,
@@ -274,30 +281,26 @@ export default defineComponent({
         $t: function (key: string, params = {}, capitalized = false) {
             return T(key, this.$options.name, params, capitalized)
         },
-        findSelectedChannelIndices () {
-            this.selectedChannelIndices = []
+        /**
+         * Collect the names of the currently selected channels, for tools that mark them.
+         *
+         * Names rather than positions into a filtered channel list: a consumer builds its own list by its own rules —
+         * the topogram drops channels with no known electrode position, and anything that filters by display state
+         * drops more — so an index is only meaningful to whoever produced it. A name means the same thing to everyone
+         * and simply fails to match when the channel is not one the consumer knows.
+         *
+         * A selection that is not a scalp electrode, an EKG or EOG lead say, contributes nothing.
+         */
+        findSelectedChannelNames () {
+            this.selectedChannelNames = []
             const selected = this.selections[this.activeIdx]
             if (!selected || !selected.channel) {
                 return
             }
-            const selectedName = selected.channel.name
-            const index = this.RESOURCE.activeMontage?.channels.filter(c => c.modality === 'eeg')
-                                                               .findIndex(c => c.name === selectedName)
-            if (index === undefined || index < 0) {
-                this.selectedChannelIndices.push(0)
-            } else {
-                this.selectedChannelIndices.push(index)
-            }
-            if (this.selections.length > 1) {
-                for (const sel of this.selections) {
-                    if (!sel.channel || sel.channel.name === selectedName) {
-                        continue
-                    }
-                    const idx = this.RESOURCE.activeMontage?.channels.filter(c => c.modality === 'eeg')
-                                                                     .findIndex(c => c.name === sel.channel!.name)
-                    if (idx !== undefined && idx >= 0) {
-                        this.selectedChannelIndices.push(idx)
-                    }
+            this.selectedChannelNames.push(selected.channel.name)
+            for (const sel of this.selections) {
+                if (sel.channel && !this.selectedChannelNames.includes(sel.channel.name)) {
+                    this.selectedChannelNames.push(sel.channel.name)
                 }
             }
         },
@@ -327,7 +330,7 @@ export default defineComponent({
                 return
             }
             this.activeIdx = idx
-            this.findSelectedChannelIndices()
+            this.findSelectedChannelNames()
         },
         setCursorPos (pos: number) {
             this.$emit('set-cursor-pos', pos)
@@ -372,7 +375,7 @@ export default defineComponent({
             'add-component-styles',
             { component: this.$options.name, styles: this.$options.__scopeId }
         )
-        this.findSelectedChannelIndices()
+        this.findSelectedChannelNames()
     },
     mounted () {
         this.rso = new ResizeObserver(this.resize)
