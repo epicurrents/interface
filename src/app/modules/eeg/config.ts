@@ -14,12 +14,14 @@ import type { InterfaceModuleSchema, InterfaceSettingsDropdownOption } from '#ty
 import { getInputForSetting, getSettingForInput } from '#config'
 
 /**
- * Runtime shape of the merged EEG settings object as far as the montage-option resolver needs it.
- * The module half (`defaultMontages`, `defaultSetups`, `skipDefaultSetups`) comes from
- * `@epicurrents/eeg-module`, the `extraMontages` half from this interface module; both live on the
- * same object at runtime, so neither exported type describes it on its own.
+ * Shape of the module-side EEG settings as far as the montage-option resolver needs it.
+ *
+ * These come from `@epicurrents/eeg-module` and live on `RUNTIME.SETTINGS.modules.eeg`, which is a
+ * *different* object from this interface module's own `settings`. {@link useContext} unions the two
+ * behind a Proxy for components, so a component reading `SETTINGS` sees both — but code reaching
+ * for the runtime object directly, as the resolver below must, sees only this half.
  */
-type MergedMontageSettings = {
+type ModuleMontageSettings = {
     defaultMontages?: { [setup: string]: [string, string][] }
     defaultSetups?: string[]
     extraMontages?: { [setup: string]: BiosignalMontageTemplate[] }
@@ -39,9 +41,16 @@ type MergedMontageSettings = {
  * Setup-scoped montages are only offered for setups the deployment actually loads, and a montage
  * name is listed once even when several setups define it (the regex match is name-only, so a second
  * entry would be indistinguishable from the first).
+ *
+ * `extraMontages` is read from **both** settings objects. `applyConfiguration` files a host's extra
+ * montages on this module's own `settings`, and only pushes selected keys across to the module
+ * settings through `applyModuleSettings` — `extraMontages` is not one of them. Reading only the
+ * runtime object leaves every montage a deployment injects out of this list, while the same
+ * montages appear in the montage menu, which reads through the unioning Proxy.
  */
 const montageOptions = (): InterfaceSettingsDropdownOption[] => {
-    const settings = window.__EPICURRENTS__?.RUNTIME?.SETTINGS.modules.eeg as MergedMontageSettings | undefined
+    const moduleSettings = window.__EPICURRENTS__?.RUNTIME?.SETTINGS
+        .modules.eeg as ModuleMontageSettings | undefined
     const options = [] as InterfaceSettingsDropdownOption[]
     const seen = new Set<string>()
     const add = (value: string, label: string) => {
@@ -51,10 +60,10 @@ const montageOptions = (): InterfaceSettingsDropdownOption[] => {
         seen.add(value)
         options.push({ label, value })
     }
-    const setups = settings?.defaultSetups || []
-    if (!settings?.skipDefaultSetups) {
+    const setups = moduleSettings?.defaultSetups || []
+    if (!moduleSettings?.skipDefaultSetups) {
         for (const setup of setups) {
-            for (const [name, label] of settings?.defaultMontages?.[setup] || []) {
+            for (const [name, label] of moduleSettings?.defaultMontages?.[setup] || []) {
                 add(name, label)
             }
         }
@@ -67,9 +76,12 @@ const montageOptions = (): InterfaceSettingsDropdownOption[] => {
             }
         }
     }
-    for (const montages of Object.values(settings?.extraMontages || {})) {
-        for (const montage of montages) {
-            add(montage.name, montage.label || montage.name)
+    const extraSources = [settings.extraMontages, moduleSettings?.extraMontages]
+    for (const source of extraSources) {
+        for (const montages of Object.values(source || {})) {
+            for (const montage of montages) {
+                add(montage.name, montage.label || montage.name)
+            }
         }
     }
     // The settings view can render before any module has published its montages; offering the
