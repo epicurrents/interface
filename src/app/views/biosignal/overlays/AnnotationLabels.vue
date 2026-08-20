@@ -47,12 +47,12 @@
 import { defineComponent, PropType, reactive, Ref, ref } from "vue"
 import { T } from "#i18n"
 import {
-    deepEqual,
     INDEX_NOT_ASSIGNED,
     NUMERIC_ERROR_VALUE,
     shouldDisplayChannel,
     settingsColorToRgba,
 } from "@epicurrents/core/util"
+import { resolveEventChannelIndices } from "#app/views/biosignal/eventChannels"
 import { useStore } from "vuex"
 import { useBiosignalContext } from "#config"
 import { NO_POINTER_BUTTON_DOWN } from "#util"
@@ -60,7 +60,6 @@ import { Log } from "scoped-event-log"
 import type {
     Annotation,
     BiosignalAnnotationEvent,
-    BiosignalChannel,
     SettingsColor,
 } from "@epicurrents/core/types"
 import type { OverlayPointerEventMeta, PointerEventOverlay } from "#app/overlays/PointerEventOverlay.vue"
@@ -238,50 +237,6 @@ export default defineComponent({
             this.updateAnnotations()
         },
         /**
-         * Find all channel indices that contain the specified signal.
-         * @param signal - The signal to search for.
-         * @param checkRef - Whether to check reference channels.
-         * @returns An array of channel indices that contain the specified signal.
-         */
-        findChannelIndicesWithSignal (signal: string | number, checkRef = false) {
-            if (!this.RESOURCE.recordMontage || !this.RESOURCE.activeMontage) {
-                return []
-            }
-            const activeIndex = typeof signal === 'number'
-                              ? [this.RESOURCE.recordMontage.channels[signal].active]
-                              : this.RESOURCE.recordMontage.channels.filter(
-                                    c => c.name.toLowerCase() === signal.toLowerCase()
-                                ).map(c => c.active)
-            if (!activeIndex?.length || activeIndex[0] === -1) {
-                return []
-            }
-            const activeMontageIndices = [] as number[]
-            this.RESOURCE.activeMontage.channels.map((c, i) => {
-                const cActive = Array.isArray(c.active) ? c.active : [c.active]
-                if (cActive === activeIndex[0] || deepEqual(cActive, activeIndex)) {
-                    activeMontageIndices.push(i)
-                }
-            })
-            if (!activeMontageIndices.length && activeIndex.length && checkRef) {
-                // If no active channels were matched but we have something to check against reference signals.
-                // We will only match channels with one reference.
-                // Otherwise this would match all channels in an average reference montage for example.
-                const refIndex = this.RESOURCE.activeMontage.channels.findIndex(
-                    c => (typeof c.reference === 'number' && activeIndex.includes(c.reference))
-                        || (
-                            c.reference.length === 1 && (
-                                (Array.isArray(c.reference[0]) && activeIndex.includes(c.reference[0][0]))
-                                || activeIndex.includes(c.reference[0])
-                            )
-                        )
-                )
-                if (refIndex !== -1) {
-                    activeMontageIndices.push(refIndex)
-                }
-            }
-            return activeMontageIndices
-        },
-        /**
          * Helper method to calculate annotation properties.
          */
         getAnnotationProperties (event: BiosignalAnnotationEvent) {
@@ -317,14 +272,6 @@ export default defineComponent({
                 ) * this.pxPerSecond
             }
             return properties
-        },
-        getBackgroundProperties (context: AnnotationContext, channel: BiosignalChannel) {
-            const range = [context.event.start, context.event.start + context.event.duration]
-            const startX = Math.max(range[0] - this.RESOURCE.viewStart, 0) * this.pxPerSecond
-            const endX = Math.max(range[1] - this.RESOURCE.viewStart, 0) * this.pxPerSecond
-            const top = `${100*(1 - channel.offset.top)}%`
-            const bottom = `${100*channel.offset.bottom}%`
-            return `top: ${top}; bottom: ${bottom}; left: ${startX}px; width: ${endX - startX}px`
         },
         getPagePosition (startTime: number): number {
             return (startTime - this.RESOURCE.viewStart)/this.secPerPage
@@ -671,23 +618,17 @@ export default defineComponent({
             for (const event of this.RESOURCE.events) {
                 // Channel annotations are always visible in raw signal view, but may not be in every montage.
                 if (event.channels?.length && this.RESOURCE.activeMontage) {
-                    // Check that at least one of the annotation channels is visible
-                    let anyChanVisible = false
-                    for (const chan of event.channels) {
-                        const cIndex = this.findChannelIndicesWithSignal(chan, true)
-                        if (
-                            cIndex.some(
-                                i => shouldDisplayChannel(
-                                    this.RESOURCE.activeMontage!.channels[i],
-                                    false,
-                                    this.SETTINGS
-                                )
-                            )
-                        ) {
-                            anyChanVisible = true
-                            break
-                        }
-                    }
+                    // Resolved together rather than one reference at a time: a name can match
+                    // several record channels, and a derived channel can draw on several of them,
+                    // so an event is displayable when any resolved position is on screen.
+                    const indices = resolveEventChannelIndices(this.RESOURCE, event.channels, true)
+                    const anyChanVisible = indices.some(
+                        i => shouldDisplayChannel(
+                            this.RESOURCE.activeMontage!.channels[i],
+                            false,
+                            this.SETTINGS
+                        )
+                    )
                     if (!anyChanVisible) {
                         continue
                     }
