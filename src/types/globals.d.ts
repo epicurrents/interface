@@ -100,6 +100,17 @@ export type ApplicationInterfaceConfig = ApplicationConfig & {
          */
         nameOptions?: { label?: string, name: string }[]
     } | null
+    /**
+     * Address of a backend that stores the signed-in user's settings for their account, or an empty
+     * string / omitted (the default) to keep settings on the local device only.
+     *
+     * Sets the `app.userSettingsBackend` setting before launch. See that setting's documentation in
+     * `@epicurrents/core` for the request contract; in short, the address answers `GET` with
+     * `{ "settings": { "<module>.<field>": value } }` and accepts the same shape on `PUT`. Only
+     * user-definable fields cross the wire, requests carry same-origin credentials, and a backend
+     * that cannot be reached is logged and ignored.
+     */
+    userSettingsBackend?: string
 }
 /**
  * Setup properties for interface modules.

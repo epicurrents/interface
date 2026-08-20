@@ -355,6 +355,10 @@ export const DefaultInterface: DefaultInterfaceModuleConstructor = class Epicurr
             return false
         }
         this.store?.loadLocalSettings()
+        // The account copy is loaded on top of the device copy, and awaited: a resource opened
+        // before it lands would be set up against the previous machine's montage and layout.
+        // Resolves immediately when no `app.userSettingsBackend` is configured.
+        await this.store?.loadUserSettings()
         Log.debug(`All interface modules loaded.`, SCOPE)
         this.isReady = true
         for (const waiter of this.readyWaiters) {

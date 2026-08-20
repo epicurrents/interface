@@ -7,13 +7,14 @@
 
 import { MutationTree } from "vuex"
 import { type State } from "#store"
-import type { DataResource, FileSystemItem } from "@epicurrents/core/types"
+import type { DataResource, FileSystemItem, SettingsValue } from "@epicurrents/core/types"
 import Log from "scoped-event-log"
 import type { ConnectorProperties, ScopedResource } from "./actions"
 import { MixedMediaDataset } from "@epicurrents/core"
 import INTERFACE from "#config"
 import type { ApplicationView, InterfaceSettings } from "#types/config"
 import { DatabaseQueryOptions, WebDAVConnectorOptions } from "#workspace/epicurrents/core/dist/types/connector"
+import { queueUserSettingsSave } from "./userSettings"
 
 const SCOPE = "StoreMutations"
 
@@ -192,6 +193,10 @@ export const mutations: MutationTree<State> & Mutations = {
                             window.localStorage.setItem('epicurrents', JSON.stringify(localStorage))
                         }
                         Log.debug(`Saved value ${payload.value} to settings field ${full} locally.`, SCOPE)
+                        // Mirror the change to the user's account when the host configured a
+                        // settings backend. No-op otherwise, and never blocking: the write is
+                        // debounced and its failures are logged inside the client.
+                        queueUserSettingsSave(payload.field, payload.value as SettingsValue)
                     }
                 }
             }

@@ -93,6 +93,7 @@ const SETUP: Required<ApplicationInterfaceConfig> = Object.assign(
         isProduction: false,
         locale: 'en',
         logThreshold: 'WARN',
+        userSettingsBackend: '',
         modules: {
             eeg: {
                 cascadeMontages: {
@@ -270,6 +271,9 @@ export const createEpicurrentsApp = async (
         'app.logThreshold': SETUP.logThreshold,
         'app.maxLoadCacheSize': SETUP.signalCacheMaxSize*MB_BYTES,
         'app.useMemoryManager': USE_SAB,
+        // Applied pre-launch because the interface reads it while loading modules, before the host
+        // regains control and could set it itself.
+        'app.userSettingsBackend': SETUP.userSettingsBackend || '',
     })
     // The interface module map is populated by the consumer's registrar through
     // registerInterfaceModule(); reset it so repeated calls start clean.

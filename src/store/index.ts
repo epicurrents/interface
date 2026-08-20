@@ -34,6 +34,7 @@ import type {
 import type { BiosignalPlot } from '#types/plot'
 import type { ModuleConfiguration } from '#types/globals'
 import { loadAsyncComponent } from "../util"
+import { loadUserSettings as fetchUserSettings } from "./userSettings"
 import { nullPromise, safeObjectFrom } from "@epicurrents/core/util"
 
 // Re-export the AugmentedRuntimeState as State for simplicity and in case it has to be altered in the future.
@@ -181,6 +182,11 @@ export interface InterfaceStoreManager {
      * Load and apply possible locally saved settings.
      */
     loadLocalSettings (): void
+    /**
+     * Load and apply the signed-in user's settings from the configured user-settings backend.
+     * Resolves without doing anything when no backend is configured or it cannot be read.
+     */
+    loadUserSettings (): Promise<void>
 }
 
 export default class AppStore implements InterfaceStoreManager {
@@ -346,6 +352,64 @@ export default class AppStore implements InterfaceStoreManager {
         return this.store
     }
 
+    /**
+     * Apply a map of `<module>.<field>` settings, skipping any field the owning module does not
+     * list as user-definable and any value whose type does not match the declared constructor.
+     *
+     * Values are written through `useContext().setFieldValue`, which reaches the settings object
+     * directly instead of going through the `SET_SETTINGS_VALUE` mutation. That is deliberate:
+     * applying a stored set must not be mistaken for the user changing a setting, or restoring it
+     * would immediately write the same values straight back out to storage and to the settings
+     * backend.
+     *
+     * @param settings - Map of full settings paths to values.
+     * @param origin - Where the values came from, used in log messages ('local' / 'user account').
+     */
+    private applySettingsMap (settings: { [field: string]: unknown }, origin: string) {
+        field_loop:
+        for (const [field, value] of Object.entries(settings)) {
+            const match = field.match(/^(.+?)\.(.+)$/)
+            if (!match) {
+                continue
+            }
+            const [_fullField, mod, modField] = match
+            // App is a special case.
+            const userDefinable = mod === 'app'
+                                ? Object.assign({},
+                                    { ... appSettings._userDefinable },
+                                    { ... SETTINGS.app._userDefinable },
+                                )
+                                : Object.assign({},
+                                    {
+                                        ... this.store.state.INTERFACE.modules
+                                                .get(mod)
+                                                ?.settings
+                                                ?._userDefinable
+                                            || {},
+                                    },
+                                    {
+                                        ... SETTINGS.modules[
+                                                mod as keyof AppSettings
+                                            ]?._userDefinable
+                                    }
+                                )
+            if (!Object.keys(userDefinable).length) {
+                continue
+            }
+            // Check that the setting can be modified.
+            for (const [uField, uConstr] of Object.entries(userDefinable)) {
+                if (uField === modField && (value as any)?.constructor === uConstr) {
+                    useContext(this.store, mod).setFieldValue(field, value as SettingsValue)
+                    Log.debug(`Applied ${origin} value ${value} to settings field ${field}`, SCOPE)
+                    continue field_loop
+                }
+            }
+            Log.warn(
+                `Setting ${field} cannot be set by the user or the value type is incorrect.`,
+            SCOPE)
+        }
+    }
+
     loadLocalSettings () {
         // Check if the local storage contains settings.
         // Prioritize session storage over local storage, so we can mmaintain different settings in multiple open tabs.
@@ -353,51 +417,20 @@ export default class AppStore implements InterfaceStoreManager {
         if (storage) {
             const localStorage = JSON.parse(storage)
             if (localStorage.settings) {
-                // Go through fields.
-                field_loop:
-                for (const [field, value] of Object.entries(localStorage.settings)) {
-                    const match = field.match(/^(.+?)\.(.+)$/)
-                    if (!match) {
-                        continue
-                    }
-                    const [_fullField, mod, modField] = match
-                    // App is a special case.
-                    const userDefinable = mod === 'app'
-                                        ? Object.assign({},
-                                            { ... appSettings._userDefinable },
-                                            { ... SETTINGS.app._userDefinable },
-                                        )
-                                        : Object.assign({},
-                                            {
-                                                ... this.store.state.INTERFACE.modules
-                                                        .get(mod)
-                                                        ?.settings
-                                                        ?._userDefinable
-                                                    || {},
-                                            },
-                                            {
-                                                ... SETTINGS.modules[
-                                                        mod as keyof AppSettings
-                                                    ]._userDefinable
-                                            }
-                                        )
-                    if (!Object.keys(userDefinable).length) {
-                        continue
-                    }
-                    // Check that the setting can be modified.
-                    for (const [uField, uConstr] of Object.entries(userDefinable)) {
-                        if (uField === modField && (value as any)?.constructor === uConstr) {
-                            useContext(this.store, mod).setFieldValue(field, value as SettingsValue)
-                            Log.debug(`Applied local value ${value} to settings field ${field}`, SCOPE)
-                            continue field_loop
-                        }
-                    }
-                    Log.warn(
-                        `Setting ${field} cannot be set by the user or the value type is incorrect.`,
-                    SCOPE)
-                }
+                this.applySettingsMap(localStorage.settings, 'local')
             }
         }
+    }
+
+    async loadUserSettings () {
+        const settings = await fetchUserSettings()
+        if (!settings) {
+            return
+        }
+        // Applied after the device copy so the account's settings win: a user who changed a setting
+        // on another machine expects to find it that way here, not overridden by whatever this
+        // browser happened to have stored from an earlier session.
+        this.applySettingsMap(settings, 'user account')
     }
     get APP () {
         return this.store.state.APP
