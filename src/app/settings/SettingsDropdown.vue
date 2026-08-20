@@ -6,7 +6,7 @@
             :label="field.text"
             v-property="'selected'"
         >
-            <wa-option v-for="(opt, idx) of field.options" :key="`${field.text}-option-${idx}`"
+            <wa-option v-for="(opt, idx) of fieldOptions" :key="`${field.text}-option-${idx}`"
                 :value="opt.value"
             >
                 <span v-if="opt.prefix" slot="start">{{ $t(opt.prefix) }}</span>
@@ -64,6 +64,14 @@ export default defineComponent({
         }
     },
     computed: {
+        /**
+         * Resolve the schema's `options` property, which may be either a fixed list or a function
+         * evaluated at render time (for option sets that depend on runtime state).
+         */
+        fieldOptions () {
+            const options = this.field.options
+            return typeof options === 'function' ? options() : options
+        },
         isDisabled () {
             return this.disabled || this.disabledTooltip !== undefined || undefined
         },

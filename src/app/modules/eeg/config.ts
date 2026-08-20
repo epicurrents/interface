@@ -7,9 +7,76 @@
 
 import { safeObjectFrom } from '@epicurrents/core/util'
 import { SettingsValue, type SettingsColor } from '@epicurrents/core/types'
+import type { BiosignalMontageTemplate } from '@epicurrents/core/types'
+import { EegRecording } from '@epicurrents/eeg-module'
 import { type EegInterfaceSettings } from './types'
-import type { InterfaceModuleSchema } from '#types/config'
+import type { InterfaceModuleSchema, InterfaceSettingsDropdownOption } from '#types/config'
 import { getInputForSetting, getSettingForInput } from '#config'
+
+/**
+ * Runtime shape of the merged EEG settings object as far as the montage-option resolver needs it.
+ * The module half (`defaultMontages`, `defaultSetups`, `skipDefaultSetups`) comes from
+ * `@epicurrents/eeg-module`, the `extraMontages` half from this interface module; both live on the
+ * same object at runtime, so neither exported type describes it on its own.
+ */
+type MergedMontageSettings = {
+    defaultMontages?: { [setup: string]: [string, string][] }
+    defaultSetups?: string[]
+    extraMontages?: { [setup: string]: BiosignalMontageTemplate[] }
+    skipDefaultSetups?: boolean
+}
+
+/**
+ * Build the option list for the default-montage dropdown from every montage the deployment can
+ * actually add to a recording: the per-setup default montages, the montage templates the EEG module
+ * ships as extras, and any the host supplied through `extraMontages`.
+ *
+ * Options are keyed by montage *name* — the trailing segment of the `<setup>:<name>` identifier
+ * that `EegViewer` matches `eeg.defaultMontage` against — and never by list position. The set of
+ * extra montages a deployment ships changes between releases, and a stored preference has to keep
+ * pointing at the same montage when it does.
+ *
+ * Setup-scoped montages are only offered for setups the deployment actually loads, and a montage
+ * name is listed once even when several setups define it (the regex match is name-only, so a second
+ * entry would be indistinguishable from the first).
+ */
+const montageOptions = (): InterfaceSettingsDropdownOption[] => {
+    const settings = window.__EPICURRENTS__?.RUNTIME?.SETTINGS.modules.eeg as MergedMontageSettings | undefined
+    const options = [] as InterfaceSettingsDropdownOption[]
+    const seen = new Set<string>()
+    const add = (value: string, label: string) => {
+        if (seen.has(value)) {
+            return
+        }
+        seen.add(value)
+        options.push({ label, value })
+    }
+    const setups = settings?.defaultSetups || []
+    if (!settings?.skipDefaultSetups) {
+        for (const setup of setups) {
+            for (const [name, label] of settings?.defaultMontages?.[setup] || []) {
+                add(name, label)
+            }
+        }
+        for (const [setup, montages] of EegRecording.EXTRA_MONTAGES) {
+            if (!setups.includes(setup)) {
+                continue
+            }
+            for (const montage of montages) {
+                add(montage.name, montage.label || montage.name)
+            }
+        }
+    }
+    for (const montages of Object.values(settings?.extraMontages || {})) {
+        for (const montage of montages) {
+            add(montage.name, montage.label || montage.name)
+        }
+    }
+    // The settings view can render before any module has published its montages; offering the
+    // as-recorded montage alone is better than an empty dropdown that silently discards the
+    // stored value.
+    return options.length ? options : [{ label: 'As recorded', value: 'rec' }]
+}
 
 /**
  * Helper type for the input/setting converters.
@@ -85,12 +152,7 @@ export const schemas: InterfaceModuleSchema = safeObjectFrom({
             },
             {
                 component: 'settings-dropdown',
-                options: [
-                    { label: 'As recorded', value: 'rec' },
-                    { label: 'Average reference', value: 'avg' },
-                    { label: 'Longitudinal bipolar', value: 'lon' },
-                    { label: 'Transverse bipolar', value: 'trv' },
-                ],
+                options: montageOptions,
                 setting: 'eeg.defaultMontage',
                 text: 'Default montage to use when opening a new recording.',
                 type: 'setting',

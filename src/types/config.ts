@@ -469,8 +469,12 @@ export type InterfaceSettingsDropdown = {
     /** The text to show on the settings row. */
     text: string
     type: 'setting'
-    /** Dropdown options. */
-    options: InterfaceSettingsDropdownOption[]
+    /**
+     * Dropdown options, either as a fixed list or as a resolver called each time the settings view
+     * renders. Use the resolver form when the set of valid values depends on runtime state (loaded
+     * modules, registered montages, active services) rather than on the schema alone.
+     */
+    options: InterfaceSettingsDropdownOption[] | (() => InterfaceSettingsDropdownOption[])
 }
 /** An option for a settings dropdown. */
 export type InterfaceSettingsDropdownOption = {
