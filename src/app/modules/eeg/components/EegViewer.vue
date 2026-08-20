@@ -1291,6 +1291,25 @@ export default defineComponent({
                 } else {
                     this.montageSetupDone = true
                 }
+                // Add the host's extra montages before the two passes below, and await them.
+                // This body runs once — every later call returns at the `montageSetupDone` guard
+                // — so a montage that arrives after the layout pass never gets `setChannelLayout`
+                // and renders every trace on one baseline, and a montage that arrives after the
+                // default-montage resolution can never *be* the default, because the fallback has
+                // already set an active montage by then. Cascade montages work around the first
+                // half of that themselves (see GenericBiosignalCascadeMontage); the montages a
+                // deployment injects through `extraMontages` had no such escape.
+                if (this.montageSetupDone) {
+                    for (const [setup, montages] of Object.entries(this.SETTINGS.extraMontages)) {
+                        for (const montage of montages) {
+                            Log.debug(
+                                `Adding extra montage '${montage.name}' to setup '${setup}''`,
+                                this.$options.name!
+                            )
+                            await this.RESOURCE.addMontage(`${setup}:${montage.name}`, montage.label, setup, montage)
+                        }
+                    }
+                }
                 // Apply viewer settings to all recording montages.
                 for (const montage of this.RESOURCE.montages) {
                     montage.setChannelLayout({ ...this.SETTINGS })
@@ -1307,23 +1326,14 @@ export default defineComponent({
                     }
                 }
                 if (this.montageSetupDone) {
-                    // Finally, start setting up additional montages.
-                    for (const [setup, montages] of Object.entries(this.SETTINGS.extraMontages)) {
-                        for (const montage of montages) {
-                            Log.debug(
-                                `Adding extra montage '${montage.name}' to setup '${setup}''`,
-                                this.$options.name!
-                            )
-                            this.RESOURCE.addMontage(`${setup}:${montage.name}`, montage.label, setup, montage)
-                        }
-                    }
                     // Resolve cascade montage entries against the now-populated setups list and
                     // register one cascade montage per entry whose source candidate matches. The
                     // recording exposes addCascadeMontagesFromEntries as a Promise-returning helper;
-                    // we don't await here because additional montages are added in a fire-and-forget
-                    // pattern (same as the extraMontages loop above). The settings shape is keyed
-                    // by setup name (mirroring extraMontages), so check Object.keys().length, not
-                    // Array.length.
+                    // we don't await here, and it deliberately stays after the layout pass: a
+                    // cascade stacks N rows of one channel and computes its own equidistant
+                    // offsets, which the configured group layout would overwrite. The settings
+                    // shape is keyed by setup name (mirroring extraMontages), so check
+                    // Object.keys().length, not Array.length.
                     const cascadeEntries = this.SETTINGS.cascadeMontages
                     if (cascadeEntries && Object.keys(cascadeEntries).length && this.RESOURCE.addCascadeMontagesFromEntries) {
                         this.RESOURCE.addCascadeMontagesFromEntries(cascadeEntries)
