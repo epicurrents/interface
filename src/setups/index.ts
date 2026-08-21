@@ -204,6 +204,10 @@ export type { ApplicationInterfaceConfig }
  * the optional `register` callback, which imports only the packages it needs.
  * Omitting `register` boots a bare shell with no modules.
  *
+ * Resolves once the launch has completed, so the app it hands back is ready to open a resource in:
+ * the interface modules are registered and the user's stored settings are in effect. A host may
+ * open a resource immediately on the returned app without racing the startup.
+ *
  * @param config   Optional configuration merged over the resolved SETUP.
  * @param register Optional callback that registers modules before launch.
  */
@@ -290,10 +294,21 @@ export const createEpicurrentsApp = async (
             },
         })
     }
-    // Register the interface and launch the app.
+    // Register the interface and launch the app. The launch is awaited, so the returned app is one
+    // whose interface has finished loading: its modules are registered in the runtime and the
+    // account copy of the user settings has been applied on top of the device copy.
+    //
+    // Resolving before that gives a host no way to tell the two states apart. The event bus and the
+    // runtime exist from the constructor, so nothing a host can poll changes when the interface
+    // becomes ready, and a resource opened in the gap is set up against the settings that were in
+    // place before the account copy arrived — a montage chosen once and applied on every machine
+    // but the one it was chosen on. Settings that resolve per resource, at setup, cannot be
+    // reapplied afterwards either: an active montage is picked once and the pick is not revisited.
+    //
+    // The wait is bounded by the settings read's own request timeout, and a backend that cannot be
+    // reached resolves rather than rejects, so an unreachable one delays the viewer opening but
+    // never prevents it.
     coreApp.registerInterface(DefaultInterface)
-    coreApp.launch(SETUP).then(() => {
-        // Possible post-launch setup.
-    })
+    await coreApp.launch(SETUP)
     return coreApp
 }
