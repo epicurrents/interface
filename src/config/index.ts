@@ -11,6 +11,7 @@ import type {
     CommonBiosignalSettings,
     Modify,
     PropertyChangeHandler,
+    SettingsChangeContext,
     SettingsValue,
     StateManager,
 } from "@epicurrents/core/types"
@@ -287,7 +288,7 @@ const INTERFACE = {
         }
         Log.debug(`Could not locate the requested ${field} handler.`, SCOPE)
     },
-    setFieldValue (field: string, value: SettingsValue) {
+    setFieldValue (field: string, value: SettingsValue, context?: SettingsChangeContext) {
         // Settings object should have the reference to object proto removed, but just in case.
         if (field.includes('__proto__')) {
             Log.warn(
@@ -338,6 +339,7 @@ const INTERFACE = {
                         dispatchPropertyChange(bus, EventScopes.INTERFACE, field, value, old, 'after', {
                             event: InterfaceEvents.SETTING_CHANGED,
                             origin: INTERFACE,
+                            source: context?.source,
                         })
                     }
                 }
@@ -527,11 +529,11 @@ export const useContext = (store: Pick<EpiCStore, "state">, context: string, com
          * @param value - New value to set.
          * @returns Value of the field or undefined if not found.
          */
-        setFieldValue: (field: string, value: SettingsValue) => {
-            if (INTERFACE.setFieldValue(field, value)) {
+        setFieldValue: (field: string, value: SettingsValue, context?: SettingsChangeContext) => {
+            if (INTERFACE.setFieldValue(field, value, context)) {
                 return true
             }
-            return store.state.SETTINGS.setFieldValue(field, value)
+            return store.state.SETTINGS.setFieldValue(field, value, context)
         },
     }
 }

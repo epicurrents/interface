@@ -357,10 +357,12 @@ export default class AppStore implements InterfaceStoreManager {
      * list as user-definable and any value whose type does not match the declared constructor.
      *
      * Values are written through `useContext().setFieldValue`, which reaches the settings object
-     * directly instead of going through the `SET_SETTINGS_VALUE` mutation. That is deliberate:
-     * applying a stored set must not be mistaken for the user changing a setting, or restoring it
-     * would immediately write the same values straight back out to storage and to the settings
-     * backend.
+     * directly instead of going through the `SET_SETTINGS_VALUE` mutation, and each write is marked
+     * `source: 'system'`. Both say the same thing by different means: applying a stored set is not
+     * the user changing a setting, and anything that writes changes back out — device storage, the
+     * settings backend — must not act on it, or restoring a set would send it straight back to
+     * where it came from. The mark is what a listener on the event bus can see; the mutation
+     * bypass only hides the write from the code sitting inside that mutation.
      *
      * @param settings - Map of full settings paths to values.
      * @param origin - Where the values came from, used in log messages ('local' / 'user account').
@@ -399,7 +401,7 @@ export default class AppStore implements InterfaceStoreManager {
             // Check that the setting can be modified.
             for (const [uField, uConstr] of Object.entries(userDefinable)) {
                 if (uField === modField && (value as any)?.constructor === uConstr) {
-                    useContext(this.store, mod).setFieldValue(field, value as SettingsValue)
+                    useContext(this.store, mod).setFieldValue(field, value as SettingsValue, { source: 'system' })
                     Log.debug(`Applied ${origin} value ${value} to settings field ${field}`, SCOPE)
                     continue field_loop
                 }

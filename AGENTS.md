@@ -307,6 +307,18 @@ Source: [src/store/mutations.ts](src/store/mutations.ts)
 
 **Key insight on `set-settings-value`**: Interface settings (`INTERFACE`) take priority over core runtime settings. The mutation calls `INTERFACE.setFieldValue()` first — if the field exists there, it's set and the core runtime is never touched. This lets the interface layer shadow/override any core setting without conflict.
 
+### Settings persistence and the `source` flag
+
+Source: [src/store/userSettings.ts](src/store/userSettings.ts), `AppStore.loadLocalSettings` / `loadUserSettings` / `applySettingsMap`
+
+User-definable settings are persisted in up to two places. The **device copy** always exists: `sessionStorage` under the key `epicurrents`, mirrored into `localStorage` when an entry is already there, written from the `set-settings-value` mutation. The **account copy** exists only when the host sets `app.userSettingsBackend`; it is read once at startup and applied over the device copy, and later changes are written back with a one-second debounce. Both are limited to fields the owning module lists in `_userDefinable`, with a matching value constructor.
+
+A write is tagged with where it came from. `setFieldValue` takes an optional `SettingsChangeContext` whose `source` is `'user'` (the default when omitted) or `'system'`, and the tag rides into the dispatched change event. **Anything that writes a change back out must ignore `'system'`.** `applySettingsMap` marks every field it restores that way, because a restore that looked like an edit would be written straight back to the storage it was just read from — harmless for the device copy, actively wrong for an account copy shared across the user's machines.
+
+The two settings trees emit on different scopes, and a listener that wants all settings changes has to subscribe to both: the interface tree dispatches `InterfaceEvents.SETTING_CHANGED` under `EventScopes.INTERFACE`, the core tree `ApplicationEvents.SETTING_CHANGED` under `EventScopes.APPLICATION`. Both carry the dotted field path, the new and old values, and `source`.
+
+The account mirror is deliberately quiet: every failure is logged and dropped, both requests carry a timeout so an unreachable backend cannot stall startup, and nothing is written before a read has succeeded — a write replaces the stored map wholesale, so writing from a picture that was never populated would erase the user's settings elsewhere.
+
 ### `INTERFACE` singleton and settings system
 
 Source: [src/config/index.ts](src/config/index.ts)

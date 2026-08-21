@@ -3,6 +3,7 @@ import {
     PropertyChangeHandler,
     RuntimeAppModule,
     SafeObject,
+    SettingsChangeContext,
     SettingsColor,
     SettingsValue,
     StateManager,
@@ -596,9 +597,10 @@ export interface InterfaceSettings {
      * Set a new `value` the the given settings `field`.
      * @param field - Name of the settings field.
      * @param value - New value for the field.
+     * @param context - Optional metadata describing the write; see {@link SettingsChangeContext}.
      * @returns true if field was found, false otherwise.
      */
-    setFieldValue (field: string, value: SettingsValue): boolean
+    setFieldValue (field: string, value: SettingsValue, context?: SettingsChangeContext): boolean
 }
 /** Subset of interface settings properties that are required at runtime. */
 export type InterfaceRuntime = Pick<InterfaceSettings, "app" | "modules">

@@ -28,7 +28,7 @@ Only the first of these is what a store is for:
 1. **Interface state** — the thirteen fields above.
 2. **Pass-through to the state manager** — `add-connector`, `add-resource`, `remove-connector`, `set-active-dataset`, `set-active-resource` forward and nothing else.
 3. **Broadcast channel** — around a dozen actions and mutations with empty bodies, existing so components can subscribe ([Store actions vocabulary](AGENTS.md#store-actions-vocabulary), [Store mutations vocabulary](AGENTS.md#store-mutations-vocabulary)).
-4. **Settings writes and their persistence** — `set-settings-value` resolves which of the two settings trees owns a field, then mirrors user-definable fields into session and local storage.
+4. **Settings writes and their persistence** — `set-settings-value` resolves which of the two settings trees owns a field, mirrors user-definable fields into session and local storage, and queues them for the user-settings backend when the host configured one. `AppStore` additionally owns reading the account copy at startup and applying it over the device copy.
 5. **Registries** — the `MODULES` and `SERVICES` maps and the three component getters.
 6. **Per-module runtime objects and their action sets** — eight module index files, around sixty action names.
 
@@ -36,12 +36,13 @@ Only the first of these is what a store is for:
 
 Ordered by how much store coupling each stage dissolves, not by module. Each stage stands alone and leaves the interface working.
 
-**1. Settings subscriptions off the store.** `set-settings-value` is the single busiest thing in the store: it accounts for roughly a third of all `store.subscribe` call sites. Both replacements already exist — `INTERFACE.setFieldValue` dispatches `InterfaceEvents.SETTING_CHANGED` on the bus, and `useContext` exposes `addPropertyChangeHandler` / `removePropertyChangeHandlers` resolving across both settings trees ([useContext](AGENTS.md#usecontextstore-context--the-universal-composable)). Only the subscribers need rewriting, and no new machinery is involved, so this stage proves the settings-watch path at scale before any state moves.
+**1. Settings subscriptions off the store.** Landed; the stages below assume it. See [useContext](AGENTS.md#usecontextstore-context--the-universal-composable) for the mechanism they build on.
 
 **2. Property-owner registry and `setPropertyValue`.** The pain point is that a caller has to know whether a property lives in the application runtime or in the store before it can mutate it. The mutator hides that the way `setFieldValue` already hides which settings tree owns a field.
 
 - Resolution is an explicit `name → owner` registry per module, not a fallback chain. Settings paths are effectively unique, so interface-first-then-core works for them; property names are not — `sensitivity` and `timebase` exist on both resource and montage, `trendVisible` on the module runtime, `viewStart` on the resource. An unregistered name warns rather than silently landing somewhere.
 - Properties are per-resource where settings are singletons. `RuntimeResourceModule.setPropertyValue` already carries an optional `resource` argument; default it to the active resource, as `useContext`'s `RESOURCE` does.
+- **A change has to say whether a user made it.** `AppStore.applySettingsMap` writes restored values through `setFieldValue` specifically so they miss the `set-settings-value` mutation, because a restore that looked like a user edit would be written straight back out to device storage and to the user-settings backend. That distinction is currently carried by which function the caller picked, so a mutator that unifies the entry points erases it. `dispatchPropertyChange` already accepts `source: 'system' | 'user'` and no caller sets it; wiring that through is what lets one entry point serve both, and it has to land with the mutator rather than after it.
 - The read side is what pays for the registry. A component today picks between three watch mechanisms depending on where the value lives: `RESOURCE.onPropertyChange`, `addPropertyChangeHandler`, and `store.subscribe`. One write entry point can emit one uniform change notification regardless of owner, collapsing those into a single `onPropertyChange(path, handler)`.
 
 **3. Module action sets to the bus.** These are deleted rather than ported, which is why the shared boilerplate across the eight module index files should not be factored first — abstracting it would entrench the `'<code>.set-*'` name strings the bus replaces. What should be collapsed is the eight `use<X>Context` wrappers, into one generic `useModuleContext<Resource, Settings>(store, scope, component)`: they are where the Vuex coupling lives, and everything else in them is store-agnostic. Give it a signature that can become `useEegStore()` without a rename.
@@ -49,6 +50,8 @@ Ordered by how much store coupling each stage dissolves, not by module. Each sta
 Fold the rest of the per-module duplication into this stage rather than sweeping eight files twice — the identical `DefaultFooter` getter, the all-empty `resourceLifecycleHooks`, the `setPropertyValue` warning stub, and `applyConfiguration`'s `moduleName` handling. Each pairs with making that member optional on `InterfaceResourceModule`.
 
 **4. Remaining broadcasts.** The empty-bodied actions and mutations, undo/redo, fullscreen and overlay signalling. The bus is ready for all of them under `EventScopes.INTERFACE`; they need event names, and the phase semantics need stating explicitly, because Vuex's `subscribeAction(handler)` shorthand means `before` and at least one subscriber depends on the `after` form ([subscribeAction defaults to before](AGENTS.md#vuex-subscribeactionhandler-defaults-to-before)).
+
+Settings persistence rides along here, and it is the part to move carefully. Device storage and the account mirror both hang off the `set-settings-value` mutation body, so both leave the store when it does. Once they listen for a change event instead, they see every write — including the fifty or so a startup restore produces — and a mirror that writes back what it has just read is worse than a wasted request, because the account copy is shared across the user's machines. The `source` flag from stage 2 is the guard, so persistence must not move before it exists.
 
 **5. Move the state.** Only after 1–4 does the remaining store fit in a per-module Pinia store. The registries in category 5 are lookup tables rather than state and can leave the store at any point.
 
@@ -74,6 +77,6 @@ A `createResourceModule(spec)` factory rather than a class base. `runtime` is a 
 A census of dispatch and subscription sites turned up several dead paths. They should be resolved as issues before the migration rather than carried through it, since each one otherwise looks like a channel that has to keep working:
 
 - `BiosignalInterface.vue` dispatches `set-cursor-tool` and `set-open-drawer` unprefixed from live template handlers; no such actions exist, only the module-scoped variants.
-- Three subscriber matches have no dispatcher: `eeg.set-spectrogram-mode`, `set-label-value`, and an unprefixed `set-page-number` where only the `pdf.` and `htm.` variants exist.
+- Two subscriber matches have no dispatcher: `set-label-value`, and an unprefixed `set-page-number` where only the `pdf.` and `htm.` variants exist.
 - The `getSettingsValue` getter has no call sites.
 - The ONNX mutations are commented out while the actions still commit to them.
