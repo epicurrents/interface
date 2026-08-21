@@ -20,6 +20,7 @@ import { SETTINGS } from "@epicurrents/core"
 import type {
     AppSettings,
     AssetService,
+    DataResource,
     RuntimeResourceModule,
     SafeObject,
     SettingsValue,
@@ -34,6 +35,7 @@ import type {
 import type { BiosignalPlot } from '#types/plot'
 import type { ModuleConfiguration } from '#types/globals'
 import { loadAsyncComponent } from "../util"
+import { registerModuleProperties, type ModulePropertyRegistry } from "#config/properties"
 import { loadUserSettings as fetchUserSettings } from "./userSettings"
 import { nullPromise, safeObjectFrom } from "@epicurrents/core/util"
 
@@ -95,6 +97,8 @@ export type InterfaceResourceModule = RuntimeResourceModule & {
 }
 export type ResourceModuleContext = {
     runtime: InterfaceResourceModule
+    /** Interface-owned properties this module declares; see `#config/properties`. */
+    properties?: ModulePropertyRegistry
     actions?: {
         [name: string]: ((
             injectee: ActionContext<State, State>,
@@ -288,9 +292,20 @@ export default class AppStore implements InterfaceStoreManager {
         module: ResourceModuleContext
     ) {
         Log.debug((`Adding a new module ${name}.`), SCOPE)
-        // Override runtime property value setter.
-        module.runtime.setPropertyValue = (property: string, value: unknown) => {
-            this.runtime?.setModulePropertyValue(modKey, property, value)
+        // Chain the two owners of a module's properties behind one setter. The module's own setter
+        // answers for the interface-side properties it declared and reports whether the name was
+        // its own; anything it does not claim is a resource property and goes to the core module,
+        // which still absorbs an unknown name without a word.
+        const interfaceSetter = module.runtime.setPropertyValue as unknown as
+            ((property: string, value: unknown) => boolean) | undefined
+        module.runtime.setPropertyValue = (property: string, value: unknown, resource?: DataResource) => {
+            if (interfaceSetter?.(property, value)) {
+                return
+            }
+            this.runtime?.setModulePropertyValue(modKey, property, value, resource)
+        }
+        if (module.properties) {
+            registerModuleProperties(name.toLowerCase(), module.properties)
         }
         const modKey = name.toLowerCase()
         this.modules.set(modKey, module.runtime)

@@ -17,6 +17,7 @@ import type { BiosignalMontageTemplate, ConfigBiosignalSetup, Modify } from "@ep
 import type { EegResource, EegModuleSettings } from "@epicurrents/eeg-module/types"
 import { schemas, settings } from "./config"
 import { applyModuleSettings, useContext } from "#config"
+import { createPropertySetter, type ModulePropertyRegistry } from "#config/properties"
 import type { EegInterfaceSettings, EegModuleConfiguration, LeadFieldProvider } from "./types"
 
 const SCOPE = 'interface-eeg-module'
@@ -42,12 +43,25 @@ enum EegActionTypes {
  *  item to the Display → Trends submenu. */
 const DEFAULT_TREND = 'aeeg'
 
+/**
+ * Interface-owned properties of the EEG module. Resource properties (sensitivity, timebase, the
+ * filters, the active montage) are not listed here — those belong to the core module and are
+ * reached through the same setter by forwarding.
+ */
+export const properties: ModulePropertyRegistry = {
+    'cursor-tool': { field: 'cursorToolActive', type: 'String?' },
+    'open-sidebar': { field: 'openSidebar', type: 'String?' },
+    'report-open': { field: 'isReportOpen', type: 'Boolean' },
+    'selected-trend': { field: 'selectedTrend', type: 'String' },
+    'trend-visible': { field: 'trendVisible', type: 'Boolean' },
+}
+
 export const actions = {
     [EegActionTypes.SET_ACTIVE_MONTAGE] (_injectee: ActionContext<State, State>, payload: number | string | null) {
         runtime.setPropertyValue('active-montage', payload)
     },
     [EegActionTypes.SET_CURSOR_TOOL] (_injectee: ActionContext<State, State>, payload: string | null) {
-        runtime.cursorToolActive = payload
+        runtime.setPropertyValue('cursor-tool', payload)
     },
     [EegActionTypes.SET_HIGHPASS_FILTER] (_injectee: ActionContext<State, State>, payload: number | null) {
         runtime.setPropertyValue('highpass-filter', payload)
@@ -59,13 +73,13 @@ export const actions = {
         runtime.setPropertyValue('notch-filter', payload)
     },
     [EegActionTypes.SET_OPEN_SIDEBAR] (_injectee: ActionContext<State, State>, payload: string) {
-        runtime.openSidebar = payload
+        runtime.setPropertyValue('open-sidebar', payload)
     },
     [EegActionTypes.SET_REPORT_OPEN] (_injectee: ActionContext<State, State>, payload: boolean) {
-        runtime.isReportOpen = payload
+        runtime.setPropertyValue('report-open', payload)
     },
     [EegActionTypes.SET_SELECTED_TREND] (_injectee: ActionContext<State, State>, payload: string) {
-        runtime.selectedTrend = payload
+        runtime.setPropertyValue('selected-trend', payload)
     },
     [EegActionTypes.SET_SENSITIVITY] (_injectee: ActionContext<State, State>, payload: number) {
         runtime.setPropertyValue('sensitivity', payload)
@@ -75,13 +89,13 @@ export const actions = {
         runtime.setPropertyValue('timebase', payload[1])
     },
     [EegActionTypes.SET_TREND_VISIBLE] (_injectee: ActionContext<State, State>, payload: boolean) {
-        runtime.trendVisible = payload
+        runtime.setPropertyValue('trend-visible', payload)
     },
     [EegActionTypes.TOGGLE_ANNOTATION_SIDEBAR] (_injectee: ActionContext<State, State>, _payload: boolean | undefined ) {
         // This is merely a broadcast.
     },
     [EegActionTypes.TOGGLE_TREND_VISIBLE] (_injectee: ActionContext<State, State>, _payload: boolean | undefined ) {
-        runtime.trendVisible = !runtime.trendVisible
+        runtime.setPropertyValue('trend-visible', !runtime.trendVisible)
     },
 }
 
@@ -193,7 +207,7 @@ export const runtime = {
                 // built at module-import time, before any configuration existed, so it still holds
                 // the built-in default; and the `created` resource hook that would otherwise sync
                 // the two is never invoked by anything (see resourceLifecycleHooks below).
-                runtime.selectedTrend = defaultType
+                runtime.setPropertyValue('selected-trend', defaultType)
             }
             if (showStrip !== undefined) {
                 settings.trends.showStrip = showStrip
@@ -252,8 +266,8 @@ export const runtime = {
         // as inert until a caller lands; anything that has to happen per resource belongs in the
         // module's viewer component, which is where extra setups and montages are actually added.
         created (resource: EegResource) {
-            runtime.trendVisible = false
-            runtime.selectedTrend = settings.trends.defaultType || DEFAULT_TREND
+            runtime.setPropertyValue('trend-visible', false)
+            runtime.setPropertyValue('selected-trend', settings.trends.defaultType || DEFAULT_TREND)
             // Add extra setups to the resource.
             for (const setup of settings.extraSetups) {
                 resource.addSetup(setup)
@@ -269,10 +283,12 @@ export const runtime = {
 
         },
     },
-    /** This method must be overridden in the EEG module. */
-    setPropertyValue (_property, _value) {
-        Log.warn(`setPropertyValue method in 'eeg' has not been overridden, state will not be altered.`, SCOPE)
-    },
+    /**
+     * Apply an interface-owned property, reporting whether this module claimed the name. The store
+     * chains the core module behind this, so a name declared nowhere reaches neither owner and is
+     * reported there rather than silently doing nothing.
+     */
+    setPropertyValue: createPropertySetter('eeg', () => runtime as unknown as Record<string, unknown>, properties),
 } as InterfaceResourceModule & {
     /** Name of the cursor tool that is active in the interface, null if no tool is active. */
     cursorToolActive: string | null

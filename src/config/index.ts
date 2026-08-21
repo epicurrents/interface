@@ -16,6 +16,7 @@ import type {
     StateManager,
 } from "@epicurrents/core/types"
 import { dispatchPropertyChange, EventScopes } from "@epicurrents/core"
+import { isModuleProperty } from "#config/properties"
 import { rgbaToSettingsColor, hexToSettingsColor } from "@epicurrents/core/util"
 import { type PythonInterpreterService } from '@epicurrents/pyodide-service/types'
 import { InterfaceEvents } from '#events/EventTypes'
@@ -494,6 +495,25 @@ export const useContext = (store: Pick<EpiCStore, "state">, context: string, com
          * @param handler - Method to call when the field updates.
          */
         addPropertyChangeHandler: (field: string, handler: PropertyChangeHandler) => {
+            if (isModuleProperty(field)) {
+                // A module property is announced on the shared bus rather than through either
+                // settings registry, so it is watched there. Resolution is by the qualified
+                // `<module>.<property>` name, which is unique across owners in a way a bare
+                // property name would not be — `sensitivity` alone belongs to a resource and a
+                // montage both.
+                const bus = window.__EPICURRENTS__?.EVENT_BUS
+                bus?.addScopedEventListener(
+                    `property-change:${field}`,
+                    (event) => {
+                        const detail = (event as CustomEvent).detail
+                        handler(detail?.newValue, detail?.oldValue)
+                    },
+                    contextId,
+                    EventScopes.INTERFACE,
+                    'after',
+                )
+                return
+            }
             if (INTERFACE.getFieldValue(field) !== undefined) {
                 INTERFACE.addPropertyChangeHandler(field, handler, contextId)
             } else {
@@ -521,6 +541,7 @@ export const useContext = (store: Pick<EpiCStore, "state">, context: string, com
         removePropertyChangeHandlers: () => {
             INTERFACE.removeAllPropertyChangeHandlersFor(contextId)
             store.state.SETTINGS.removeAllPropertyUpdateHandlersFor(contextId)
+            window.__EPICURRENTS__?.EVENT_BUS?.removeAllScopedEventListeners(contextId, EventScopes.INTERFACE)
         },
         /**
          * Utility method to set the `value` of the given settings `field` primarily in the interface settings

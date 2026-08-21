@@ -12,12 +12,10 @@ import { type ActionContext } from "vuex"
 import type { Modify } from "@epicurrents/core/types"
 import { EpiCStore, type InterfaceResourceModule, type State } from "#store"
 import { loadAsyncComponent } from "#util"
-import { Log } from "scoped-event-log"
 import { useContext } from '#config'
+import { createPropertySetter, type ModulePropertyRegistry } from "#config/properties"
 import { schemas, settings } from './config'
 import type { AccInterfaceSettings, AccModuleConfiguration, AccModuleSettings, AccResource } from './types'
-
-const SCOPE = "vue-interface-acc-module"
 
 enum AccActionTypes {
     AUDIO_REWIND = 'acc.audio-rewind',
@@ -35,6 +33,17 @@ enum AccActionTypes {
     VIDEO_TOGGLE = 'acc.video-toggle',
 }
 
+/**
+ * Interface-owned properties of the ACC module. Resource properties are not listed
+ * here — those belong to the core module and are reached through the same setter by forwarding.
+ */
+export const properties: ModulePropertyRegistry = {
+    'cursor-tool': { field: 'cursorToolActive', type: 'String?' },
+    'open-sidebar': { field: 'openSidebar', type: 'String?' },
+    'video-playing': { field: 'videoPlaying', type: 'Boolean' },
+    'video-visible': { field: 'videoVisible', type: 'Boolean' },
+}
+
 export const actions = {
     [AccActionTypes.AUDIO_REWIND] (_injectee: ActionContext<State, State>, _payload: null) {
         // Broadcast only; handled by AccViewer.
@@ -45,13 +54,13 @@ export const actions = {
     [AccActionTypes.MEDIA_STATE] (_injectee: ActionContext<State, State>, payload: boolean) {
         // AccViewer reports the attached video's play state here so AccControls
         // can mirror it on the play button; the dispatch also triggers a reload.
-        runtime.videoPlaying = payload
+        runtime.setPropertyValue('video-playing', payload)
     },
     [AccActionTypes.SET_ACTIVE_MONTAGE] (_injectee: ActionContext<State, State>, payload: number | string | null) {
         runtime.setPropertyValue('active-montage', payload)
     },
     [AccActionTypes.SET_CURSOR_TOOL] (_injectee: ActionContext<State, State>, payload: string | null) {
-        runtime.cursorToolActive = payload
+        runtime.setPropertyValue('cursor-tool', payload)
     },
     [AccActionTypes.SET_HIGHPASS_FILTER] (_injectee: ActionContext<State, State>, payload: number | null) {
         runtime.setPropertyValue('highpass-filter', payload)
@@ -63,7 +72,7 @@ export const actions = {
         runtime.setPropertyValue('notch-filter', payload)
     },
     [AccActionTypes.SET_OPEN_SIDEBAR] (_injectee: ActionContext<State, State>, payload: string) {
-        runtime.openSidebar = payload
+        runtime.setPropertyValue('open-sidebar', payload)
     },
     [AccActionTypes.SET_SENSITIVITY] (_injectee: ActionContext<State, State>, payload: number) {
         runtime.setPropertyValue('sensitivity', payload)
@@ -78,7 +87,7 @@ export const actions = {
     [AccActionTypes.VIDEO_TOGGLE] (_injectee: ActionContext<State, State>, payload: boolean | null) {
         // Flip when no explicit target is given; AccViewer reacts to show/hide
         // the video panel and AccControls reads the flag for the toggle state.
-        runtime.videoVisible = typeof payload === 'boolean' ? payload : !runtime.videoVisible
+        runtime.setPropertyValue('video-visible', typeof payload === 'boolean' ? payload : !runtime.videoVisible)
     },
 }
 
@@ -129,9 +138,11 @@ export const runtime = {
         },
     },
     /** Overridden by the runtime when the module is registered. */
-    setPropertyValue (_property, _value) {
-        Log.warn(`setPropertyValue method in 'acc' has not been overridden, state will not be altered.`, SCOPE)
-    },
+    /**
+     * Apply an interface-owned property, reporting whether this module claimed the name. The store
+     * chains the core module behind this for the resource properties it does not claim.
+     */
+    setPropertyValue: createPropertySetter('acc', () => runtime as unknown as Record<string, unknown>, properties),
 } as InterfaceResourceModule & {
     cursorToolActive: string | null
     openSidebar: string | null

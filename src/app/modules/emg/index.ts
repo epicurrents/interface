@@ -9,15 +9,22 @@ import { type ActionContext } from "vuex"
 import { EpiCStore, type InterfaceResourceModule, type State } from "#store"
 import type { DocumentResource, Modify } from "@epicurrents/core/types"
 import { loadAsyncComponent } from "#util"
-import { Log } from "scoped-event-log"
 import { useContext } from '#config'
+import { createPropertySetter, type ModulePropertyRegistry } from "#config/properties"
 import { ModuleConfiguration } from '#types/globals'
 import type { EmgModuleSettings, EmgResource } from '@epicurrents/emg-module/dist/types'
 import type { EmgInterfaceSettings } from './types'
 
 import { settings } from "./config"
 
-const SCOPE = "vue-interface-doc-module"
+/**
+ * Interface-owned properties of the EMG module. Resource properties are not listed
+ * here — those belong to the core module and are reached through the same setter by forwarding.
+ */
+export const properties: ModulePropertyRegistry = {
+    'cursor-tool': { field: 'cursorToolActive', type: 'String?' },
+    'open-sidebar': { field: 'openSidebar', type: 'String?' },
+}
 
 export const runtime = {
     __proto__: null,
@@ -40,10 +47,11 @@ export const runtime = {
     getViewerComponent: () => {
         return loadAsyncComponent(() => import('./components/EmgViewer.vue'))
     },
-    /** This method must be overridden in the EMG module. */
-    setPropertyValue (_property, _value) {
-        Log.warn(`setPropertyValue method in 'emg' has not been overridden, state will not be altered.`, SCOPE)
-    },
+    /**
+     * Apply an interface-owned property, reporting whether this module claimed the name. The store
+     * chains the core module behind this for the resource properties it does not claim.
+     */
+    setPropertyValue: createPropertySetter('emg', () => runtime as unknown as Record<string, unknown>, properties),
     resourceLifecycleHooks: {
         beforeDestroy (_resource: DocumentResource) {
 
@@ -75,7 +83,7 @@ enum EmgActionTypes {
 
 export const actions = {
     [EmgActionTypes.SET_CURSOR_TOOL] (_injectee: ActionContext<State, State>, payload: string | null) {
-        runtime.cursorToolActive = payload
+        runtime.setPropertyValue('cursor-tool', payload)
     },
     [EmgActionTypes.SET_HIGHPASS_FILTER] (_injectee: ActionContext<State, State>, payload: number | null) {
         runtime.setPropertyValue('highpass-filter', payload)
@@ -87,7 +95,7 @@ export const actions = {
         runtime.setPropertyValue('notch-filter', payload)
     },
     [EmgActionTypes.SET_OPEN_SIDEBAR] (_injectee: ActionContext<State, State>, payload: string) {
-        runtime.openSidebar = payload
+        runtime.setPropertyValue('open-sidebar', payload)
     },
     [EmgActionTypes.SET_SENSITIVITY] (_injectee: ActionContext<State, State>, payload: number) {
         runtime.setPropertyValue('sensitivity', payload)
