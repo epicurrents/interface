@@ -413,6 +413,21 @@ export default defineComponent({
         const lastCacheEnd = ref(0)
         const lastVideoTime = ref(0)
         const menuChannel = ref(null as MontageChannel | null)
+        /** Whether the host's extra montages are still being added to the resource.
+         *
+         *  Separate from `montageSetupDone`, which reports that the *default* montages are in place
+         *  and drives the setup message. The extras are added after that point and one `await` at a
+         *  time, so between the two the montage list exists but is not yet the list the user's
+         *  default is chosen from. Keeping them separate is what lets a recording become available
+         *  on its default montages while the choice still waits for the whole list.
+         *
+         *  Only the choice may wait on this, never the recording's availability, and that holds
+         *  because the wait is bounded: `extraMontages` reaches the settings as resolved templates,
+         *  so the loop builds from what it already has. A host may configure a montage as a URL,
+         *  but `applyConfiguration` fetches it before any recording exists — the settings type
+         *  admits no string. Acquiring a network fetch inside the loop would stall the montage
+         *  choice behind it. */
+        const extraMontagesPending = ref(false)
         const montageSetupDone = ref(false)
         const pointerDownPoint = reactive({ x: NUMERIC_ERROR_VALUE, y: NUMERIC_ERROR_VALUE })
         const navigatorHeight = ref(NAVIGATOR_MIN_HEIGHT)
@@ -635,6 +650,7 @@ export default defineComponent({
             overlay,
             panel,
             plot,
+            extraMontagesPending,
             montageSetupDone,
             setupMessage,
             sidebar,
@@ -841,6 +857,36 @@ export default defineComponent({
             } else {
                 this.goForward()
             }
+        },
+        /**
+         * Activate the montage the user has chosen as their default, or the recording's own
+         * channels when that montage is not among this resource's.
+         *
+         * The single place an initial montage is chosen. Both the montage-setup and the
+         * initial-data paths route through here, because an active montage is chosen once and the
+         * choice is never revisited — two places choosing independently means whichever runs first
+         * wins, and the loser is silently discarded. A resource that already has an active montage
+         * has made that choice and is left alone.
+         *
+         * Declines while the montage list is still being built. The montages a deployment adds
+         * through `extraMontages` are the last to arrive, so resolving against a partial list can
+         * never select one of them — and because the choice is permanent, an early resolution does
+         * not merely mis-select once, it locks the user's default out for the whole session. The
+         * check lives here rather than at the call sites because both of them run while the list is
+         * still growing.
+         */
+        activateDefaultMontage () {
+            if (
+                this.extraMontagesPending
+                || !this.montageSetupDone
+                || this.RESOURCE.activeMontage
+                || !this.RESOURCE.montages.length
+            ) {
+                return
+            }
+            const defRgx = new RegExp(`:${this.SETTINGS.defaultMontage}$`)
+            const userDefault = this.RESOURCE.montages.find(m => m.name.match(defRgx))
+            this.RESOURCE.setActiveMontage(userDefault ? userDefault.name : 0)
         },
         /**
          * Perform appropriate operations when the active montage changes.
@@ -1300,31 +1346,32 @@ export default defineComponent({
                 // half of that themselves (see GenericBiosignalCascadeMontage); the montages a
                 // deployment injects through `extraMontages` had no such escape.
                 if (this.montageSetupDone) {
-                    for (const [setup, montages] of Object.entries(this.SETTINGS.extraMontages)) {
-                        for (const montage of montages) {
-                            Log.debug(
-                                `Adding extra montage '${montage.name}' to setup '${setup}''`,
-                                this.$options.name!
-                            )
-                            await this.RESOURCE.addMontage(`${setup}:${montage.name}`, montage.label, setup, montage)
+                    // Held across the whole loop, not just each add: every `await` below yields to
+                    // anything else that might activate a montage, and until the last extra is in
+                    // place the list is not the one the user's default is chosen from.
+                    this.extraMontagesPending = true
+                    try {
+                        for (const [setup, montages] of Object.entries(this.SETTINGS.extraMontages)) {
+                            for (const montage of montages) {
+                                Log.debug(
+                                    `Adding extra montage '${montage.name}' to setup '${setup}''`,
+                                    this.$options.name!
+                                )
+                                await this.RESOURCE.addMontage(
+                                    `${setup}:${montage.name}`, montage.label, setup, montage
+                                )
+                            }
                         }
+                    } finally {
+                        this.extraMontagesPending = false
                     }
                 }
                 // Apply viewer settings to all recording montages.
                 for (const montage of this.RESOURCE.montages) {
                     montage.setChannelLayout({ ...this.SETTINGS })
                 }
-                // Activate the user default montage once it has been loaded. If it cannot be found for some reason,
-                // activate the first montage in the list (as recorded).
-                if (!this.RESOURCE.activeMontage) {
-                    const defRgx = new RegExp(`:${this.SETTINGS.defaultMontage}$`)
-                    const userDefault = this.RESOURCE.montages.find(m => m.name.match(defRgx))
-                    if (userDefault) {
-                        this.RESOURCE.setActiveMontage(userDefault.name)
-                    } else if (this.montageSetupDone) {
-                        this.RESOURCE.setActiveMontage(0)
-                    }
-                }
+                // Activate the user's default montage now that the list it is chosen from is whole.
+                this.activateDefaultMontage()
                 if (this.montageSetupDone) {
                     // Resolve cascade montage entries against the now-populated setups list and
                     // register one cascade montage per entry whose source candidate matches. The
@@ -1355,9 +1402,12 @@ export default defineComponent({
         },
         signalCacheChanged () {
             if (this.RESOURCE.signalCacheStatus[1] > 0) {
-                // Activate the first montage if the recording has been waiting for initial data to load.
-                if (!this.dataSetupDone && !this.RESOURCE.activeMontage && this.RESOURCE.montages.length) {
-                    this.RESOURCE.setActiveMontage(0)
+                // Activate a montage if the recording has been waiting for initial data to load.
+                // Data commonly arrives while montages are still being added, so this declines
+                // whenever the list is incomplete; the montage-setup path activates once it is,
+                // and nothing is left unactivated by that.
+                if (!this.dataSetupDone) {
+                    this.activateDefaultMontage()
                 }
                 this.dataSetupDone = true
             }
@@ -1615,6 +1665,18 @@ export default defineComponent({
         }, this.ID, 'before')
         this.RESOURCE.onPropertyChange('montages', this.montagesChanged, this.ID)
         this.RESOURCE.onPropertyChange('signalCacheStatus', this.signalCacheChanged, this.ID)
+        // The handlers above only see changes made from here on, and a resource may arrive with its
+        // setup already behind it: `preload` runs the same montage and caching work while nothing
+        // is mounted, so a host that prepares a resource before activating it leaves both handlers
+        // with nothing left to observe. Montage setup would then never run — taking the
+        // `extraMontages` a deployment injects with it, since this is where they are added — and
+        // the montage list would stay at whatever the defaults produced.
+        //
+        // Run both once against the state that is already there. Their `montageSetupDone` /
+        // `dataSetupDone` guards make this a no-op for a resource that has not been prepared yet,
+        // and the montage pass is awaited so the data pass cannot resolve a montage against a list
+        // it is still extending.
+        this.montagesChanged().then(() => this.signalCacheChanged())
         this.RESOURCE.onPropertyChange('timebase', this.timebaseChanged, this.ID)
         this.RESOURCE.onPropertyChange('viewStart', this.viewStartChanged, this.ID)
         // keydown and blur are managed by useBiosignalKeyboard; register keyup here.
