@@ -59,6 +59,7 @@
 import { defineComponent, reactive, Ref, ref, PropType } from "vue"
 import { T } from "#i18n"
 import { settingsColorToRgba } from "@epicurrents/core/util"
+import { timeSpanToPixels, timeToPixel } from "#util"
 import { useEmgContext } from "#app/modules/emg"
 import { useStore } from "vuex"
 import { SettingsColor } from "@epicurrents/core/types"
@@ -198,7 +199,7 @@ export default defineComponent({
                 const startPos = (this.timelineStepSize - startTime%this.timelineStepSize)
                 context.fillStyle = settingsColorToRgba(this.SETTINGS.navigator.tickColor)
                 for (let i=startPos; i<this.RESOURCE.totalDuration; i+=this.timelineStepSize) {
-                    const xPos = Math.floor(i*durWidth)
+                    const xPos = timeToPixel(i, durWidth)
                     context.fillRect(xPos, 0, 1, this.canvasHeight)
                 }
             }
@@ -333,8 +334,7 @@ export default defineComponent({
                     }
                 }
                 context.fillStyle = annoColor
-                const xPos = Math.floor(anno.start*durWidth)
-                const xEnd = Math.floor(anno.duration*durWidth)
+                const { x: xPos, width: xWidth } = timeSpanToPixels(anno.start, anno.duration, durWidth)
                 // Determine next available row to avoid overlap
                 const overlapRows = [] as number[]
                 for (let j=0; j<i; j++) {
@@ -361,36 +361,38 @@ export default defineComponent({
                     }
                 }
                 annoRows.set(i, nextRow)
+                // Height distinguishes an instant annotation from a span, so it keys on the
+                // duration rather than the drawn width: a span too brief to fill a column still
+                // gets one, and must not be mistaken for an instant marker because of it.
                 context.fillRect(
                     xPos,
                     nextRow*5,
-                    xEnd || 1,
-                    xEnd ? 5 : this.canvasHeight
+                    xWidth,
+                    anno.duration ? 5 : this.canvasHeight
                 )
             }
             // Draw possible selection bound marker.
             if (this.selectionBound) {
                 context.fillStyle = settingsColorToRgba(this.SETTINGS.selectionBound.color)
-                context.fillRect(Math.floor(this.selectionBound.position*durWidth), 0, 1, this.canvasHeight)
+                context.fillRect(timeToPixel(this.selectionBound.position, durWidth), 0, 1, this.canvasHeight)
             }
             // Draw loading progress bar
             const loadedLen = this.RESOURCE.signalCacheStatus[1] - this.RESOURCE.signalCacheStatus[0]
             context.fillStyle = settingsColorToRgba(this.SETTINGS.navigator.loadedColor)
-            context.fillRect(0, contentHeight, Math.round(loadedLen*durWidth), 2)
+            context.fillRect(0, contentHeight, timeSpanToPixels(0, loadedLen, durWidth).width, 2)
             // Draw cached progress bar
             if (this.RESOURCE.activeMontage?.cacheStatus) {
                 const cacheLen = this.RESOURCE.activeMontage?.cacheStatus.end
                                  - this.RESOURCE.activeMontage?.cacheStatus.start
                 context.fillStyle = settingsColorToRgba(this.SETTINGS.navigator.cachedColor)
-                context.fillRect(0, contentHeight, Math.round(cacheLen*durWidth), 2)
+                context.fillRect(0, contentHeight, timeSpanToPixels(0, cacheLen, durWidth).width, 2)
             }
             // Clear everything from interruptions and fill with the proper color.
             for (const {start, duration} of this.RESOURCE.getInterruptions()) {
-                const xPos = Math.floor(start*durWidth)
-                const xLen = Math.floor(duration*durWidth)
-                context.clearRect(xPos, 0, xLen || 1, this.canvasHeight)
+                const { x: xPos, width: xLen } = timeSpanToPixels(start, duration, durWidth)
+                context.clearRect(xPos, 0, xLen, this.canvasHeight)
                 context.fillStyle = settingsColorToRgba(this.SETTINGS.navigator.interruptionColor)
-                context.fillRect(xPos, 0, xLen || 1, this.canvasHeight)
+                context.fillRect(xPos, 0, xLen, this.canvasHeight)
             }
             // Draw viewbox.
             this.drawViewbox()
@@ -408,13 +410,9 @@ export default defineComponent({
             // Draw the new viewbox.
             const viewStart = this.RESOURCE.viewStart
             const viewLen = Math.min(this.visibleRange, this.RESOURCE.totalDuration - this.RESOURCE.viewStart)
+            const view = timeSpanToPixels(viewStart, viewLen, durWidth)
             context.fillStyle = settingsColorToRgba(this.SETTINGS.navigator.viewBoxColor)
-            context.fillRect(
-                Math.round(viewStart*durWidth),
-                1,
-                Math.max(Math.round(viewLen*durWidth), 1),
-                contentHeight
-            )
+            context.fillRect(view.x, 1, view.width, contentHeight)
         },
         getTimeAtPosition (position: number) {
             const startSeconds = this.RESOURCE.startTime ? + this.RESOURCE.startTime.getHours()*60*60

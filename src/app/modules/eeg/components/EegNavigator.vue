@@ -116,6 +116,7 @@
 import { defineComponent, reactive, Ref, ref, PropType } from "vue"
 import { T } from "#i18n"
 import { padTime, secondsToTimeString, settingsColorToRgba } from "@epicurrents/core/util"
+import { timeSpanToPixels, timeToPixel } from "#util"
 import { useEegContext } from "#app/modules/eeg"
 import { useStore } from "vuex"
 import { SettingsColor } from "@epicurrents/core/types"
@@ -282,7 +283,7 @@ export default defineComponent({
                 const startPos = (this.timelineStepSize - startTime%this.timelineStepSize)
                 context.fillStyle = settingsColorToRgba(this.SETTINGS.navigator.tickColor)
                 for (let i=startPos; i<this.RESOURCE.totalDuration; i+=this.timelineStepSize) {
-                    const xPos = Math.floor(i*durWidth)
+                    const xPos = timeToPixel(i, durWidth)
                     context.fillRect(xPos, 0, 1, this.canvasHeight)
                 }
             }
@@ -343,8 +344,7 @@ export default defineComponent({
                 const evtColor = colorByClass.get(event.class)
                     ?? colorByIdPrefix.find(([id]) => event.id?.startsWith(id))?.[1]
                     ?? defaultEvtColor
-                const xPos = Math.floor(event.start*durWidth)
-                const xWidth = Math.floor(event.duration*durWidth)
+                const { x: xPos, width: xWidth } = timeSpanToPixels(event.start, event.duration, durWidth)
                 if (!event.duration) {
                     // Instant event: full-height marker, no row stacking.
                     const col = pixelMap.get(xPos) ?? new Map<number, string>()
@@ -361,7 +361,7 @@ export default defineComponent({
                 }
                 rowEnds[row] = event.start + event.duration
                 // Claim pixels for this event; first claimant per (x, row) wins.
-                const xEnd = xPos + (xWidth || 1)
+                const xEnd = xPos + xWidth
                 for (let x = xPos; x < xEnd; x++) {
                     const col = pixelMap.get(x) ?? new Map<number, string>()
                     if (!col.has(row)) {
@@ -384,7 +384,7 @@ export default defineComponent({
             // Draw possible selection bound marker.
             if (this.selectionBound) {
                 context.fillStyle = settingsColorToRgba(this.SETTINGS.selectionBound.color)
-                context.fillRect(Math.floor(this.selectionBound.position*durWidth), 0, 1, this.canvasHeight)
+                context.fillRect(timeToPixel(this.selectionBound.position, durWidth), 0, 1, this.canvasHeight)
             }
             // Draw loading progress bar. With the rolling-window cache (PSG-class recordings), the
             // cached range can start at non-zero recording time and slide forward as the view moves.
@@ -393,19 +393,19 @@ export default defineComponent({
             // and the bar grows from x=0 as before.
             const loadedStart = this.RESOURCE.signalCacheStatus[0]
             const loadedLen = this.RESOURCE.signalCacheStatus[1] - loadedStart
+            const loaded = timeSpanToPixels(loadedStart, loadedLen, durWidth)
             context.fillStyle = settingsColorToRgba(this.SETTINGS.navigator.loadedColor)
-            context.fillRect(Math.round(loadedStart*durWidth), contentHeight, Math.round(loadedLen*durWidth), 2)
+            context.fillRect(loaded.x, contentHeight, loaded.width, 2)
             // Draw cached progress bar
             if (this.RESOURCE.activeMontage?.cacheStatus) {
                 const cacheLen = this.RESOURCE.activeMontage?.cacheStatus.end
                                  - this.RESOURCE.activeMontage?.cacheStatus.start
                 context.fillStyle = settingsColorToRgba(this.SETTINGS.navigator.cachedColor)
-                context.fillRect(0, contentHeight, Math.round(cacheLen*durWidth), 2)
+                context.fillRect(0, contentHeight, timeSpanToPixels(0, cacheLen, durWidth).width, 2)
             }
             // Clear everything from interruptions and fill with the proper color.
             for (const {start, duration} of this.RESOURCE.getInterruptions()) {
-                const xPos = Math.floor(start*durWidth)
-                const xLen = Math.max(Math.ceil(duration*durWidth), 1)
+                const { x: xPos, width: xLen } = timeSpanToPixels(start, duration, durWidth)
                 context.clearRect(xPos, 0, xLen, this.navigator.height)
                 context.fillStyle = settingsColorToRgba(this.SETTINGS.navigator.interruptionColor)
                 context.fillRect(xPos, 0, xLen, this.navigator.height)
@@ -416,7 +416,7 @@ export default defineComponent({
             // at the boundary pushes it onward.
             const exploredEnd = this.RESOURCE.exploredEnd
             if (exploredEnd >= 0 && exploredEnd < this.RESOURCE.totalDuration) {
-                const xPos = Math.floor(exploredEnd*durWidth)
+                const xPos = timeToPixel(exploredEnd, durWidth)
                 context.fillStyle = settingsColorToRgba(this.SETTINGS.navigator.offLimitsColor)
                 context.fillRect(xPos, 0, this.navigator.width - xPos, this.navigator.height)
             }
@@ -447,13 +447,9 @@ export default defineComponent({
             if (viewLen <= 0) {
                 return
             }
+            const view = timeSpanToPixels(viewStart, viewLen, durWidth)
             context.fillStyle = settingsColorToRgba(this.SETTINGS.navigator.viewBoxColor)
-            context.fillRect(
-                Math.round(viewStart*durWidth),
-                1,
-                Math.max(Math.round(viewLen*durWidth), 1),
-                this.canvasHeight
-            )
+            context.fillRect(view.x, 1, view.width, this.canvasHeight)
         },
         /**
          * Get the time to display for a `position` given as seconds from the recording start.

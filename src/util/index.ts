@@ -25,6 +25,46 @@ export { waDirective }
 export const NO_POINTER_BUTTON_DOWN = -1
 
 /**
+ * Map a point in recording time onto the canvas column that represents it.
+ *
+ * The counterpart of {@link timeSpanToPixels}, which resolves its edges through this function so a
+ * marker at a given time lands on the same column as the edge of a span at that same time.
+ *
+ * @param time - Position in seconds from the start of the recording.
+ * @param pxPerSecond - Canvas columns per second of recording.
+ * @returns The canvas column, as an integer.
+ */
+export const timeToPixel = (time: number, pxPerSecond: number): number => {
+    return Math.round(time*pxPerSecond)
+}
+
+/**
+ * Map a span of recording time onto the canvas columns that represent it.
+ *
+ * Both edges are resolved independently and the width is derived from them, rather than the origin
+ * and the duration each being rounded on their own. A span's extent on screen follows from where
+ * its two edges fall and not from its duration alone, so rounding the width in its own right lets
+ * two drawings of the same range disagree by a column, and lets spans that meet in time fall short
+ * of each other or overlap on screen.
+ *
+ * The width is never less than one column, so a span too brief to fill one still marks where it is
+ * instead of disappearing.
+ *
+ * @param start - Start of the span in seconds from the start of the recording.
+ * @param duration - Length of the span in seconds; zero yields a single column at `start`.
+ * @param pxPerSecond - Canvas columns per second of recording.
+ * @returns Canvas columns as `{ x, width }`, spanning `x` up to but not including `x + width`.
+ */
+export const timeSpanToPixels = (
+    start: number,
+    duration: number,
+    pxPerSecond: number
+): { x: number, width: number } => {
+    const x = timeToPixel(start, pxPerSecond)
+    return { x, width: Math.max(timeToPixel(start + duration, pxPerSecond) - x, 1) }
+}
+
+/**
  * Load an asynchronous Vue component, displaying a temporary component until loading is complete.
  * @param loader - The import function of the component to load.
  * @param props - Loading component properties (optional, NYI).
