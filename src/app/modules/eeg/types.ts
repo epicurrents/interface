@@ -61,6 +61,17 @@ export type EegInterfaceSettings = CommonBiosignalInterfaceSettings & {
      *  `CommonBiosignalSettings.trends`, so the trend worker / processor never
      *  has to know about render flags. */
     trends: {
+        /**
+         * Trend type selected when a recording is opened, as a key of the trend registry. Only the
+         * selected trend is ever computed, so this decides what a deployment pays for as well as
+         * what it shows first.
+         */
+        defaultType: string
+        /**
+         * Open the trend strip with the recording rather than waiting to be asked. Opening the
+         * strip is also what triggers the selected trend's computation.
+         */
+        showStrip: boolean
         aeeg: {
             /**
              * Per-derivation band colours, keyed by the derivation id from
@@ -360,7 +371,15 @@ export type EegModuleConfiguration = ModuleConfiguration & {
     trace?: RecursivePartial<EegInterfaceSettings['trace']>
     /** Per-trend math knobs (epoch length, frequency bands, referencing). Merged per trend type
      *  over the module defaults, so naming one knob leaves the rest of that trend's defaults. */
+    /**
+     * Trend configuration. Carries both halves: the maths knobs (`amplitude`, `spectrogram`,
+     * `ratio`, `pdbsi` epoch lengths, bands, referencing) belong to the module settings, while
+     * `defaultType` and `showStrip` are interface state. `applyConfiguration` routes each to its
+     * own object — they share a key here because a deployment configuring trends should not have
+     * to know which layer owns which knob.
+     */
     trends?: RecursivePartial<NonNullable<CommonBiosignalSettings['trends']>>
+        & RecursivePartial<Pick<EegInterfaceSettings['trends'], 'defaultType' | 'showStrip'>>
 }
 
 export type EegNavigationKey = 'ArrowLeft' | 'ArrowRight' | 'PageDown' | 'PageUp'

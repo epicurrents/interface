@@ -9,6 +9,7 @@ import { safeObjectFrom } from '@epicurrents/core/util'
 import { SettingsValue, type SettingsColor } from '@epicurrents/core/types'
 import type { BiosignalMontageTemplate } from '@epicurrents/core/types'
 import { EegRecording } from '@epicurrents/eeg-module'
+import { TREND_REGISTRY } from './trends'
 import { type EegInterfaceSettings } from './types'
 import type { InterfaceModuleSchema, InterfaceSettingsDropdownOption } from '#types/config'
 import { getInputForSetting, getSettingForInput } from '#config'
@@ -89,6 +90,14 @@ const montageOptions = (): InterfaceSettingsDropdownOption[] => {
     // stored value.
     return options.length ? options : [{ label: 'As recorded', value: 'rec' }]
 }
+
+/**
+ * Build the option list for the default-trend dropdown from the trend registry, so the choice on
+ * offer is exactly the set of trends that can be rendered. Labels come from the registry rather
+ * than being restated here — see the note on {@link TREND_REGISTRY}.
+ */
+const trendOptions = (): InterfaceSettingsDropdownOption[] =>
+    Object.entries(TREND_REGISTRY).map(([value, entry]) => ({ label: entry.label, value }))
 
 /**
  * Helper type for the input/setting converters.
@@ -182,6 +191,31 @@ export const schemas: InterfaceModuleSchema = safeObjectFrom({
                 text: 'Display time elapsed from the recording start instead of the time of day.',
                 type: 'setting',
                 width: '5rem',
+            },
+            {
+                text: 'Trend options',
+                type: 'subtitle',
+                info: (
+                    'The trend strip shows a derived summary of the recording below the signal view. '
+                    + 'Only the selected trend is computed, so choosing one is also choosing what the '
+                    + 'recording spends time calculating.'
+                ),
+            },
+            {
+                component: 'settings-checkbox',
+                height: '2.5rem',
+                setting: 'eeg.trends.showStrip',
+                text: 'Open the trend strip when a recording is opened.',
+                type: 'setting',
+                width: '5rem',
+            },
+            {
+                component: 'settings-dropdown',
+                options: trendOptions,
+                setting: 'eeg.trends.defaultType',
+                text: 'Trend to select when a recording is opened.',
+                type: 'setting',
+                width: '50%',
             },
             {
                 text: 'Color options',
@@ -514,6 +548,7 @@ export const settings: EegInterfaceSettings = safeObjectFrom({
         'epochMode.onlyFullEpochs': Boolean,
         'trends.aeeg.derivationColors': Object,
         'trends.aeeg.displayMode': String,
+        'trends.defaultType': String,
         'trends.pdbsi.markCrossing': Boolean,
         'trends.pdbsi.showFill': Boolean,
         'trends.pdbsi.showThreshold': Boolean,
@@ -524,6 +559,7 @@ export const settings: EegInterfaceSettings = safeObjectFrom({
         'trends.ratio.showFill': Boolean,
         'trends.ratio.showThreshold': Boolean,
         'trends.ratio.threshold': Number,
+        'trends.showStrip': Boolean,
         'trends.spectrogram.averageReference': Boolean,
         'trends.spectrogram.epochLength': Number,
         'trends.spectrogram.mode': String,
@@ -921,6 +957,17 @@ export const settings: EegInterfaceSettings = safeObjectFrom({
         },
     },
     trends: {
+        /**
+         * Trend type selected when a recording is opened, as a key of the trend registry. Only the
+         * selected trend is ever computed, so this decides what a deployment pays for as well as
+         * what it shows first.
+         */
+        defaultType: 'aeeg',
+        /**
+         * Open the trend strip with the recording rather than waiting to be asked. Opening the
+         * strip is also what triggers the selected trend's computation.
+         */
+        showStrip: false,
         aeeg: {
             // Standard hemispheric derivation colours. Left and right automatically inherit
             // from trace.color.sin/dex — these entries allow per-deployment overrides and

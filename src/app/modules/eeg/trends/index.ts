@@ -16,6 +16,8 @@ export type TrendRegistryEntry = {
     /** Derivation type identifier on `BiosignalTrend.derivation.type` — used by the chrome to
      *  filter `montage.trends` so the renderer only sees trends it can draw. */
     derivationType: BiosignalTrend['derivation']['type']
+    /** Human-readable name, for anywhere the type is offered as a choice. */
+    label: string
     /** Async loader for the body component (label gutter + canvases + scale). */
     getRendererComponent: () => Component
     /** Async loader for the settings panel rendered inside the controls drawer.
@@ -25,21 +27,25 @@ export type TrendRegistryEntry = {
 
 export const TREND_REGISTRY: Record<string, TrendRegistryEntry> = {
     aeeg: {
+        label: 'aEEG',
         derivationType: 'amplitude',
         getRendererComponent: () => loadAsyncComponent(() => import('./aeeg/AeegRenderer.vue')),
         getSettingsComponent: () => loadAsyncComponent(() => import('./aeeg/AeegSettings.vue')),
     },
     ratio: {
+        label: 'TAR / DAR / DTABR',
         derivationType: 'ratio',
         getRendererComponent: () => loadAsyncComponent(() => import('./ratio/RatioRenderer.vue')),
         getSettingsComponent: () => loadAsyncComponent(() => import('./ratio/RatioSettings.vue')),
     },
     pdbsi: {
+        label: 'pdBSI',
         derivationType: 'pdbsi',
         getRendererComponent: () => loadAsyncComponent(() => import('./pdbsi/PdbsiRenderer.vue')),
         getSettingsComponent: () => loadAsyncComponent(() => import('./pdbsi/PdbsiSettings.vue')),
     },
     spectrogram: {
+        label: 'Spectrogram',
         derivationType: 'spectrogram',
         getRendererComponent: () => loadAsyncComponent(() => import('./spectrogram/SpectrogramRenderer.vue')),
         getSettingsComponent: () => loadAsyncComponent(() => import('./spectrogram/SpectrogramSettings.vue')),

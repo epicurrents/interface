@@ -98,7 +98,7 @@ export const runtime = {
     isReportOpen: false,
     leadFieldProvider: null as LeadFieldProvider | null,
     openSidebar: null as string | null,
-    selectedTrend: DEFAULT_TREND as string,
+    selectedTrend: (settings.trends.defaultType || DEFAULT_TREND) as string,
     trendVisible: false,
     async applyConfiguration (config: EegModuleConfiguration) {
         // Epoch mode.
@@ -180,8 +180,25 @@ export const runtime = {
         if (config.spectrogram) {
             applyModuleSettings('eeg', { spectrogram: config.spectrogram })
         }
+        // `trends` carries two layers' settings under one key. `defaultType` and `showStrip` are
+        // interface state — the strip and the selection belong to the chrome, and the module knows
+        // nothing of either — so they are filed on this module's own settings. Everything else is a
+        // maths knob the trend processor reads, and goes to the module settings. Splitting here
+        // rather than in the config surface means a deployment configures trends in one place.
         if (config.trends) {
-            applyModuleSettings('eeg', { trends: config.trends })
+            const { defaultType, showStrip, ...moduleTrends } = config.trends
+            if (defaultType) {
+                settings.trends.defaultType = defaultType
+                // Also aligned on the live runtime, not only stored as the setting. `runtime` was
+                // built at module-import time, before any configuration existed, so it still holds
+                // the built-in default; and the `created` resource hook that would otherwise sync
+                // the two is never invoked by anything (see resourceLifecycleHooks below).
+                runtime.selectedTrend = defaultType
+            }
+            if (showStrip !== undefined) {
+                settings.trends.showStrip = showStrip
+            }
+            applyModuleSettings('eeg', { trends: moduleTrends })
         }
         // Additional setups.
         if (config.extraSetups) {
@@ -229,12 +246,14 @@ export const runtime = {
         beforeDestroy (_resource: EegResource) {
 
         },
+        // NOTE: nothing invokes these hooks. `resourceLifecycleHooks` is declared on the module
+        // contract in #store and implemented by seven modules, but no caller exists — the resource
+        // setup each one describes is done by the viewer components instead. Treat the bodies below
+        // as inert until a caller lands; anything that has to happen per resource belongs in the
+        // module's viewer component, which is where extra setups and montages are actually added.
         created (resource: EegResource) {
-            // Reset per-resource UI state. The runtime is shared across recordings, so without
-            // this reset the trend-strip tick in the Display menu would persist from a previous
-            // recording even though the new recording hasn't had its trends set up yet.
             runtime.trendVisible = false
-            runtime.selectedTrend = DEFAULT_TREND
+            runtime.selectedTrend = settings.trends.defaultType || DEFAULT_TREND
             // Add extra setups to the resource.
             for (const setup of settings.extraSetups) {
                 resource.addSetup(setup)

@@ -1682,7 +1682,13 @@ export default defineComponent({
         // when the resource already has computed trend data.
         const lastKnown = trendVisibilityByResource.get(this.RESOURCE.id)
         const hasTrends = Object.keys(this.RESOURCE.trends || {}).length > 0
-        this.$store.dispatch('eeg.set-trend-visible', lastKnown ?? hasTrends)
+        // Dispatched rather than assigned, because the handler for this action is what calls
+        // `ensureTrendSetup` — a deployment that opens the strip by default is asking for the
+        // selected trend to be computed, and setting the flag directly would show an empty strip.
+        this.$store.dispatch(
+            'eeg.set-trend-visible',
+            lastKnown ?? (this.SETTINGS.trends.showStrip || hasTrends)
+        )
         if (this.video) {
             this.video.addEventListener('canplay', this.videoReady)
             this.video.addEventListener('enterpictureinpicture', this.videoEnteredPnP)
