@@ -307,6 +307,36 @@ Source: [src/store/mutations.ts](src/store/mutations.ts)
 
 **Key insight on `set-settings-value`**: Interface settings (`INTERFACE`) take priority over core runtime settings. The mutation calls `INTERFACE.setFieldValue()` first — if the field exists there, it's set and the core runtime is never touched. This lets the interface layer shadow/override any core setting without conflict.
 
+### Module properties — the two owners behind one setter
+
+Source: [src/config/properties.ts](src/config/properties.ts), each module's `index.ts`
+
+A module's UI state has two owners. Properties of the **resource** — `sensitivity`, `timebase`, the filters, `active-montage` — belong to the core module and reach the resource through `StateManager.setModulePropertyValue`. Properties of the **interface** — which sidebar is open, whether the trend strip is shown — live on the interface module's `runtime` object, which is a plain object rather than an asset.
+
+Each module declares the interface-side properties it owns, keyed by the kebab-case name callers address them with, mapped onto the camel-case runtime field behind it:
+
+```ts
+export const properties: ModulePropertyRegistry = {
+    'trend-visible': { field: 'trendVisible', type: 'Boolean' },
+    'open-sidebar': { field: 'openSidebar', type: 'String?' },
+}
+```
+
+`type` is a constructor name, `'?'`-suffixed when `null` is also accepted — the notation worker commissions use. `createPropertySetter` builds the setter from the registry: it validates, assigns, and dispatches `property-change:<module>.<property>` on the shared bus under the interface scope. **Every write goes through it**, including toggles and any assignment made during configuration or a lifecycle hook; assigning the runtime field directly announces nothing and is the bug this replaced.
+
+`AppStore.addModule` chains the two owners behind the module's setter: the module answers for its own registry and reports whether the name was its own, and anything it does not claim goes to the core module. A name neither owner claims still reaches the core module's if-chain and is absorbed there without a word.
+
+**Reading and watching** go through the context, by the same name and with the same teardown as a settings field:
+
+```ts
+this.addPropertyChangeHandler(`${this.SCOPE}.trend-visible`, this.trendVisibleChanged)
+const visible = this.getFieldValue(`${this.SCOPE}.trend-visible`)
+```
+
+`addPropertyChangeHandler` resolves a module property first, then the interface settings tree, then the core one; resolution is by the qualified `<module>.<property>` name, which is unique across owners in a way a bare name is not. Handlers take no arguments — `PropertyChangeHandler` is declared as a generic *function* signature that only a zero-argument handler can satisfy — so a handler reads the current value through `getFieldValue`. Menu items and toolbar controls name a property in their `reloadOn` list with the `property:` scope, alongside `settings:`.
+
+Do **not** observe a module property by subscribing to the action that sets it. The property announces itself, so one handler covers every route to the value: `eeg.set-trend-visible` and `eeg.toggle-trend-visible` both land as one `trend-visible` change.
+
 ### Settings persistence and the `source` flag
 
 Source: [src/store/userSettings.ts](src/store/userSettings.ts), `AppStore.loadLocalSettings` / `loadUserSettings` / `applySettingsMap`
@@ -525,9 +555,9 @@ The Vuex state has two superficially-similar `Map`s. They actually contain diffe
 - `state.MODULES.get(name)` — the **core** module's runtime (registered via `Epicurrents.registerModule()` → core `RuntimeStateManager.setModule()`). For EEG this is `@epicurrents/eeg-module`'s runtime — without interface-specific fields like `trendVisible`.
 - `state.INTERFACE.modules.get(name)` — the **interface** module's combined config + runtime data. Populated by `AppStore.addModule()`.
 
-`AppStore.addModule()` installs live getters on `modConfig` for every non-method property on the interface module's `runtime` (primitives, objects, arrays — methods stay on the runtime itself). The getters read directly from `runtime`, so `state.INTERFACE.modules.get('eeg').trendVisible` always returns the current toggle state even after action handlers mutate `runtime.trendVisible = !runtime.trendVisible`. Existing keys (`schemas`/`settings`) take precedence over runtime keys with the same name.
+`AppStore.addModule()` installs live getters on `modConfig` for every non-method property on the interface module's `runtime` (primitives, objects, arrays — methods stay on the runtime itself). The getters read directly from `runtime`, so `state.INTERFACE.modules.get('eeg').trendVisible` reflects the current value rather than a snapshot taken at registration. Existing keys (`schemas`/`settings`) take precedence over runtime keys with the same name.
 
-**Rule for new interface module runtime fields**: just add them to the module's exported `runtime` object. They become readable via `state.INTERFACE.modules.get(name).<field>` automatically. The generic config typing doesn't expose module-specific fields, so an inline structural cast (`as { modules: Map<string, { fieldName?: T }> }`) is appropriate at the call site. For methods (which are still excluded), call them on the runtime object directly.
+**Read a runtime field through the property registry, not through this Map.** `getFieldValue('eeg.trend-visible')` (or `getModuleProperty` outside a component) resolves the same value by its declared name, needs no structural cast, and pairs with a change notification — the getters here tell a reader nothing when the value changes, which is why every consumer that used them also had to subscribe to the action that set them. See [Module properties](#module-properties--the-two-owners-behind-one-setter). The getters remain for runtime fields a module has not declared as properties.
 
 ### Vuex `subscribeAction(handler)` defaults to `before`
 
