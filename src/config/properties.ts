@@ -45,17 +45,36 @@ export type ModulePropertySpec = {
  */
 export type ModulePropertyRegistry = { readonly [name: string]: ModulePropertySpec }
 
-/** Registries of every loaded module, keyed by module code. */
-const _registries = new Map<string, ModulePropertyRegistry>()
+/** Registry and runtime accessor of every loaded module, keyed by module code. */
+const _registries = new Map<string, {
+    registry: ModulePropertyRegistry
+    runtime: () => Record<string, unknown>
+}>()
 
 /**
- * Record a module's property registry so a watcher can resolve `<code>.<property>` without holding
- * a reference to the module itself.
+ * Record a module's property registry so a caller can read or watch `<code>.<property>` without
+ * holding a reference to the module itself.
  * @param moduleCode - Code of the module, e.g. `eeg`.
  * @param registry - The module's interface-owned property declarations.
+ * @param runtime - Accessor for the module's runtime object, whose fields the registry addresses.
  */
-export const registerModuleProperties = (moduleCode: string, registry: ModulePropertyRegistry) => {
-    _registries.set(moduleCode, registry)
+export const registerModuleProperties = (
+    moduleCode: string,
+    registry: ModulePropertyRegistry,
+    runtime: () => Record<string, unknown>,
+) => {
+    _registries.set(moduleCode, { registry, runtime })
+}
+
+/** Split a qualified path into its module code and property name, or null when it is neither. */
+const resolve = (path: string) => {
+    const separator = path.indexOf('.')
+    if (separator < 0) {
+        return null
+    }
+    const entry = _registries.get(path.slice(0, separator))
+    const spec = entry?.registry[path.slice(separator + 1)]
+    return entry && spec ? { entry, spec } : null
 }
 
 /**
@@ -63,11 +82,17 @@ export const registerModuleProperties = (moduleCode: string, registry: ModulePro
  * @param path - Fully qualified property name, e.g. `eeg.trend-visible`.
  */
 export const isModuleProperty = (path: string): boolean => {
-    const separator = path.indexOf('.')
-    if (separator < 0) {
-        return false
-    }
-    return Boolean(_registries.get(path.slice(0, separator))?.[path.slice(separator + 1)])
+    return resolve(path) !== null
+}
+
+/**
+ * Read the current value of an interface-owned module property.
+ * @param path - Fully qualified property name, e.g. `eeg.trend-visible`.
+ * @returns The value, or undefined when no module declares the property.
+ */
+export const getModuleProperty = (path: string): unknown => {
+    const found = resolve(path)
+    return found ? found.entry.runtime()[found.spec.field] : undefined
 }
 
 /** True when `value` satisfies the constructor named by `type`, honouring a `'?'` null suffix. */

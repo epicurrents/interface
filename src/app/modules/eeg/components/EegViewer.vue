@@ -1505,6 +1505,26 @@ export default defineComponent({
         handleTrendToggleControls (open: boolean) {
             this.controlsOpen = open
         },
+        /** Follow the module's active cursor tool, restyling the plot surfaces to match. */
+        cursorToolChanged () {
+            const tool = this.getFieldValue(`${this.SCOPE}.cursor-tool`) as string | null
+            const cursor = tool === 'inspect' ? 'zoom-in' : 'initial'
+            this.overlay.style.cursor = cursor
+            this.plot.$el.style.cursor = cursor
+            this.activeCursorTool = tool
+        },
+        /** Follow which sidebar the module reports as open. */
+        openSidebarChanged () {
+            this.sidebarOpen = this.getFieldValue(`${this.SCOPE}.open-sidebar`) as string | null
+        },
+        /** Follow the module's report-open flag. */
+        reportOpenChanged () {
+            this.reportWindow.open = this.getFieldValue(`${this.SCOPE}.report-open`) as boolean
+        },
+        /** Follow the module's trend-strip visibility, however it was changed. */
+        trendVisibleChanged () {
+            this.setTrendVisible(this.getFieldValue(`${this.SCOPE}.trend-visible`) as boolean)
+        },
         setTrendVisible (visible: boolean) {
             if (this.trendVisible === visible) {
                 return
@@ -1717,27 +1737,17 @@ export default defineComponent({
         this.unsubscribeActions = this.$store.subscribeAction((action) => {
             if (action.type === 'redo-action') {
                 this.redoAction()
-            } else if (action.type === 'eeg.set-cursor-tool') {
-                if (action.payload === 'inspect') {
-                    this.overlay.style.cursor = 'zoom-in'
-                    this.plot.$el.style.cursor = 'zoom-in'
-                } else {
-                    this.overlay.style.cursor = 'initial'
-                    this.plot.$el.style.cursor = 'initial'
-                }
-                this.activeCursorTool = action.payload
-            } else if (action.type === 'eeg.set-report-open') {
-                this.reportWindow.open = action.payload
-            } else if (action.type === 'eeg.set-open-sidebar') {
-                this.sidebarOpen = action.payload
-            } else if (action.type === 'eeg.set-trend-visible') {
-                this.setTrendVisible(action.payload as boolean)
-            } else if (action.type === 'eeg.toggle-trend-visible') {
-                this.setTrendVisible(!this.trendVisible)
             } else if (action.type === 'undo-action') {
                 this.undoAction()
             }
         })
+        // Module properties announce themselves, so these follow the value rather than the action
+        // that happened to set it. `trend-visible` covers the toggle as well: it goes through the
+        // same setter and so reports the same change.
+        this.addPropertyChangeHandler(`${this.SCOPE}.cursor-tool`, this.cursorToolChanged)
+        this.addPropertyChangeHandler(`${this.SCOPE}.open-sidebar`, this.openSidebarChanged)
+        this.addPropertyChangeHandler(`${this.SCOPE}.report-open`, this.reportOpenChanged)
+        this.addPropertyChangeHandler(`${this.SCOPE}.trend-visible`, this.trendVisibleChanged)
         // Restore trend-strip visibility for this resource. If the user has previously
         // visited this resource, honour their last explicit choice (hide stays hidden
         // even if trend data exists). On a first visit, fall back to showing the strip

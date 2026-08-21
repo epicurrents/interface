@@ -115,6 +115,8 @@
  */
 import { defineComponent, reactive } from "vue"
 import { useStore } from "vuex"
+import { useAppContext } from "#config"
+import { getModuleProperty, isModuleProperty } from "#config/properties"
 import { T } from "#i18n"
 // Import this synchronously
 import { MenuItem, MenubarItem } from "#types/interface"
@@ -399,14 +401,11 @@ export default defineComponent({
                                 keepOpen: true,
                                 label: T('Display trend', 'AppMenubar'),
                                 onclick: () => store.dispatch('eeg.toggle-trend-visible'),
-                                // `AppStore.addModule` forwards the runtime's `trendVisible` onto
-                                // `INTERFACE.modules.get('eeg')` as a live getter, so this read
-                                // always reflects the current state.
-                                selected: (store.state.INTERFACE as { modules: Map<string, { trendVisible?: boolean }> }).modules.get('eeg')?.trendVisible === true,
+                                selected: getModuleProperty('eeg.trend-visible') === true,
                                 reloadOn: [
-                                    ['eeg.set-trend-visible', 'eeg.toggle-trend-visible', 'set-active-resource'],
+                                    ['eeg.trend-visible', 'set-active-resource'],
                                     (item: MenuItem) => {
-                                        item.selected = (store.state.INTERFACE as { modules: Map<string, { trendVisible?: boolean }> }).modules.get('eeg')?.trendVisible === true
+                                        item.selected = getModuleProperty('eeg.trend-visible') === true
                                     }
                                 ],
                             },
@@ -421,11 +420,11 @@ export default defineComponent({
                                 keepOpen: true,
                                 label: T('aEEG', 'AppMenubar'),
                                 onclick: () => store.dispatch('eeg.set-selected-trend', 'aeeg'),
-                                selected: (store.state.INTERFACE as { modules: Map<string, { selectedTrend?: string }> }).modules.get('eeg')?.selectedTrend === 'aeeg',
+                                selected: getModuleProperty('eeg.selected-trend') === 'aeeg',
                                 reloadOn: [
-                                    ['eeg.set-selected-trend'],
+                                    ['eeg.selected-trend'],
                                     (item: MenuItem) => {
-                                        item.selected = (store.state.INTERFACE as { modules: Map<string, { selectedTrend?: string }> }).modules.get('eeg')?.selectedTrend === 'aeeg'
+                                        item.selected = getModuleProperty('eeg.selected-trend') === 'aeeg'
                                     }
                                 ],
                             },
@@ -436,11 +435,11 @@ export default defineComponent({
                                 keepOpen: true,
                                 label: T('TAR / DAR / DTABR', 'AppMenubar'),
                                 onclick: () => store.dispatch('eeg.set-selected-trend', 'ratio'),
-                                selected: (store.state.INTERFACE as { modules: Map<string, { selectedTrend?: string }> }).modules.get('eeg')?.selectedTrend === 'ratio',
+                                selected: getModuleProperty('eeg.selected-trend') === 'ratio',
                                 reloadOn: [
-                                    ['eeg.set-selected-trend'],
+                                    ['eeg.selected-trend'],
                                     (item: MenuItem) => {
-                                        item.selected = (store.state.INTERFACE as { modules: Map<string, { selectedTrend?: string }> }).modules.get('eeg')?.selectedTrend === 'ratio'
+                                        item.selected = getModuleProperty('eeg.selected-trend') === 'ratio'
                                     }
                                 ],
                             },
@@ -451,11 +450,11 @@ export default defineComponent({
                                 keepOpen: true,
                                 label: T('pdBSI', 'AppMenubar'),
                                 onclick: () => store.dispatch('eeg.set-selected-trend', 'pdbsi'),
-                                selected: (store.state.INTERFACE as { modules: Map<string, { selectedTrend?: string }> }).modules.get('eeg')?.selectedTrend === 'pdbsi',
+                                selected: getModuleProperty('eeg.selected-trend') === 'pdbsi',
                                 reloadOn: [
-                                    ['eeg.set-selected-trend'],
+                                    ['eeg.selected-trend'],
                                     (item: MenuItem) => {
-                                        item.selected = (store.state.INTERFACE as { modules: Map<string, { selectedTrend?: string }> }).modules.get('eeg')?.selectedTrend === 'pdbsi'
+                                        item.selected = getModuleProperty('eeg.selected-trend') === 'pdbsi'
                                     }
                                 ],
                             },
@@ -466,11 +465,11 @@ export default defineComponent({
                                 keepOpen: true,
                                 label: T('Spectrogram', 'AppMenubar'),
                                 onclick: () => store.dispatch('eeg.set-selected-trend', 'spectrogram'),
-                                selected: (store.state.INTERFACE as { modules: Map<string, { selectedTrend?: string }> }).modules.get('eeg')?.selectedTrend === 'spectrogram',
+                                selected: getModuleProperty('eeg.selected-trend') === 'spectrogram',
                                 reloadOn: [
-                                    ['eeg.set-selected-trend'],
+                                    ['eeg.selected-trend'],
                                     (item: MenuItem) => {
-                                        item.selected = (store.state.INTERFACE as { modules: Map<string, { selectedTrend?: string }> }).modules.get('eeg')?.selectedTrend === 'spectrogram'
+                                        item.selected = getModuleProperty('eeg.selected-trend') === 'spectrogram'
                                     }
                                 ],
                             },
@@ -565,6 +564,7 @@ export default defineComponent({
             // Ubsubscribe from store action
             unsubscribeActions,
             unsubscribeMutations,
+            ...useAppContext(store, 'AppMenubar'),
         }
     },
     watch: {
@@ -573,8 +573,8 @@ export default defineComponent({
             handler (value) {
                 // Update display menu item properties if visible elements change. Skip items
                 // whose id isn't a key in `componentVisible` (e.g. `trend-strip` manages its
-                // own `selected` state via the item's `reloadOn` callback against
-                // `INTERFACE.modules.get('eeg').trendVisible`) — otherwise this watcher would
+                // own `selected` state via the item's `reloadOn` callback against the module's
+                // `trend-visible` property) — otherwise this watcher would
                 // overwrite their `item.selected` with `undefined` whenever any other component
                 // visibility toggles.
                 for (const menu of this.menubarItems) {
@@ -644,6 +644,29 @@ export default defineComponent({
          * entry) react to broadcast actions/mutations even though only top-level items live
          * directly under `visibleMenus`.
          */
+        /**
+         * Collect every module property named as a `reloadOn` trigger by a visible menu item, so
+         * each one can be watched once.
+         */
+        _reloadProperties (): string[] {
+            const found = new Set<string>()
+            const visit = (item: MenuItem) => {
+                for (const trigger of item.reloadOn?.[0] || []) {
+                    if (isModuleProperty(trigger)) {
+                        found.add(trigger)
+                    }
+                }
+                for (const sub of (item.items || []) as MenuItem[]) {
+                    visit(sub)
+                }
+            }
+            for (const menu of this.visibleMenus) {
+                for (const item of menu.items) {
+                    visit(item as MenuItem)
+                }
+            }
+            return [...found]
+        },
         _dispatchReload (triggerType: string) {
             const visit = (item: MenuItem) => {
                 if (item.reloadOn && item.reloadOn[0].includes(triggerType)) {
@@ -708,10 +731,9 @@ export default defineComponent({
     mounted () {
         // Subscribe to store actions
         // Two-phase subscription: the menu-close handling runs BEFORE the action handler (its
-        // outcome is independent of state mutations), while the `reloadOn` dispatch runs AFTER
-        // so that callbacks reading the toggled state (e.g. `INTERFACE.modules.get('eeg').trendVisible`
-        // for the trend-strip tick) see the new value. Vuex's default `subscribeAction(handler)`
-        // fires `before`, which made the tick lag one click behind the actual state.
+        // outcome is independent of state mutations), while the `reloadOn` dispatch runs AFTER so
+        // that a callback reading state the action changed sees the new value. Vuex's default
+        // `subscribeAction(handler)` fires `before`, which made such a tick lag one click behind.
         this.unsubscribeActions = this.$store.subscribeAction({
             before: (action) => {
                 if (action.type === 'pointer-left-app' || action.type === 'overlay-clicked') {
@@ -725,12 +747,17 @@ export default defineComponent({
                 }
             },
             after: (action) => {
-                // Let menu items react to action types — some modules (e.g. EEG) toggle their
-                // runtime state via broadcast actions rather than mutations. Firing `after` the
-                // action handler ensures the reloadOn callback reads the post-toggle state.
+                // Let menu items react to action types. Firing `after` the action handler ensures
+                // the reloadOn callback reads the post-action state.
                 this._dispatchReload(action.type)
             },
         })
+        // Menu items may also name a module property as their trigger. Those announce themselves,
+        // so the tick follows the value however it was changed rather than tracking each action
+        // that can change it.
+        for (const property of this._reloadProperties()) {
+            this.addPropertyChangeHandler(property, () => this._dispatchReload(property))
+        }
         // Subscribe to store mutations
         this.unsubscribeMutations = this.$store.subscribe((mutation) => {
             if (mutation.type === 'set-fullscreen' || mutation.type === 'toggle-expand-viewer') {
@@ -740,6 +767,7 @@ export default defineComponent({
         })
     },
     beforeUnmount () {
+        this.removePropertyChangeHandlers()
         if (this.unsubscribeActions) {
             this.unsubscribeActions()
         }

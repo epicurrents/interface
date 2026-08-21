@@ -68,6 +68,7 @@
 import { defineComponent, ref, type Component } from 'vue'
 import { T } from '#i18n'
 import { useEegContext } from '#app/modules/eeg'
+import { getModuleProperty } from "#config/properties"
 import { useStore } from 'vuex'
 import { TREND_REGISTRY } from '../trends'
 
@@ -105,13 +106,11 @@ export default defineComponent({
     },
     setup () {
         const store = useStore()
-        // Local reactive mirror of `INTERFACE.modules.get('eeg').selectedTrend`. The runtime
-        // field is exposed via a non-reactive getter, so Vue can't track changes through the
-        // INTERFACE singleton — the value is refreshed on `eeg.set-selected-trend` and on
-        // resource lifecycle events via subscribeAction (see mounted()).
+        // Local reactive mirror of the module's `selected-trend` property. The runtime field is a
+        // plain object field rather than reactive state, so the mirror is refreshed from the
+        // property's own change event (see mounted()).
         const readSelectedTrend = () =>
-            (store.state.INTERFACE as { modules: Map<string, { selectedTrend?: string }> })
-                .modules.get('eeg')?.selectedTrend || 'aeeg'
+            (getModuleProperty('eeg.selected-trend') as string | undefined) || 'aeeg'
         const selectedTrend = ref(readSelectedTrend())
         return {
             readSelectedTrend,
@@ -131,6 +130,16 @@ export default defineComponent({
         },
     },
     methods: {
+        /**
+         * Follow the module's selected trend type, recomputing at once when the strip is
+         * showing so the user never has to reach for Recompute after switching type.
+         */
+        selectedTrendChanged () {
+            this.selectedTrend = this.readSelectedTrend()
+            if (this.getFieldValue(`${this.SCOPE}.trend-visible`)) {
+                this.recomputeTrends()
+            }
+        },
         $t (key: string, params = {}, capitalized = false) {
             return T(key, this.$options.name, params, capitalized)
         },
@@ -163,29 +172,10 @@ export default defineComponent({
         )
     },
     mounted () {
-        this._unsubscribe = this.$store.subscribeAction({
-            after: (action) => {
-                if (action.type === 'eeg.set-selected-trend') {
-                    this.selectedTrend = this.readSelectedTrend()
-                    // Auto-recompute immediately when the strip is visible so the
-                    // user never has to hit Recompute after changing the trend type.
-                    const trendVisible = (this.$store.state.INTERFACE as {
-                        modules?: Map<string, { trendVisible?: boolean }>
-                    }).modules?.get('eeg')?.trendVisible
-                    if (trendVisible) {
-                        this.recomputeTrends()
-                    }
-                }
-            },
-        })
+        this.addPropertyChangeHandler(`${this.SCOPE}.selected-trend`, this.selectedTrendChanged)
     },
     beforeUnmount () {
-        this._unsubscribe?.()
-    },
-    data () {
-        return {
-            _unsubscribe: null as null | (() => void),
-        }
+        this.removePropertyChangeHandlers()
     },
 })
 </script>

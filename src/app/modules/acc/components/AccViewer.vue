@@ -672,6 +672,22 @@ export default defineComponent({
         },
     },
     methods: {
+        /** Follow the module's active cursor tool, restyling the plot surfaces to match. */
+        cursorToolChanged () {
+            const tool = this.getFieldValue(`${this.SCOPE}.cursor-tool`) as string | null
+            const cursor = tool === 'inspect' ? 'zoom-in' : 'initial'
+            this.overlay.style.cursor = cursor
+            this.plot.$el.style.cursor = cursor
+            this.activeCursorTool = tool
+        },
+        /** Follow which sidebar the module reports as open. */
+        openSidebarChanged () {
+            this.sidebarOpen = this.getFieldValue(`${this.SCOPE}.open-sidebar`) as string | null
+        },
+        /** Follow the module's video-panel visibility. */
+        videoVisibleChanged () {
+            this.setVideoVisible(this.getFieldValue(`${this.SCOPE}.video-visible`) as boolean)
+        },
         /**
          * Re-derive the horizontal scale and lay the elements out again.
          */
@@ -1473,23 +1489,15 @@ export default defineComponent({
                 this.togglePlayback()
             } else if (action.type === 'acc.audio-rewind') {
                 this.rewindPlayback()
-            } else if (action.type === 'acc.video-toggle') {
-                this.setVideoVisible(action.payload as boolean)
-            } else if (action.type === 'acc.set-cursor-tool') {
-                if (action.payload === 'inspect') {
-                    this.overlay.style.cursor = 'zoom-in'
-                    this.plot.$el.style.cursor = 'zoom-in'
-                } else {
-                    this.overlay.style.cursor = 'initial'
-                    this.plot.$el.style.cursor = 'initial'
-                }
-                this.activeCursorTool = action.payload
-            } else if (action.type === 'acc.set-open-sidebar') {
-                this.sidebarOpen = action.payload
             } else if (action.type === 'undo-action') {
                 this.undoAction()
             }
         })
+        // Module properties announce themselves, so these follow the value rather than the
+        // action that happened to set it.
+        this.addPropertyChangeHandler(`${this.SCOPE}.cursor-tool`, this.cursorToolChanged)
+        this.addPropertyChangeHandler(`${this.SCOPE}.open-sidebar`, this.openSidebarChanged)
+        this.addPropertyChangeHandler(`${this.SCOPE}.video-visible`, this.videoVisibleChanged)
         this.montagesChanged()
         //const ONNX = window.__EPICURRENTS__.RUNTIME?.SERVICES.get('ONNX') as OnnxService
         //if (ONNX) {

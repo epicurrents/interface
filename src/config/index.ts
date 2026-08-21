@@ -16,7 +16,7 @@ import type {
     StateManager,
 } from "@epicurrents/core/types"
 import { dispatchPropertyChange, EventScopes } from "@epicurrents/core"
-import { isModuleProperty } from "#config/properties"
+import { getModuleProperty, isModuleProperty } from "#config/properties"
 import { rgbaToSettingsColor, hexToSettingsColor } from "@epicurrents/core/util"
 import { type PythonInterpreterService } from '@epicurrents/pyodide-service/types'
 import { InterfaceEvents } from '#events/EventTypes'
@@ -494,11 +494,13 @@ export const useContext = (store: Pick<EpiCStore, "state">, context: string, com
         SCHEMAS: activeSchemas,
         SETTINGS: settingsProxy as AppSettings['app'] & { [key: string]: unknown },
         /**
-         * Utility method to watch the given settings `field` for changes, in the interface settings or,
-         * if the field is not declared there, in the core app settings. Updates to the field and any of
-         * its children trigger the handler. Handlers are registered under this context's `ID`, so
-         * `removePropertyChangeHandlers` removes every handler added through this context.
-         * @param field - Name of the settings field, scope included (e.g. `eeg.navigator.relativeTime`).
+         * Utility method to watch a value for changes, whichever layer owns it: an interface-owned
+         * module property addressed as `<module>.<property>`, else a settings field in the interface
+         * settings or, if it is not declared there, in the core app settings. Updates to a settings
+         * field and any of its children trigger the handler. Handlers are registered under this
+         * context's `ID`, so `removePropertyChangeHandlers` removes every handler added through this
+         * context, from every layer.
+         * @param field - Name of the module property or settings field, scope included (e.g. `eeg.navigator.relativeTime`, `eeg.trend-visible`).
          * @param handler - Method to call when the field updates.
          */
         addPropertyChangeHandler: (field: string, handler: PropertyChangeHandler) => {
@@ -528,13 +530,19 @@ export const useContext = (store: Pick<EpiCStore, "state">, context: string, com
             }
         },
         /**
-         * Utility method to get the value of the given settings `field` primarily from the interface settings
-         * or failing that the core app settings.
-         * @param field - Name of the settings field.
-         * @param depth - Optional depth to match.
+         * Utility method to read a value by name, whichever layer owns it: an interface-owned module
+         * property addressed as `<module>.<property>`, else a settings field from the interface
+         * settings, else the same field from the core app settings.
+         * @param field - Name of the module property or settings field.
+         * @param depth - Optional depth to match; settings fields only, a property has no branch to address.
          * @returns Value of the field or undefined if not found.
          */
         getFieldValue: (field: string, depth?: number) => {
+            if (isModuleProperty(field)) {
+                // A module property is a single value rather than a branch of a settings tree, so
+                // `depth` has nothing to address and is ignored.
+                return getModuleProperty(field) as SettingsValue
+            }
             const intfValue = INTERFACE.getFieldValue(field, depth)
             if (intfValue !== undefined) {
                 return intfValue

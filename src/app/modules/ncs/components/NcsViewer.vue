@@ -303,6 +303,18 @@ export default defineComponent({
         },
     },
     methods: {
+        /** Follow the module's active cursor tool, restyling the plot surfaces to match. */
+        cursorToolChanged () {
+            const tool = this.getFieldValue(`${this.SCOPE}.cursor-tool`) as string | null
+            const cursor = tool === 'inspect' ? 'zoom-in' : 'initial'
+            this.overlay.style.cursor = cursor
+            this.plot.$el.style.cursor = cursor
+            this.activeCursorTool = tool
+        },
+        /** Follow which sidebar the module reports as open. */
+        openSidebarChanged () {
+            this.sidebarOpen = this.getFieldValue(`${this.SCOPE}.open-sidebar`) as string | null
+        },
         /**
          * Override the default I18n translate method.
          * Returns a component-specific translation (default) or a
@@ -658,21 +670,14 @@ export default defineComponent({
         this.unsubscribeActions = this.$store.subscribeAction((action) => {
             if (action.type === 'redo-action') {
                 this.redoAction()
-            } else if (action.type === 'ncs.set-cursor-tool') {
-                if (action.payload === 'inspect') {
-                    this.overlay.style.cursor = 'zoom-in'
-                    this.plot.$el.style.cursor = 'zoom-in'
-                } else {
-                    this.overlay.style.cursor = 'initial'
-                    this.plot.$el.style.cursor = 'initial'
-                }
-                this.activeCursorTool = action.payload
-            } else if (action.type === 'ncs.set-open-sidebar') {
-                this.sidebarOpen = action.payload
             } else if (action.type === 'undo-action') {
                 this.undoAction()
             }
         })
+        // Module properties announce themselves, so these follow the value rather than the
+        // action that happened to set it.
+        this.addPropertyChangeHandler(`${this.SCOPE}.cursor-tool`, this.cursorToolChanged)
+        this.addPropertyChangeHandler(`${this.SCOPE}.open-sidebar`, this.openSidebarChanged)
         // Init signal cache monitoring.
         this.signalCacheChanged()
     },
@@ -682,6 +687,7 @@ export default defineComponent({
         // Unsubscribe from store
         this.unsubscribe?.()
         this.unsubscribeActions?.()
+        this.removePropertyChangeHandlers()
     },
 })
 </script>

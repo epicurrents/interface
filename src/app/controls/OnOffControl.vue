@@ -159,7 +159,10 @@ export default defineComponent({
                 continue
             }
             const ONNX = this.$store.state.SERVICES.get('ONNX')
-            if (scope === 'settings') {
+            if (scope === 'settings' || scope === 'property') {
+                // Both scopes resolve through the same watcher, which finds the value wherever it
+                // lives — a module property or a settings field. They stay distinct in the
+                // declaration so a reader can see which kind of value a control follows.
                 // A trailing dot marks a branch to watch; handlers match the named field and all of
                 // its descendants either way.
                 this.addPropertyChangeHandler(prop.replace(/\.$/, ''), this.reloadComponent)

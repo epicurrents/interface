@@ -305,7 +305,11 @@ export default class AppStore implements InterfaceStoreManager {
             this.runtime?.setModulePropertyValue(modKey, property, value, resource)
         }
         if (module.properties) {
-            registerModuleProperties(name.toLowerCase(), module.properties)
+            registerModuleProperties(
+                name.toLowerCase(),
+                module.properties,
+                () => module.runtime as unknown as Record<string, unknown>,
+            )
         }
         const modKey = name.toLowerCase()
         this.modules.set(modKey, module.runtime)
