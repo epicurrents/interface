@@ -553,7 +553,7 @@ export interface InterfaceSettings {
      * onPropertyUpdate('high.level.field.grand.child') // Triggers handler (child field updated).
      * onPropertyUpdate('high.level') // Does not trigger update.
      */
-    addPropertyChangeHandler (field: string, handler: PropertyChangeHandler, caller?: string): void
+    addPropertyChangeHandler (field: string, handler: PropertyChangeHandler<SettingsValue>, caller?: string): void
     /**
      * Get the value stored at the given settings `field`.
      * @param field - Name of the settings field.
@@ -592,7 +592,7 @@ export interface InterfaceSettings {
      * removePropertyChangeHandler('high.level', handler) // Handler is removed (parent field match).
      * removePropertyChangeHandler('high.level.field.grand.child', handler) // Not removed (child field match).
      */
-    removePropertyChangeHandler (field: string, handler: PropertyChangeHandler): void
+    removePropertyChangeHandler (field: string, handler: PropertyChangeHandler<SettingsValue>): void
     /**
      * Set a new `value` the the given settings `field`.
      * @param field - Name of the settings field.

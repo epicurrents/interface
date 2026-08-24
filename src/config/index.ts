@@ -45,7 +45,7 @@ const _PropertyChangeHandlers = [] as {
     /** Name of the field to watch. Updates to this field and any of it's children trigger the hander. */
     field: string
     /** Handler to execute on field update. */
-    handler: PropertyChangeHandler
+    handler: PropertyChangeHandler<SettingsValue>
 }[]
 
 export const applicationViews = new Map<string, ApplicationView>([
@@ -181,7 +181,7 @@ export const getInputForSetting = (
 const INTERFACE = {
     app: appSettings,
     modules: new Map<string, InterfaceModuleConfig>(),
-    addPropertyChangeHandler (field: string, handler: PropertyChangeHandler, caller?: string) {
+    addPropertyChangeHandler (field: string, handler: PropertyChangeHandler<SettingsValue>, caller?: string) {
         if (typeof field !== 'string' || !field) {
             Log.error(`Invalid field supplied to addPropertyChangeHandler.`, SCOPE)
             return
@@ -285,7 +285,7 @@ const INTERFACE = {
             }
         }
     },
-    removePropertyChangeHandler (field: string, handler: PropertyChangeHandler) {
+    removePropertyChangeHandler (field: string, handler: PropertyChangeHandler<SettingsValue>) {
         for (let i=0; i<_PropertyChangeHandlers.length; i++) {
             const update = _PropertyChangeHandlers[i]
             if ((field === update.field || field.startsWith(`${update.field}.`)) && handler === update.handler) {
@@ -503,7 +503,7 @@ export const useContext = (store: Pick<EpiCStore, "state">, context: string, com
          * @param field - Name of the module property or settings field, scope included (e.g. `eeg.navigator.relativeTime`, `eeg.trend-visible`).
          * @param handler - Method to call when the field updates.
          */
-        addPropertyChangeHandler: (field: string, handler: PropertyChangeHandler) => {
+        addPropertyChangeHandler: (field: string, handler: PropertyChangeHandler<SettingsValue>) => {
             if (isModuleProperty(field)) {
                 // A module property is announced on the shared bus rather than through either
                 // settings registry, so it is watched there. Resolution is by the qualified

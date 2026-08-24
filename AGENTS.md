@@ -333,7 +333,7 @@ this.addPropertyChangeHandler(`${this.SCOPE}.trend-visible`, this.trendVisibleCh
 const visible = this.getFieldValue(`${this.SCOPE}.trend-visible`)
 ```
 
-`addPropertyChangeHandler` resolves a module property first, then the interface settings tree, then the core one; resolution is by the qualified `<module>.<property>` name, which is unique across owners in a way a bare name is not. Handlers take no arguments — `PropertyChangeHandler` is declared as a generic *function* signature that only a zero-argument handler can satisfy — so a handler reads the current value through `getFieldValue`. Menu items and toolbar controls name a property in their `reloadOn` list with the `property:` scope, alongside `settings:`.
+`addPropertyChangeHandler` resolves a module property first, then the interface settings tree, then the core one; resolution is by the qualified `<module>.<property>` name, which is unique across owners in a way a bare name is not. Handlers either take no arguments or declare `SettingsValue` exactly — a narrower `(newValue?: boolean)` is rejected, because the registry is keyed by path string and knows nothing of the type behind any one path. Every existing handler takes none and reads the current value through `getFieldValue`. Menu items and toolbar controls name a property in their `reloadOn` list with the `property:` scope, alongside `settings:`.
 
 Do **not** observe a module property by subscribing to the action that sets it. The property announces itself, so one handler covers every route to the value: `eeg.set-trend-visible` and `eeg.toggle-trend-visible` both land as one `trend-visible` change.
 
@@ -382,7 +382,9 @@ Every component in the interface calls a variant of this. It returns:
 
 Do **not** subscribe to the `set-settings-value` store mutation to observe a settings change. That route sees only the field the mutation carries, has no tree resolution, and needs its own unsubscriber. `addPropertyChangeHandler` is the read side of settings; the `set-settings-value` dispatch remains the write side, because it is what persists user-definable fields to storage.
 
-Handlers currently take no arguments and re-read through `getFieldValue` when they need the value — `PropertyChangeHandler` is declared as a generic *function* signature (`<T>(newValue?: T, …)`), which only a zero-argument handler can satisfy.
+Handlers currently take no arguments and re-read through `getFieldValue` when they need the value. Taking `(newValue?: SettingsValue, oldValue?: SettingsValue)` also type-checks, since the type parameter of `PropertyChangeHandler<T>` sits on the alias and both settings registries pin it to `SettingsValue`. Narrowing to the type actually behind the path does not: `(newValue?: boolean)` is rejected for `eeg.trends.showStrip` like any other field, because one registry serves every path and nothing ties a path string to a type. Narrow inside the handler instead.
+
+`RESOURCE.onPropertyChange` leaves `T` at its `unknown` default, so a handler that wants the value there casts it. Deriving the property's own type would make the signature generic over `keyof this`, which stops two resource types relating structurally and breaks every subclass that narrows an inherited static.
 
 **`SETTINGS` is a `Proxy`**: reads try interface settings first (`INTERFACE.modules.get(context)?.settings`), then core runtime settings (`store.state.SETTINGS.modules[context]`). Writes go to whichever source declares the field, interface first; a field declared in neither is created on the interface settings. Where both sources carry the same key with plain-object values, the returned value is itself a proxy applying the same two-source resolution, so nested keys can live in either source without one shadowing the other. This shadow pattern means interface settings always override core without needing to copy values.
 
