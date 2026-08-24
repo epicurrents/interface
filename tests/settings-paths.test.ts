@@ -75,8 +75,13 @@ describe.each(MODULES)('%s module settings paths', (code, schemas, interfaceSett
     const resolves = (path: string) => resolvesIn(interfaceSettings, path) || resolvesIn(moduleSettings, path)
 
     test('every menu field names a setting that exists', () => {
+        const paths = menuPaths(schemas)
+        // Without this the test passes on an empty collection, which is what a rename of the field-list
+        // shape would produce: the walk below would have nothing to reject and the suite would stay green
+        // while covering nothing.
+        expect(paths.length).toBeGreaterThan(0)
         const unresolved = [] as string[]
-        for (const path of menuPaths(schemas)) {
+        for (const path of paths) {
             if (!path.startsWith(`${code}.`)) {
                 unresolved.push(`${path} (wrong module prefix)`)
                 continue
