@@ -74,9 +74,8 @@ A `createResourceModule(spec)` factory rather than a class base. `runtime` is a 
 
 ### Prerequisite cleanup
 
-A census of dispatch and subscription sites turned up several dead paths. They should be resolved as issues before the migration rather than carried through it, since each one otherwise looks like a channel that has to keep working:
+A census of dispatch and subscription sites turned up several dead paths, since each one otherwise looks like a channel that has to keep working. The dispatch side is now closed: the unprefixed calls are gone, and [tests/store-vocabulary.test.ts](tests/store-vocabulary.test.ts) scans every literal `dispatch` against the declared action names so another one cannot land silently. What remains:
 
-- `BiosignalInterface.vue` dispatches `set-cursor-tool` and `set-open-drawer` unprefixed from live template handlers; no such actions exist, only the module-scoped variants.
-- Two subscriber matches have no dispatcher: `set-label-value`, and an unprefixed `set-page-number` where only the `pdf.` and `htm.` variants exist.
-- The `getSettingsValue` getter has no call sites.
-- The ONNX mutations are commented out while the actions still commit to them.
+- **No equivalent guard on the subscriber side.** A `store.subscribe` that matches a mutation type nothing commits is inert in the same way, and that is how the `set-label-value` and unprefixed `set-page-number` subscribers survived — the latter also leaking a subscription per mount, because `mounted` overwrote its unsubscriber. Scanning for it is harder than the dispatch case: a subscriber legitimately matches names declared anywhere, including in a host application.
+- The `getSettingsValue` getter has no call sites, and neither do `getSettingForInput` / `getInputForSetting` — which also carry an inverted user-definable check, dormant only because the field names they compare live in different key spaces (menu paths are module-prefixed, `_userDefinable` keys are not).
+- The `action:` scope in a control's `reloadOn` list now has no users. Only `OnOffControl` ever implemented it; `ButtonControl` and `DropdownControl` silently ignored the entry. Removing the branch belongs with stage 3, since it is the same `subscribeAction` teardown.

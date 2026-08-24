@@ -8,8 +8,6 @@
             :is="CONTROLS[$store.state.APP.activeModality || 'default']"
             :key="`biosignal-controls-${$store.state.APP.activeModality}`"
             ref="controls"
-            v-on:set-cursor-tool="setCursorTool"
-            v-on:set-open-drawer="setOpenDrawer"
             v-on:toggle-navigation="$emit('toggle-navigation')"
         >
         </component>
@@ -188,12 +186,6 @@ export default defineComponent({
                 this.VIEWERS[modality] = this.$store.getters.getResourceViewer(modality)
             }
             this.activeResources.push(...activeResources)
-        },
-        setCursorTool (value: string | null) {
-            this.$store.dispatch('set-cursor-tool', value)
-        },
-        setOpenDrawer (value: string | null) {
-            this.$store.dispatch('set-open-drawer', value)
         },
         //footerUpdate (update: [any, any]) {
             //this.footer?.update(update)

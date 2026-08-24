@@ -150,10 +150,6 @@ export enum ActionTypes {
     ADD_DATASET = 'add-dataset',
     CREATE_DATASET = 'create-dataset',
     SET_ACTIVE_DATASET = 'set-active-dataset',
-    // ONNX
-    PAUSE_ONNX_RUN = 'pause-onnx-run',
-    RUN_ONNX_MODEL = 'run-onnx-model',
-    SET_ONNX_MODEL = 'set-onnx-model',
 }
 export type Actions = {
     // TypeScript can't check the types of dynamically loaded module
@@ -188,10 +184,6 @@ export type Actions = {
     [ActionTypes.ADD_DATASET] (payload?: MixedMediaDataset): void
     [ActionTypes.CREATE_DATASET] (payload?: { name: string, connector: DatasourceConnector | null }): void
     [ActionTypes.SET_ACTIVE_DATASET] (payload: MixedMediaDataset | null): void
-    // ONNX
-    [ActionTypes.PAUSE_ONNX_RUN] (): void
-    [ActionTypes.RUN_ONNX_MODEL] (): void
-    [ActionTypes.SET_ONNX_MODEL] (payload: string): void
 }
 export const actions = {
     [ActionTypes.ACCEPT_DISCLAIMER] (injectee: ActionContext<State, State>) {
@@ -438,23 +430,6 @@ export const actions = {
             }
         } else {
             injectee.commit(MutationTypes.SET_ACTIVE_DATASET, payload)
-        }
-    },
-    // ONNX
-    [ActionTypes.PAUSE_ONNX_RUN] (injectee: ActionContext<State, State>) {
-        if (injectee.state.SERVICES.get('ONNX')) {
-            injectee.commit(MutationTypes.PAUSE_ONNX_RUN)
-        }
-    },
-    [ActionTypes.RUN_ONNX_MODEL] (injectee: ActionContext<State, State>) {
-        if (injectee.state.SERVICES.get('ONNX')) {
-            injectee.commit(MutationTypes.RUN_ONNX_MODEL)
-        }
-    },
-    [ActionTypes.SET_ONNX_MODEL] (injectee: ActionContext<State, State>, payload: string) {
-        // TODO: Validate model that is requested somehow.
-        if (injectee.state.SERVICES.get('ONNX')) {
-            injectee.commit(MutationTypes.SET_ONNX_MODEL, payload)
         }
     },
 }

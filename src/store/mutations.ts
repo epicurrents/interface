@@ -45,10 +45,6 @@ export enum MutationTypes {
     // Datasets
     ADD_DATASET = 'add-dataset',
     SET_ACTIVE_DATASET = 'set-active-dataset',
-    // ONNX mutations
-    PAUSE_ONNX_RUN = 'pause-onnx-run',
-    RUN_ONNX_MODEL = 'run-onnx-model',
-    SET_ONNX_MODEL = 'set-onnx-model',
 }
 export type Mutations<S = State> = {
     [MutationTypes.ACCEPT_DISCLAIMER] (state: S): void
@@ -75,10 +71,6 @@ export type Mutations<S = State> = {
     // Datatest
     [MutationTypes.ADD_DATASET] (state: S, payload: MixedMediaDataset): void
     [MutationTypes.SET_ACTIVE_DATASET] (state: S, payload: MixedMediaDataset | null): void
-    // ONNX
-    //[MutationTypes.PAUSE_ONNX_RUN] (state: S): void
-    //[MutationTypes.RUN_ONNX_MODEL] (state: S): void
-    //[MutationTypes.SET_ONNX_MODEL] (state: S, payload: string): void
 }
 export const mutations: MutationTree<State> & Mutations = {
     [MutationTypes.ACCEPT_DISCLAIMER] (state: State) {
@@ -245,17 +237,4 @@ export const mutations: MutationTree<State> & Mutations = {
     [MutationTypes.SET_ACTIVE_DATASET] (state: State, payload: MixedMediaDataset | null) {
         state.setActiveDataset(payload)
     },
-    // ONNX
-    //[MutationTypes.PAUSE_ONNX_RUN] (state: State) {
-    //    const ONNX = state.SERVICES.get('ONNX') as OnnxService
-    //    ONNX?.pauseRun()
-    //},
-    //[MutationTypes.RUN_ONNX_MODEL] (state: State) {
-    //    const ONNX = state.SERVICES.get('ONNX') as OnnxService
-    //    ONNX?.run()
-    //},
-    //[MutationTypes.SET_ONNX_MODEL] (state: State, payload: string) {
-    //    const ONNX = state.SERVICES.get('ONNX') as OnnxService
-    //    ONNX?.loadModel(payload)
-    //},
 }

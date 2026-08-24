@@ -195,21 +195,6 @@ export default defineComponent({
             const resIdx = this.allResources.map(r => r.id).indexOf(resource.id)
             const nextRes = this.allResources[resIdx + 1]
             this.$store.dispatch('set-active-resource', nextRes)
-            /*
-            if (nextRes.activeModality === 'doc') {
-                const nextIdx = this.$store.state.DOC.resources.map(r => r.id).indexOf(nextRes.id)
-                this.$store.dispatch('set-active-doc', nextIdx)
-            } else if (nextRes.type === 'eeg') {
-                const nextIdx = this.$store.state.EEG.resources.map(r => r.id).indexOf(nextRes.id)
-                this.$store.dispatch('set-active-eeg', nextIdx)
-            } else if (nextRes.type === 'emg') {
-                const nextIdx = this.$store.state.EMG.resources.map(r => r.id).indexOf(nextRes.id)
-                this.$store.dispatch('set-active-emg', nextIdx)
-            } else if (nextRes.type === 'ncs') {
-                const nextIdx = this.$store.state.NCS.resources.map(r => r.id).indexOf(nextRes.id)
-                this.$store.dispatch('set-active-ncs', nextIdx)
-            }
-            */
         },
         openPrevResource () {
             const resource = this.$store.getters.getActiveResource()
@@ -219,21 +204,6 @@ export default defineComponent({
             const resIdx = this.allResources.map(r => r.id).indexOf(resource.id)
             const prevRes = this.allResources[resIdx - 1]
             this.$store.dispatch('set-active-resource', prevRes)
-            /*
-            if (prevRes.activeModality === 'doc') {
-                const prevIdx = this.$store.state.DOC.resources.map(r => r.id).indexOf(prevRes.id)
-                this.$store.dispatch('set-active-doc', prevIdx)
-            } else if (prevRes.type === 'eeg') {
-                const prevIdx = this.$store.state.EEG.resources.map(r => r.id).indexOf(prevRes.id)
-                this.$store.dispatch('set-active-eeg', prevIdx)
-            } else if (prevRes.type === 'emg') {
-                const prevIdx = this.$store.state.EMG.resources.map(r => r.id).indexOf(prevRes.id)
-                this.$store.dispatch('set-active-emg', prevIdx)
-            } else if (prevRes.type === 'ncs') {
-                const prevIdx = this.$store.state.NCS.resources.map(r => r.id).indexOf(prevRes.id)
-                this.$store.dispatch('set-active-ncs', prevIdx)
-            }
-            */
         },
         toggleNavigation () {
             this.$emit('toggle-navigation')
