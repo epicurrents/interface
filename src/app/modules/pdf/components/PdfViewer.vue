@@ -81,12 +81,8 @@ export default defineComponent({
             component: [],
             overlay: [],
         }) as Ref<{[element in PointerLeaveElement]: PointerEventHandler[] }>
-        // Listen to some store state changes
-        const unsubscribe = store.subscribe((mutation) => {
-            if (mutation.type === 'set-page-number') {
-                context.RESOURCE.currentPage = mutation.payload.value
-            }
-        })
+        // Unsubscriber for the store subscription set up in `mounted`.
+        const unsubscribe = ref(null as (() => void) | null)
         return {
             hotkeyEvents,
             hotkeys,

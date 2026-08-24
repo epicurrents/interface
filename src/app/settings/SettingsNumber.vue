@@ -42,7 +42,7 @@ import { useAppContext } from "#config"
 import type { InterfaceSettingsCommon, InterfaceSettingsInput } from "#types/config"
 
 export default defineComponent({
-    name: 'SettingsCheckbox',
+    name: 'SettingsNumber',
     components: {
     },
     props: {

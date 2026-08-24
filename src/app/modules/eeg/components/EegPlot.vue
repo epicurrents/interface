@@ -522,7 +522,7 @@ export default defineComponent({
                     const sensVals = this.SETTINGS.sensitivity[this.SETTINGS.sensitivityUnit].availableValues
                     for (let i=0; i<sensVals.length; i++) {
                         if (i && sensVals[i] >= this.RESOURCE.sensitivity) {
-                            this.$store.dispatch('set-sensitivity', sensVals[i-1])
+                            this.$store.dispatch('eeg.set-sensitivity', sensVals[i-1])
                             return
                         }
                     }
@@ -530,14 +530,14 @@ export default defineComponent({
                     const sensVals = this.SETTINGS.sensitivity[this.SETTINGS.sensitivityUnit].availableValues
                     for (let i=0; i<sensVals.length; i++) {
                         if (sensVals[i] > this.RESOURCE.sensitivity) {
-                            this.$store.dispatch('set-sensitivity', sensVals[i])
+                            this.$store.dispatch('eeg.set-sensitivity', sensVals[i])
                             return
                         } else if (i < sensVals.length - 1) {
                             if (
                                 sensVals[i] === this.RESOURCE.sensitivity ||
                                 sensVals[i+1] > this.RESOURCE.sensitivity
                             ) {
-                                this.$store.dispatch('set-sensitivity', sensVals[i+1])
+                                this.$store.dispatch('eeg.set-sensitivity', sensVals[i+1])
                                 return
                             }
                         }
