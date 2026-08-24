@@ -796,12 +796,6 @@ export const settings: EegInterfaceSettings = safeObjectFrom({
             width: 2,
         },
     },
-    minorGrid: {
-        show: true,
-        color: [0, 0, 0, 0.15] as SettingsColor,
-        style: 'solid',
-        width: 1,
-    },
     minSignalSelection: 0.2,
     navigator: {
         annotationColor: [0, 0, 1, 0.5] as SettingsColor,

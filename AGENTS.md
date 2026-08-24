@@ -562,3 +562,9 @@ The Vuex state has two superficially-similar `Map`s. They actually contain diffe
 ### Vuex `subscribeAction(handler)` defaults to `before`
 
 `store.subscribeAction(handler)` invokes the handler *before* the action's mutation handler runs. When `AppMenubar`'s subscribeAction iterates menu items' `reloadOn` callbacks, those callbacks need the post-action state. Use the `store.subscribeAction({ before, after })` form and put the reloadOn dispatch in `after`. Menu-closing logic (pointer-left-app, overlay-clicked) stays in `before` because its effect is independent of any state mutation.
+
+### A settings menu path that names nothing is inert, not an error
+
+A module's settings live in two objects: the interface config in this package (`src/app/modules/<code>/config.ts`) and the core module package's own config (`epicurrents/<code>-module/src/config/`). `useContext`'s `SETTINGS` proxy joins them, so a menu field's `setting:` path may legitimately name a field in either one. A path that exists in neither resolves to nothing and `setFieldValue` returns false — the control renders, moves, and changes no state. The same applies to a `_userDefinable` key, which then quietly stops the field from persisting.
+
+[tests/settings-paths.test.ts](tests/settings-paths.test.ts) walks every menu path and every `_userDefinable` key of the four biosignal modules against the union of both trees, so a renamed setting fails the suite instead of shipping a control that does nothing.
