@@ -4,10 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "build": "node scripts/typecheck.mjs && vite build --config vite.config.dist.ts",
+    "build": "node scripts/typecheck.mjs && vite build --config vite.config.dist.ts && node scripts/build-types.mjs",
     "build:app": "node scripts/typecheck.mjs && vite build --config vite.config.app.ts",
     "build:custom": "node scripts/typecheck.mjs && vite build --config vite.config.custom.ts",
     "build:dist": "vite build --config vite.config.dist.ts",
+    "build:types": "node scripts/build-types.mjs",
     "dev": "vite --force",
     "lint": "npm run lint:src",
     "lint:src": "eslint src",
@@ -20,27 +21,32 @@
   },
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./dist/setups/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
     "./modules/eeg": {
+      "types": "./dist/app/modules/eeg/index.d.ts",
       "import": "./dist/modules/eeg.js",
       "default": "./dist/modules/eeg.js"
     },
     "./modules/acc": {
+      "types": "./dist/app/modules/acc/index.d.ts",
       "import": "./dist/modules/acc.js",
       "default": "./dist/modules/acc.js"
     },
     "./modules/doc": {
+      "types": "./dist/app/modules/doc/index.d.ts",
       "import": "./dist/modules/doc.js",
       "default": "./dist/modules/doc.js"
     },
     "./modules/emg": {
+      "types": "./dist/app/modules/emg/index.d.ts",
       "import": "./dist/modules/emg.js",
       "default": "./dist/modules/emg.js"
     },
     "./modules/pdf": {
+      "types": "./dist/app/modules/pdf/index.d.ts",
       "import": "./dist/modules/pdf.js",
       "default": "./dist/modules/pdf.js"
     },

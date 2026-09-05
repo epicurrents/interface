@@ -5,12 +5,6 @@
  * @license    Apache-2.0
  */
 
-declare module '*.vue' {
-    import { defineComponent } from "vue"
-    const Component: ReturnType<typeof defineComponent>
-    export default Component
-}
-
 import { EpiCStore } from "#store"
 import type { EpicurrentsApp, RuntimeState } from "@epicurrents/core/types"
 import type { ScopedEventBus } from "scoped-event-bus/types"

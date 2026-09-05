@@ -29,6 +29,7 @@ vite.config.*.ts
 !/src/setups/standalone.ts
 !/src/setups/*.example.ts
 tsconfig.*.json
+!tsconfig.types.json
 
 # Editor directories and files
 .vscode/*

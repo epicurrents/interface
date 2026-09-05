@@ -12,6 +12,7 @@ This package builds to the per-module **`dist/` package** — the form other bui
 | `npm run build` | the `dist/` package (`vite.config.dist.ts`) — per-module entries a bundler composes from; this is what the builder and host apps consume |
 | `npm run build:app` | a self-contained standalone web app in `build/app/` (`vite.config.app.ts`), for quick demos |
 | `npm run typecheck` | type-check only, honouring `INCLUDE_MODULES` (see [scripts/README.md](scripts/README.md)) |
+| `npm run build:types` | the declarations alone (`scripts/build-types.mjs`), useful while iterating on the public type surface |
 
 The `@epicurrents/*` packages are cloned, installed and built by the builder (`frontend/viewer/scripts/`) — the interface no longer manages them itself, and worker bundles are emitted by Vite rather than copied.
 
@@ -30,6 +31,16 @@ createEpicurrentsApp(config, async ({ app, registerInterfaceModule }: SetupConte
 ```
 
 Per-modality UI is exposed as subpath exports (`@epicurrents/interface/modules/<name>`) so a consumer's bundler pulls in only what it imports. The all-in reference setup that wires every module together is `src/setups/full.example.ts`, which the standalone dev and app builds use.
+
+### Types
+
+Each subpath ships declarations, so a consumer can name `SetupContext`, `ApplicationInterfaceConfig`, `LeadFieldProvider` and the rest without reaching into a file path. They are emitted by [scripts/build-types.mjs](scripts/build-types.mjs) as part of `npm run build`, and two things about that are worth knowing before changing it.
+
+It runs plain `tsc` over the `.ts` sources rather than `vue-tsc` over everything. A single-file component's inferred type is not part of this package's API, and the larger ones cannot be serialized at all — [EegViewer.vue](src/app/modules/eeg/components/EegViewer.vue) fails with TS7056. Component imports resolve instead through the ambient `*.vue` declaration in [src/types/vue.ambient.d.ts](src/types/vue.ambient.d.ts), giving the same generic component type a consumer sees. That declaration has to live in a file with no top-level import or export, or it is an augmentation of a module named `*.vue` rather than a wildcard, and applies to nothing. Type *checking* is unaffected: `npm run typecheck` still runs `vue-tsc` over the whole tree, templates included.
+
+The script then rewrites every `#`-prefixed specifier in the emitted declarations. Those aliases are this package's own tsconfig, and a consumer resolving one gets "cannot find module" on every type the package exposes — indistinguishable, from the outside, from shipping no types at all. Aliases into the package become relative paths, and `#workspace/…` names of sibling packages become the package names a consumer knows them by. An alias the script cannot resolve fails the build rather than reaching a consumer.
+
+Because vite writes the bundle entries flat (`dist/modules/eeg.js`) while tsc mirrors the source tree (`dist/app/modules/eeg/index.d.ts`), each subpath's `types` and `import` conditions point at different places. That asymmetry is expected; keep both in step when adding an entry.
 
 ## Customising which modules are registered
 

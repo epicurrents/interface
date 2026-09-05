@@ -22,8 +22,7 @@ import type {
     SettingsColor,
 } from '@epicurrents/core/dist/types'
 import type { ContextMenuContext, SignalSelectionLimit } from '#types/interface'
-import type { PlotSelection } from '#app/views/biosignal/types'
-import type { PointerEventOverlay } from '#app/overlays/PointerEventOverlay.vue'
+import type { PlotSelection, PointerOverlayHandle } from '#app/views/biosignal/types'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -77,7 +76,7 @@ export type PointerComposableOptions = {
     contextMenu: Ref<ContextMenuContext | null>
     cursors: Ref<Cursors>
     dragAction: Ref<DragAction | null>
-    overlay: Ref<PointerEventOverlay>
+    overlay: Ref<PointerOverlayHandle>
     plotSelections: PlotSelection[]
     pointerLeaveHandlers: ((event?: PointerEvent) => void)[]
     pxPerSecond: Ref<number>

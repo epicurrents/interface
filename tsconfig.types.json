@@ -1,0 +1,25 @@
+{
+  /*
+   * Declaration build for the published package.
+   *
+   * Plain `tsc`, not `vue-tsc`, and only the `.ts` sources: a single-file component's inferred type
+   * is not part of this package's API, and asking TypeScript to serialize the larger ones fails
+   * outright (TS7056). Component imports resolve through the ambient `*.vue` declaration in
+   * src/types/vue.ambient.d.ts to the same generic component type a consumer sees, which is all the
+   * emitted declarations need to name.
+   *
+   * Type CHECKING still runs through vue-tsc over the whole tree (scripts/typecheck.mjs) — this
+   * config emits, it does not vet.
+   */
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "declarationMap": false,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["./src/**/*.ts", "./src/**/*.d.ts"],
+  "exclude": ["node_modules"]
+}
