@@ -78,6 +78,18 @@ export type ApplicationInterfaceConfig = ApplicationConfig & {
      */
     usePyodide?: boolean
     /**
+     * Does this consumer compute biosignals (montage derivation and filtering) in Pyodide.
+     *
+     * Only set this when the consumer has actually pointed the `montage` / `<modality>-montage`
+     * worker overrides at the Pyodide worker. It makes the Python runtime and the biosignal script
+     * blocking dependencies of every biosignal resource, so a recording cannot be opened until the
+     * interpreter and its packages have loaded. With the montage computed in JavaScript (the
+     * default) the interpreter is needed only by the analysis tools, which await the service
+     * themselves, and gating resources on it would delay every recording for a capability most
+     * sessions never open.
+     */
+    usePyodideBiosignal?: boolean
+    /**
      * User authentication configuration. Following options are allowed:
      * - `string`: This name is used as the user name for this application instance.
      * - `object`: An object containing the following optional fields.

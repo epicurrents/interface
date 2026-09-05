@@ -106,12 +106,20 @@ const registerAllModules = ({ app, useSAB, setup, registerInterfaceModule }: Set
             // If we use Pyodide for computing montages, we must convey signal
             // data cache updates to the service, among others.
             app.setWorkerOverride('montage', pyoWorker)
+            // Declares that the signal path runs in Python, which makes the interpreter and the
+            // biosignal script blocking dependencies of every biosignal resource: nothing can be
+            // drawn before scipy can filter it. A consumer that leaves filtering in the JS montage
+            // worker must NOT set this — see the flag's documentation in types/globals.d.ts, and
+            // the builder's setup/services/pyodide.ts for the non-blocking registration.
+            setup.usePyodideBiosignal = true
         }
         const pyoService = new PyodideService()
         app.registerService('pyodide', pyoService)
-        pyoService.setupWorker(
-            { indexURL: setup.pyodideAssetPath, packages: ['scipy', 'matplotlib', 'mne'] }
-        )
+        pyoService.setupWorker({
+            // Passed only for a self-hosted distribution; see the SETUP default in setups/index.ts.
+            ...(setup.pyodideAssetPath ? { indexURL: setup.pyodideAssetPath } : {}),
+            packages: ['matplotlib', 'mne'],
+        })
         if (useSAB) {
             pyoService.loadDefaultScript('biosignal')
         }

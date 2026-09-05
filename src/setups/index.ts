@@ -112,11 +112,17 @@ const SETUP: Required<ApplicationInterfaceConfig> = Object.assign(
                 },
             },
         },
-        pyodideAssetPath: 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/', // CDN path.
-        //pyodideAssetPath: `${window.location.origin}/vendor/pyodide/0.25.0/`, // Local dev path.
+        // Empty means the Pyodide service uses its own pinned upstream distribution and
+        // micropip-installs the packages upstream no longer bundles. Set this only to a
+        // SELF-HOSTED distribution folder (e.g. `${window.location.origin}/vendor/pyodide/`),
+        // because a value here also requires every package to resolve from that folder's
+        // `pyodide-lock.json` — an upstream CDN path takes that branch against a lock with no mne
+        // and fails to load.
+        pyodideAssetPath: '',
         scope: 'local' as 'local' | 'workspace',
         signalCacheMaxSize: 500,
         usePyodide: false,
+        usePyodideBiosignal: false,
         user: null,
         useSAB: true,
     } as Required<ApplicationInterfaceConfig>),

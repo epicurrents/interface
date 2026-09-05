@@ -200,7 +200,18 @@ export const DefaultInterface: DefaultInterfaceModuleConstructor = class Epicurr
             const resource = context.resource
             const pyodide = window.__EPICURRENTS__.RUNTIME!.SERVICES.get('pyodide') as unknown as PythonInterpreterService | null
             const memoryManager = window.__EPICURRENTS__.RUNTIME!.SETTINGS.app.useMemoryManager
-            if (pyodide && memoryManager && Object.hasOwn(resource, '_signalCacheStatus')) {
+            // Only a consumer that computes the montage in Python needs the interpreter before the
+            // resource can be shown; `usePyodideBiosignal` is how it says so. Otherwise the service
+            // is registered for the analysis tools alone, and they await it themselves through
+            // `runCode`, which resolves `initialSetup` and its script dependencies before running
+            // anything. Adding the dependencies regardless would hold every recording closed behind
+            // an interpreter download and a package install for a capability the session may never
+            // open — the resource is not ready until `dependenciesMissing` is empty, and the
+            // navigator refuses to activate a resource that is not ready.
+            if (
+                pyodide && config.usePyodideBiosignal && memoryManager
+                && Object.hasOwn(resource, '_signalCacheStatus')
+            ) {
                 // Refresh of the Pyodide-side input arrays is demand-driven inside
                 // `biosignal_get_signals` (and the batched `biosignal_refresh_channels`
                 // primitive), so no per-signalCacheStatus push is needed here.
