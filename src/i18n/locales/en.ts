@@ -21,11 +21,20 @@ const messagesEN = {
     datetime: '{y}/{m}/{d} {h}:{min}',
     'Dataset {n}': 'Dataset {n}',
     'Day {d}': 'Day {d}',
+    'Dipole ({x}, {y}, {z}) mm — GOF {gof}%': 'Dipole ({x}, {y}, {z}) mm — GOF {gof}%',
+    'Document has a total of {n} pages': 'Document has a total of {n} pages',
     'Duration: {t}': 'Duration: {t}',
+    'Lead field model for {montage} is not available on this server. Contact an administrator to compute it.':
+        'Lead field model for {montage} is not available on this server. Contact an administrator to compute it.',
     'Loading studies from {c}...': 'Loading studies from {c}...',
     'Loading dependency {n}/{t}...': 'Loading dependency {n}/{t}...',
+    'Loading module dependencies, please wait ({ready}/{total} done)...':
+        'Loading module dependencies, please wait ({ready}/{total} done)...',
     'Memory use: {p} % ({u} / {t} MiB)': 'Memory use: {p} % ({u} / {t} MiB)',
     'Number {n}': 'Number {n}',
+    'Peak at {t} ms': 'Peak at {t} ms',
+    'Setting up montage {current} of {total}': 'Setting up montage {current} of {total}',
+    'Voltage / Δ ({unit})': 'Voltage / Δ ({unit})',
     'uV': 'µV', // Display ASCII-compatible unit uV in the interface as µV.
     welcome: {
         accept: 'I accept',
