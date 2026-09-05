@@ -123,7 +123,7 @@
  * 1. Tab opened → component mounts → `load()` runs automatically.
  * 2. `load()`: ensures the Pyodide script is loaded, fetches + matches the
  *    lead field for the active setup's MNE montage, calls the Python setup
- *    chain.  State transitions: loading → ready (or error/unavailable).
+ *    chain. State transitions: loading → ready (or error/unavailable).
  * 3. User clicks Analyze → `runAnalysis()` extracts a ±windowSec/2 epoch at
  *    `cursorPos`, ships it to Pyodide, renders result to the two canvases.
  */
@@ -144,13 +144,19 @@ import {
 const SCOPE = 'SourceLocalizationTool'
 
 /**
- * Map the EEG setup name (e.g. '10-20', '10-10') to the MNE standard montage
- * name used by the backend lead-field computation.  Falls back to 'standard_1020'
- * for unrecognised names.
+ * Map the EEG setup name (e.g. '10-20', '10-10') to the MNE standard montage whose lead field
+ * covers it. An unrecognised name falls back to `standard_1020`.
+ *
+ * `standard_1020` is not the 21-electrode clinical system: it is MNE's 94-position montage
+ * carrying the whole 10-10 grid — every AF / FC / C / CP / P / PO row including the odd
+ * intermediates, plus the legacy T3-T6 and ear/mastoid names. A 10-10 cap is therefore fully
+ * covered by it, and asking for `standard_1005` instead would fetch 343 channels (roughly four
+ * times the bytes) to use the same rows. `standard_1005` earns its size only for a cap that
+ * actually places the 10-05 half-distance positions, which is the `10-5` entry.
  */
 const SETUP_TO_MNE: Record<string, string> = {
     '10-20':  'standard_1020',
-    '10-10':  'standard_1005',
+    '10-10':  'standard_1020',
     '10-5':   'standard_1005',
 }
 
@@ -221,13 +227,13 @@ export default defineComponent({
         },
         /**
          * Collect EEG channel labels from the active montage, in signal-index
-         * order.  Used by the orchestrator to intersect with the lead-field
+         * order. Used by the orchestrator to intersect with the lead-field
          * channel list.
          *
-         * Source localisation requires a common-reference montage.  With a
+         * Source localisation requires a common-reference montage. With a
          * bipolar montage the signal T7−T8 would be matched to the T7 lead-field
          * row, treating a LEFT-minus-RIGHT signal as a unipolar T7 recording —
-         * the result would be spatially wrong.  We warn but don't block so the
+         * the result would be spatially wrong. We warn but don't block so the
          * user can still experiment.
          */
         getEegChannelLabels (): string[] {
@@ -244,7 +250,7 @@ export default defineComponent({
         },
         /**
          * Full load sequence: script → lead field fetch + channel match →
-         * Pyodide setup.  Called automatically on mount and on Retry.
+         * Pyodide setup. Called automatically on mount and on Retry.
          */
         async load () {
             this.state = 'loading'
