@@ -162,8 +162,6 @@ export function useBiosignalLayout (
     function handleNavigatorResize (value: { start: number, end: number }) {
         const current = navigatorHeight?.value ?? 0
         const next = value.end
-        // eslint-disable-next-line no-console
-        console.log(`[trend-debug] handleNavigatorResize end=${next} (was ${current}) suppressed=${performance.now() < suppressResizeUntil}`)
         if (performance.now() < suppressResizeUntil) {
             return
         }

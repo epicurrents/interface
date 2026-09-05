@@ -524,7 +524,6 @@ export default defineComponent({
                 open: false,
             },
         ] as MenubarItem[]
-        console.log(store.state)
         ////////////////      DOT MENU      /////////////////
         const options = reactive({
             anchor: 'right',
