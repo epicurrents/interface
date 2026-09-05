@@ -17,6 +17,7 @@
         <!-- Dialog body -->
         <p>{{ $t('welcome.warranty') }}</p>
         <p>{{ $t('welcome.medical') }}</p>
+        <p>{{ $t('welcome.version') }}</p>
         <div v-if="$config.user" class="auth">
             <wa-select v-if="$config.user.nameOptions"
                 id="select-user-name"
@@ -54,28 +55,32 @@
             </div>
         </div>
         <!-- Dialog footer -->
-        <div
-            :class="[
-                'notice',
-                { 'epicv-hidden' : !displayNotice },
-            ]"
-            slot="footer"
-        >
+        <div class="notice" slot="footer">
             {{ $t(
-                displayLoginError
-                ? 'welcome.notice.error'
-                : displayLoginNotice
-                    ? 'welcome.notice.login'
-                    : 'welcome.notice.disclaimer'
+                !displayNotice
+                ? 'welcome.notice.default'
+                : displayLoginError
+                    ? 'welcome.notice.error'
+                    : displayLoginNotice
+                        ? 'welcome.notice.login'
+                        : 'welcome.notice.disclaimer'
             ) }}
         </div>
-        <wa-button id="accept-disclaimer-button"
+        <wa-button id="accept-disclaimer-basic-button"
             appearance="filled-outlined"
             data-dialog="close"
             slot="footer"
             variant="brand"
         >
-            {{ $t('welcome.accept') }}
+            {{ $t('welcome.basic') }}
+        </wa-button>
+        <wa-button id="accept-disclaimer-advanced-button"
+            appearance="filled-outlined"
+            data-dialog="close"
+            slot="footer"
+            variant="warning"
+        >
+            {{ $t('welcome.advanced') }}
         </wa-button>
     </wa-dialog>
 </template>
@@ -191,8 +196,9 @@ export default defineComponent({
             this.displayLoginError = false
             this.displayLoginNotice = false
             // Display a hint that the dialog cannot be dismissed.
-            const acceptButton = this.dialog.querySelector('#accept-disclaimer-button')
-            if (event.detail?.source !== acceptButton && !this.$store.state.INTERFACE.app.disclaimerAccepted) {
+            const acceptBasic = event.detail?.source === this.dialog.querySelector('#accept-disclaimer-basic-button')
+            const acceptAdvanced = event.detail?.source === this.dialog.querySelector('#accept-disclaimer-advanced-button')
+            if (!acceptBasic && !acceptAdvanced && !this.$store.state.INTERFACE.app.disclaimerAccepted) {
                 if (this.$config.user && !this.isLoggedIn) {
                     this.displayLoginNotice = true
                 } else {
@@ -207,6 +213,16 @@ export default defineComponent({
                 Log.debug(`User accepted the disclaimer.`, this.$options.name!)
                 this.$store.dispatch('accept-disclaimer')
                 event.stopPropagation()
+            }
+            // Adjust applications version based on the button clicked.
+            if (acceptBasic && (window.location.href.includes('?advanced') || window.location.href.includes('&advanced'))) {
+                window.location.href = window.location.href.replace('?advanced', '').replace('&advanced', '')
+            } else if (acceptAdvanced && !window.location.href.includes('?advanced') && !window.location.href.includes('&advanced')) {
+                if (window.location.href.includes('?')) {
+                    window.location.href = window.location.href + '&advanced'
+                } else {
+                    window.location.href = window.location.href + '?advanced'
+                }
             }
         },
     },
@@ -255,7 +271,7 @@ export default defineComponent({
     width: auto;
     height: 40px;
     line-height: 40px;
-    float: left;
+    margin-right: auto;
     color: darkred;
     font-weight: bold;
 }

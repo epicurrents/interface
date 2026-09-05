@@ -78,8 +78,8 @@
                     :width="panelWidth"
                 />
             </wa-tab-panel>
-            <wa-tab-panel name="source-loc">
-                <source-localization-tool v-if="shouldShowPanel('source-loc')"
+            <wa-tab-panel name="source">
+                <source-localization-tool v-if="shouldShowPanel('source')"
                     :cursorPos="cursorPos"
                     :height="panelHeight"
                     :width="panelWidth"
@@ -214,8 +214,8 @@ export default defineComponent({
         ] as PanelTabProps[])
         // Add certain tabs only if MNE is enabled.
         if (store.state.SERVICES.get('pyodide')) {
-            tabs.push({ code: 'power', label: 'Power', requireChannel: false, requireSignal: false, showLegend: false })
-            tabs.push({ code: 'source-loc', label: 'Source', requireChannel: false, requireSignal: false, showLegend: false })
+        //  tabs.push({ code: 'power', label: 'Power', requireChannel: false, requireSignal: false, showLegend: false })
+            tabs.push({ code: 'source', label: 'Source', requireChannel: false, requireSignal: false, showLegend: false })
         }
         const bottomPanelHeight = ref(0)
         const panelHeight = ref(0)
