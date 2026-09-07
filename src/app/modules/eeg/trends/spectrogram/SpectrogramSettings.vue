@@ -5,11 +5,12 @@
             <wa-input
                 class="epoch-length"
                 id="epicv-spectrogram-epoch-length"
-                :min="1"
+                :min="0"
+                :placeholder="String(derivedEpochLength)"
                 :step="1"
                 size="s"
                 type="number"
-                :value="String(localEpochLength)"
+                :value="localEpochLength ? String(localEpochLength) : ''"
                 @change="onEpochLengthChanged($event)"
             >
                 <span slot="end">s</span>
@@ -49,7 +50,7 @@
                 </button>
             </div>
         </label>
-        <p class="hint">{{ $t('Recompute after changes.') }}</p>
+        <p class="hint">{{ $t('Empty scales the epoch with the recording. Recompute after changes.') }}</p>
     </div>
 </template>
 
@@ -58,6 +59,7 @@
  * Settings panel for the spectrogram trend.
  * Epoch length changes require a manual recompute to take effect.
  */
+import { resolveTrendEpochLength } from '@epicurrents/core/dist/util'
 import { defineComponent } from 'vue'
 import { T } from '#i18n'
 import { useStore } from 'vuex'
@@ -73,17 +75,26 @@ export default defineComponent({
     data () {
         return {
             localAverageReference: false as boolean,
-            localEpochLength: 1 as number,
+            localEpochLength: 0 as number,
             localMode: 'proportion' as 'power' | 'proportion',
         }
+    },
+    computed: {
+        /** The length the trend actually computes at, shown as the placeholder while unpinned. */
+        derivedEpochLength (): number {
+            return resolveTrendEpochLength(this.RESOURCE?.totalDuration ?? 0, this.SETTINGS.trends?.spectrogram)
+        },
     },
     methods: {
         $t (key: string) {
             return T(key, SCOPE)
         },
         onEpochLengthChanged (event: Event) {
-            const raw = Number((event.target as HTMLInputElement).value)
-            if (!Number.isFinite(raw) || raw <= 0) {
+            // An emptied field asks for the length to scale with the recording again, which is what
+            // a zero says in the settings; anything else is a length the user is pinning.
+            const input = (event.target as HTMLInputElement).value.trim()
+            const raw = input ? Number(input) : 0
+            if (!Number.isFinite(raw) || raw < 0) {
                 return
             }
             this.localEpochLength = raw
@@ -114,7 +125,7 @@ export default defineComponent({
             trends?: { spectrogram?: { averageReference?: boolean, epochLength?: number, mode?: string } }
         }).trends?.spectrogram
         this.localAverageReference = s?.averageReference ?? false
-        this.localEpochLength      = s?.epochLength      ?? 1
+        this.localEpochLength      = s?.epochLength      ?? 0
         this.localMode             = (s?.mode as 'power' | 'proportion') ?? 'proportion'
         this.$store.dispatch(
             'add-component-styles',

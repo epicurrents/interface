@@ -5,11 +5,12 @@
             <wa-input
                 class="epoch-length"
                 :id="`epicv-aeeg-epoch-length`"
-                :min="1"
+                :min="0"
+                :placeholder="String(derivedEpochLength)"
                 :step="1"
                 size="s"
                 type="number"
-                :value="String(epochLength)"
+                :value="epochLength ? String(epochLength) : ''"
                 @change="onEpochLengthChanged($event)"
             >
                 <span slot="end">s</span>
@@ -25,7 +26,7 @@
                 {{ $t('Superimpose') }}
             </wa-switch>
         </label>
-        <p class="hint">{{ $t('Recompute after changes.') }}</p>
+        <p class="hint">{{ $t('Empty scales the epoch with the recording. Recompute after changes.') }}</p>
     </div>
 </template>
 
@@ -38,6 +39,7 @@
  * the common biosignal trend settings but require a manual recompute via the chrome's
  * recompute button to take effect on the existing trends.
  */
+import { resolveTrendEpochLength } from '@epicurrents/core/dist/util'
 import { defineComponent } from 'vue'
 import { T } from '#i18n'
 import { useStore } from 'vuex'
@@ -56,8 +58,13 @@ export default defineComponent({
         isSuperimposed (): boolean {
             return this.SETTINGS.trends?.aeeg?.displayMode === 'superimposed'
         },
+        /** The length the trend actually computes at, shown as the placeholder while unpinned. */
+        derivedEpochLength (): number {
+            return resolveTrendEpochLength(this.RESOURCE?.totalDuration ?? 0, this.SETTINGS.trends?.amplitude)
+        },
+        /** The pinned epoch length, or 0 while it is left to scale with the recording. */
         epochLength (): number {
-            return this.SETTINGS.trends?.amplitude?.epochLength ?? 15
+            return this.SETTINGS.trends?.amplitude?.epochLength ?? 0
         },
     },
     methods: {
@@ -72,8 +79,11 @@ export default defineComponent({
             })
         },
         onEpochLengthChanged (event: Event) {
-            const raw = Number((event.target as HTMLInputElement).value)
-            if (!Number.isFinite(raw) || raw <= 0) {
+            // An emptied field asks for the length to scale with the recording again, which is what
+            // a zero says in the settings; anything else is a length the user is pinning.
+            const input = (event.target as HTMLInputElement).value.trim()
+            const raw = input ? Number(input) : 0
+            if (!Number.isFinite(raw) || raw < 0) {
                 return
             }
             this.$store.dispatch('set-settings-value', {

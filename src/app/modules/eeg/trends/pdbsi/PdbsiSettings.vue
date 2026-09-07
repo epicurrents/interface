@@ -5,11 +5,12 @@
             <wa-input
                 class="epoch-length"
                 id="epicv-pdbsi-epoch-length"
-                :min="1"
+                :min="0"
+                :placeholder="String(derivedEpochLength)"
                 :step="1"
                 size="s"
                 type="number"
-                :value="String(localEpochLength)"
+                :value="localEpochLength ? String(localEpochLength) : ''"
                 @change="onEpochLengthChanged($event)"
             >
                 <span slot="end">s</span>
@@ -63,7 +64,7 @@
                 </button>
             </div>
         </label>
-        <p class="hint">{{ $t('Epoch length changes require Recompute.') }}</p>
+        <p class="hint">{{ $t('Empty scales the epoch with the recording. Recompute after changes.') }}</p>
     </div>
 </template>
 
@@ -73,6 +74,7 @@
  * Threshold and display-mode changes take effect on the next render frame; epoch
  * length changes require a manual recompute since they alter the trend signal.
  */
+import { resolveTrendEpochLength } from '@epicurrents/core/dist/util'
 import { defineComponent } from 'vue'
 import { T } from '#i18n'
 import { useStore } from 'vuex'
@@ -87,19 +89,28 @@ export default defineComponent({
     },
     data () {
         return {
-            localEpochLength:   2 as number,
+            localEpochLength:   0 as number,
             localThreshold:     0.52 as number,
             localShowThreshold: true as boolean,
             localShowFill:      true as boolean,
         }
+    },
+    computed: {
+        /** The length the trend actually computes at, shown as the placeholder while unpinned. */
+        derivedEpochLength (): number {
+            return resolveTrendEpochLength(this.RESOURCE?.totalDuration ?? 0, this.SETTINGS.trends?.pdbsi)
+        },
     },
     methods: {
         $t (key: string) {
             return T(key, SCOPE)
         },
         onEpochLengthChanged (event: Event) {
-            const raw = Number((event.target as HTMLInputElement).value)
-            if (!Number.isFinite(raw) || raw <= 0) {
+            // An emptied field asks for the length to scale with the recording again, which is what
+            // a zero says in the settings; anything else is a length the user is pinning.
+            const input = (event.target as HTMLInputElement).value.trim()
+            const raw = input ? Number(input) : 0
+            if (!Number.isFinite(raw) || raw < 0) {
                 return
             }
             this.localEpochLength = raw
@@ -143,7 +154,7 @@ export default defineComponent({
                 showThreshold?: boolean, showFill?: boolean,
             } }
         }).trends?.pdbsi
-        this.localEpochLength   = s?.epochLength   ?? 2
+        this.localEpochLength   = s?.epochLength   ?? 0
         this.localThreshold     = s?.threshold     ?? 0.52
         this.localShowThreshold = s?.showThreshold !== false
         this.localShowFill      = s?.showFill      !== false

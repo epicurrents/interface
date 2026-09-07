@@ -548,6 +548,7 @@ export const settings: EegInterfaceSettings = safeObjectFrom({
         'epochMode.onlyFullEpochs': Boolean,
         'trends.aeeg.derivationColors': Object,
         'trends.aeeg.displayMode': String,
+        'trends.amplitude.epochLength': Number,
         'trends.defaultType': String,
         'trends.pdbsi.markCrossing': Boolean,
         'trends.pdbsi.showFill': Boolean,
