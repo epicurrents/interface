@@ -78,9 +78,11 @@ window.global ||= window
 
 import { MB_BYTES, MICRO, safeObjectFrom } from '@epicurrents/core/dist/util'
 import type { ApplicationInterfaceConfig } from '#types/globals'
+import { mergeConfig } from '#setups/merge'
 import { Log } from 'scoped-event-log'
-// Make sure we have valid initial configuration.
-const SETUP: Required<ApplicationInterfaceConfig> = Object.assign(
+// Make sure we have valid initial configuration. The merge recurses into object-valued keys, so a
+// host naming one property of `modules` keeps the defaults for everything it did not name.
+const SETUP: Required<ApplicationInterfaceConfig> = mergeConfig(
     safeObjectFrom({
         activeModules: [],
         activeViews: [],
@@ -151,9 +153,9 @@ if (typeof window.__EPICURRENTS__ === 'undefined') {
         window.__EPICURRENTS__.SETUP = SETUP
     } else {
         // Merge existing setup with defaults.
-        window.__EPICURRENTS__.SETUP = Object.assign(
+        window.__EPICURRENTS__.SETUP = mergeConfig(
             SETUP,
-            safeObjectFrom(window.__EPICURRENTS__.SETUP)
+            window.__EPICURRENTS__.SETUP
         )
     }
 }
@@ -222,7 +224,7 @@ export const createEpicurrentsApp = async (
     register?: RegisterModules,
 ) => {
     // Update setup.
-    Object.assign(SETUP, config)
+    mergeConfig(SETUP, config)
     // Resolve the runtime configuration a host's HTML entry used to set, so every consumer — the
     // standalone build and embedding hosts such as the platform — honours it identically.
     const urlParams = new URLSearchParams(window.location?.search || '')
