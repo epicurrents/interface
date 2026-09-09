@@ -35,6 +35,7 @@ enum EegActionTypes {
     SET_TIMEBASE = 'eeg.set-timebase',
     SET_TREND_VISIBLE = 'eeg.set-trend-visible',
     TOGGLE_ANNOTATION_SIDEBAR = 'eeg.toggle-annotation-sidebar',
+    TOGGLE_SIGNAL_POLARITY = 'eeg.toggle-signal-polarity',
     TOGGLE_TREND_VISIBLE = 'eeg.toggle-trend-visible',
 }
 
@@ -93,6 +94,22 @@ export const actions = {
     },
     [EegActionTypes.TOGGLE_ANNOTATION_SIDEBAR] (_injectee: ActionContext<State, State>, _payload: boolean | undefined ) {
         // This is merely a broadcast.
+    },
+    async [EegActionTypes.TOGGLE_SIGNAL_POLARITY] (
+        injectee: ActionContext<State, State>,
+        _payload: boolean | undefined
+    ) {
+        // The menu entry sends no argument, so the current state is read here. A recording is
+        // either read as stored or read inverted; the per-signal form of the correction is not
+        // reachable from this entry point.
+        const resource = injectee.state.APP.activeDataset?.activeResources[0] as EegResource | undefined
+        if (!resource) {
+            return
+        }
+        // Awaited rather than dispatched through `setPropertyValue`, because the menu's checkmark
+        // follows this action's completion: the correction is only applied once the reader has
+        // acknowledged it, and reading the resource before then shows the previous state.
+        await resource.setSignalPolarityInverted(!resource.invertedSignals.size)
     },
     [EegActionTypes.TOGGLE_TREND_VISIBLE] (_injectee: ActionContext<State, State>, _payload: boolean | undefined ) {
         runtime.setPropertyValue('trend-visible', !runtime.trendVisible)

@@ -120,6 +120,7 @@ import { getModuleProperty, isModuleProperty } from "#config/properties"
 import { T } from "#i18n"
 // Import this synchronously
 import { MenuItem, MenubarItem } from "#types/interface"
+import type { BiosignalResource } from "@epicurrents/core/types"
 import { EpiCStore } from "#store"
 
 // The subset of a study importer / exporter context the file menu reads. Kept structural so both
@@ -260,6 +261,15 @@ export default defineComponent({
             label: T('Add a connector', 'AppMenubar'),
             onclick: () => emit(`add-connector`),
         })
+        /**
+         * Whether the active recording is read with its signal polarity corrected. Read off the
+         * resource itself rather than mirrored into a module property, so the menu and the
+         * recording cannot come to disagree.
+         */
+        const signalPolarityInverted = (): boolean => {
+            const resource = APP.activeDataset?.activeResources[0] as BiosignalResource | undefined
+            return (resource?.invertedSignals?.size || 0) > 0
+        }
         const menubarItems = [
             fileMenu,
             ////////////////      EDIT      /////////////////
@@ -473,6 +483,27 @@ export default defineComponent({
                                     }
                                 ],
                             },
+                        ],
+                    },
+                    {
+                        // Corrects a recording exported with a reversed sign: the samples themselves
+                        // are negated as they are read, which is a different thing from the display
+                        // polarity setting that only decides which way a trace is drawn. Toggling
+                        // drops the cached samples, so the view reloads before it redraws.
+                        icon: ['', 'check'],
+                        id: 'signal-polarity',
+                        enabled: true,
+                        keepOpen: true,
+                        label: T('Correct inverted signal polarity', 'AppMenubar'),
+                        onclick: () => store.dispatch('eeg.toggle-signal-polarity'),
+                        selected: signalPolarityInverted(),
+                        visible: APP.view.name === 'biosignal',
+                        reloadOn: [
+                            ['set-view', 'set-active-resource', 'eeg.toggle-signal-polarity'],
+                            (item: MenuItem) => {
+                                item.visible = APP.view.name === 'biosignal'
+                                item.selected = signalPolarityInverted()
+                            }
                         ],
                     },
                 ] as Partial<MenuItem>[],
