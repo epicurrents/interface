@@ -1,5 +1,6 @@
 /**
- * Resolving an annotation's target channels to positions in the active montage.
+ * Naming an annotation's target channels, and resolving them back to positions in the active
+ * montage.
  *
  * An event names its channels as they exist in the *record* montage — by index or by name — but it
  * has to be drawn against the *active* montage, whose channels are derivations of those. The two
@@ -10,6 +11,12 @@
  * channels, and a derived channel that draws on several sources, both have to resolve — an equality
  * check fails exactly when there is more than one of either, which is the case where an event is
  * most worth showing.
+ *
+ * Both halves of that convention live here on purpose. `eventChannelNames` names the channels an
+ * event is created on and `resolveEventChannelIndices` finds them again when it is drawn, so the
+ * two have to agree about what "the same channel" means. They did not while the naming half sat in
+ * the viewer components: an event created on a derivation was stored under the derivation's own
+ * name ('Fp1-F7'), which matches no record channel, and so was drawn on none of them.
  * @package    epicurrents/interface
  * @copyright  2026 Sampsa Lohi
  * @license    Apache-2.0
@@ -46,6 +53,47 @@ export function sourceIndices (active: number | DerivedChannelProperties | undef
         }
     }
     return indices
+}
+
+/**
+ * Get the record-montage channel names an event created on `channel` should target.
+ *
+ * A derivation's own name resolves to nothing in the record montage, so what gets stored is the
+ * as-recorded name of the channel it is active on. That is what lets the event surface later on
+ * every derivation sharing that channel, and — through `resolveEventChannelIndices`'s fallback —
+ * on one referenced against it where nothing is active on it.
+ *
+ * Naming uses the same intersection rule the drawing side does rather than comparing whole `active`
+ * properties, so a derivation drawing on several record channels names all of them.
+ *
+ * Returns the channel's own name where no record channel resolves, which leaves the annotation
+ * readable rather than empty, and an empty array for a general event created on no channel.
+ * @param recordMontage - The record montage to name the channel against.
+ * @param channel - The channel the event was created on, or null for a general event.
+ */
+export function eventChannelNames (
+    recordMontage: BiosignalMontage | null | undefined,
+    channel: { active?: number | DerivedChannelProperties, name?: string | null } | null | undefined,
+): string[] {
+    if (!channel) {
+        return []
+    }
+    const targets = new Set(sourceIndices(channel.active))
+    const names = [] as string[]
+    if (recordMontage && targets.size) {
+        for (const recordChannel of recordMontage.channels) {
+            if (!recordChannel?.name) {
+                continue
+            }
+            if (sourceIndices(recordChannel.active).some(source => targets.has(source))) {
+                names.push(recordChannel.name)
+            }
+        }
+    }
+    if (names.length) {
+        return names
+    }
+    return channel.name ? [channel.name] : []
 }
 
 /**

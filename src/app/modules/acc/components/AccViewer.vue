@@ -300,7 +300,7 @@ import ViewerOverlay, { type PointerEventOverlay } from '#app/overlays/PointerEv
 import WindowDialog from '#app/overlays/WindowDialog.vue'
 import AccAnalysisTools from './overlays/AccAnalysisTools.vue'
 import AccChannelProperties from './overlays/AccChannelProperties.vue'
-import { deepEqual } from '@epicurrents/core/util'
+import { eventChannelNames } from '#app/views/biosignal/eventChannels'
 import type { default as WaSplitPanel } from '@awesome.me/webawesome/dist/components/split-panel/split-panel.js'
 
 const NAVIGATOR_MIN_HEIGHT = 75   // natural navigator strip height (px)
@@ -1042,7 +1042,7 @@ export default defineComponent({
                     const newEvent = AccEvent.fromTemplate({
                         annotator: '',
                         background: false,
-                        channels: selection.channel ? [selection.channel.name] : [],
+                        channels: eventChannelNames(this.RESOURCE.recordMontage, selection.channel),
                         class: eventClass.name,
                         codes: eventClass.codes || [],
                         duration: selection.range[1] - selection.range[0],
@@ -1067,7 +1067,7 @@ export default defineComponent({
                         background: false,
                         channels: this.RESOURCE.visibleChannels.filter(
                                      c => c.name === chan
-                                   ).map(c => c.name),
+                                   ).flatMap(c => eventChannelNames(this.RESOURCE.recordMontage, c)),
                         class: eventClass.name,
                         codes: eventClass.codes || [],
                         duration: props?.duration ? props.duration : 0,
@@ -1119,28 +1119,6 @@ export default defineComponent({
             const left = `${startX}px`
             const right = `${overlayW - endX}px`
             return `top: ${top}; bottom: ${bottom}; left: ${left}; right: ${right}`
-        },
-        /**
-         * Get the as-recorded montage channel name for the active source channel.
-         * @param index - Index of the currently active montage.
-         * @returns Name of the channel or null if the channel name cannot be found.
-         */
-        getSourceChannelName (channel: MontageChannel) {
-            if (!this.RESOURCE.recordMontage) {
-                return null
-            }
-            return this.RESOURCE.recordMontage.channels.filter(c => {
-                if (
-                    (
-                        typeof c.active !== 'number'
-                        && typeof channel.active !== 'number'
-                        && deepEqual(c.active, channel.active)
-                    ) || c.active === channel.active
-                ) {
-                    return true
-                }
-                return false
-            })[0]?.name || null
         },
         handleContextMenuAction (props: any) {
             switch (props.action) {
