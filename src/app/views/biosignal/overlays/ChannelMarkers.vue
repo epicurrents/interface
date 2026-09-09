@@ -33,6 +33,7 @@ import { T } from "#i18n"
 import { BiosignalChannelMarker } from "@epicurrents/core/types"
 import { settingsColorToRgba } from "@epicurrents/core/util"
 import { shouldDisplayChannel } from "@epicurrents/core/util"
+import { resolveDisplayPolarity } from "#util"
 import type { OverlayPointerEventMeta, PointerEventOverlay } from "#app/overlays/PointerEventOverlay.vue"
 import { useStore } from "vuex"
 import { useEegContext } from "#app/modules/eeg"
@@ -106,7 +107,7 @@ export default defineComponent({
                 c++
                 // Create a new marker group for each channel
                 const chanMarkers = [] as StyledChannelMarker[]
-                const displayPol = chan.displayPolarity || this.SETTINGS.displayPolarity
+                const displayPol = resolveDisplayPolarity(chan.displayPolarity, this.SETTINGS.displayPolarity, 'up')
                 let i = 0
                 for (const marker of chan.markers) {
                     if (marker.position === null || marker.value === null) {
@@ -182,7 +183,9 @@ export default defineComponent({
             marker.dragging = true
             const offsetW = this.SETTINGS.markers.active.style === 'line' ? 5 : 12
             const chanSr = marker.channel.samplingRate
-            const displayPol = marker.channel.displayPolarity || this.SETTINGS.displayPolarity
+            const displayPol = resolveDisplayPolarity(
+                marker.channel.displayPolarity, this.SETTINGS.displayPolarity, 'up'
+            )
             const sensitivity = this.sensitivityUnits*(marker.channel.sensitivity || this.RESOURCE.sensitivity)
             const pointerMove = (_left: number, _top: number, meta: OverlayPointerEventMeta) => {
                 // Prevent dragging out to negative index range

@@ -39,6 +39,7 @@ import { settingsColorToRgba, settingsDashArrayToSvgStrokeDasharray } from "@epi
 import type { PlotTraceSelection } from "#types/plot"
 import { useStore } from "vuex"
 import { useBiosignalContext } from "#config"
+import { resolveDisplayPolarity } from "#util"
 import { NUMERIC_ERROR_VALUE } from "@epicurrents/core/util"
 import { Log } from "scoped-event-log"
 
@@ -182,9 +183,11 @@ export default defineComponent({
                 }
                 // Start with one datapoint of padding.
                 let x = props.xPerPoint*PAD_AMOUNT
-                const polarity = selection.channel.displayPolarity
-                               ? selection.channel.displayPolarity*this.SETTINGS.displayPolarity
-                               : 1
+                // The SVG Y axis grows downwards, so the resolved factor is the inverse of the one
+                // the WebGL plot applies against clip space.
+                const polarity = resolveDisplayPolarity(
+                    selection.channel.displayPolarity, this.SETTINGS.displayPolarity, 'down'
+                )
                 // Skip NaN samples (interruption gaps) so the points string never carries
                 // `x,NaN` pairs that some browsers reject. The polyline crosses the gap with a
                 // straight line — a small visual hint that the segment is non-contiguous, but

@@ -37,7 +37,7 @@ import { settingsColorToRgba, shouldDisplayChannel } from "@epicurrents/core/uti
 import { NUMERIC_ERROR_VALUE } from "@epicurrents/core/util"
 import { PointerInteraction } from "#types/interface"
 import { useNcsContext } from "#app/modules/ncs"
-import { NO_POINTER_BUTTON_DOWN } from "#util"
+import { NO_POINTER_BUTTON_DOWN, resolveDisplayPolarity } from "#util"
 import type {
     OverlayPointerEventMeta,
     PointerEventOverlay,
@@ -269,7 +269,7 @@ export default defineComponent({
                 }
                 const [r, g, b, a] = this.SETTINGS.trace.color as SettingsColor
                 const color = new PlotColor(r, g, b, a)
-                const dispPol = chan.displayPolarity || this.SETTINGS.displayPolarity
+                const dispPol = resolveDisplayPolarity(chan.displayPolarity, this.SETTINGS.displayPolarity, 'up')
                 const sensitivity = chan.sensitivity || this.RESOURCE.sensitivity
                 const scale = chan.scale || 0
                 const sigLen = this.viewRange*chan.samplingRate
@@ -780,7 +780,7 @@ export default defineComponent({
                         continue
                     }
                     // Update properties if needed
-                    const dispPol = chan.displayPolarity || this.SETTINGS.displayPolarity
+                    const dispPol = resolveDisplayPolarity(chan.displayPolarity, this.SETTINGS.displayPolarity, 'up')
                     if (line.polarity !== dispPol) {
                         line.polarity = dispPol
                     }
@@ -820,6 +820,7 @@ export default defineComponent({
             [
                 'filters',
                 'channels',
+                'invertedSignals',
                 'sensitivity',
                 'viewStart',
             ],

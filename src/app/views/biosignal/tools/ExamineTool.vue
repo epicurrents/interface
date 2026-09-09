@@ -157,7 +157,7 @@ import { PointerInteraction } from "#types/interface"
 import { NUMERIC_ERROR_VALUE } from "@epicurrents/core/util"
 import { PlotTraceSelection, SignalPoI } from "#types/plot"
 import { useBiosignalContext } from "#config"
-import { NO_POINTER_BUTTON_DOWN } from "#util"
+import { NO_POINTER_BUTTON_DOWN, resolveDisplayPolarity } from "#util"
 import { useStore } from "vuex"
 
 type SignalProperties = {
@@ -339,10 +339,18 @@ export default defineComponent({
                     minValue = 0
                     maxValue = 0
                 }
-                // First determine signal bounds
-                props.margin = (maxValue - minValue)*0.2
-                const displayMax = maxValue + props.margin
-                const displayMin = minValue - props.margin
+                // First determine signal bounds. The SVG Y axis grows downwards, so the resolved
+                // factor is the inverse of the one the WebGL plot applies against clip space.
+                // Bounds are taken from display values, not raw samples, so that the trace keeps
+                // the orientation of the plot the selection was made in.
+                const polarity = resolveDisplayPolarity(
+                    selection.channel.displayPolarity, this.SETTINGS.displayPolarity, 'down'
+                )
+                const lowValue = Math.min(polarity*minValue, polarity*maxValue)
+                const highValue = Math.max(polarity*minValue, polarity*maxValue)
+                props.margin = (highValue - lowValue)*0.2
+                const displayMax = highValue + props.margin
+                const displayMin = lowValue - props.margin
                 const range = displayMax - displayMin
                 // Update baseline
                 props.baseline = range
@@ -356,7 +364,7 @@ export default defineComponent({
                 // the gap straight rather than crashing.
                 for (const y of croppedSignal) {
                     if (Number.isFinite(y) && range) {
-                        points.push(`${x},${this.svgHeight*((y - displayMin)/range)}`)
+                        points.push(`${x},${this.svgHeight*((polarity*y - displayMin)/range)}`)
                     }
                     x += props.xPerPoint
                 }
@@ -662,8 +670,13 @@ export default defineComponent({
                 // No finite samples in the selection — park the marker on the baseline.
                 return this.activeProps.baseline
             }
-            const displayMax = maxValue + this.activeProps.margin
-            const displayMin = minValue - this.activeProps.margin
+            // Display orientation, as in `calculateSignalProperties` — the marker has to land on
+            // the drawn trace, so the two must resolve the polarity the same way.
+            const polarity = resolveDisplayPolarity(
+                this.activeSelection.channel.displayPolarity, this.SETTINGS.displayPolarity, 'down'
+            )
+            const displayMax = Math.max(polarity*minValue, polarity*maxValue) + this.activeProps.margin
+            const displayMin = Math.min(polarity*minValue, polarity*maxValue) - this.activeProps.margin
             const range = displayMax - displayMin
             if (!range) {
                 return this.activeProps.baseline
@@ -672,7 +685,7 @@ export default defineComponent({
             if (!Number.isFinite(sample)) {
                 return this.activeProps.baseline
             }
-            return this.svgHeight*((sample - displayMin)/range)
+            return this.svgHeight*((polarity*sample - displayMin)/range)
         },
     },
     beforeMount () {

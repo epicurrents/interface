@@ -27,7 +27,7 @@ import { NUMERIC_ERROR_VALUE } from "@epicurrents/core/util"
 import { PointerInteraction } from "#types/interface"
 import { useEegContext } from "#app/modules/eeg"
 import { EegNavigationKey } from "../types"
-import { NO_POINTER_BUTTON_DOWN } from "#util"
+import { NO_POINTER_BUTTON_DOWN, resolveDisplayPolarity } from "#util"
 import type {
     OverlayPointerEventMeta,
     PointerEventOverlay,
@@ -306,7 +306,7 @@ export default defineComponent({
                                       : this.SETTINGS.trace.color[chanType as "eeg"/* Trick to avoid TS lint errors */]
                                     : this.SETTINGS.trace.color.default
                 const color = new PlotColor(r, g, b, a)
-                const dispPol = chan.displayPolarity || this.SETTINGS.displayPolarity
+                const dispPol = resolveDisplayPolarity(chan.displayPolarity, this.SETTINGS.displayPolarity, 'up')
                 const sensitivity = chan.sensitivity || this.RESOURCE.sensitivity
                 const scale = chan.scale || 0
                 // Allocate room for every datapoint the view can contain, plus one past its edge:
@@ -991,7 +991,7 @@ export default defineComponent({
                     continue
                 }
                 // Update properties if needed
-                const dispPol = chan.displayPolarity || this.SETTINGS.displayPolarity
+                const dispPol = resolveDisplayPolarity(chan.displayPolarity, this.SETTINGS.displayPolarity, 'up')
                 if (line.polarity !== dispPol) {
                     line.polarity = dispPol
                 }
@@ -1082,6 +1082,7 @@ export default defineComponent({
             [
                 'filters',
                 'channels',
+                'invertedSignals',
                 'sensitivity',
                 'viewStart',
             ],

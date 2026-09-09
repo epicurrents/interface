@@ -15,6 +15,7 @@ import EmptyComponent from './components/EmptyComponent.vue'
 import ErrorComponent from './components/ErrorComponent.vue'
 import LoadingComponent from './components/LoadingComponent.vue'
 import waDirective from './wa-directive'
+import type { SignalPolarity } from '@epicurrents/core/dist/types'
 import type { LoadingComponentProps } from '../types/interface'
 
 export { waDirective }
@@ -23,6 +24,39 @@ export { waDirective }
  * Value indicating that no pointer button is being pressed at the moment.
  */
 export const NO_POINTER_BUTTON_DOWN = -1
+
+/**
+ * Direction that a rendering surface's vertical coordinates grow in.
+ * - `up` = towards the top of the screen (WebGL clip space, CSS `bottom`).
+ * - `down` = towards the bottom of the screen (SVG, canvas).
+ */
+export type VerticalAxis = 'up' | 'down'
+
+/**
+ * Resolve the factor that a raw signal sample must be multiplied by before it is scaled into the
+ * coordinates of a surface whose vertical axis grows towards `axis`.
+ *
+ * Display polarity is stated against an upward-growing axis — `-1` means negative up, the clinical
+ * default for EEG — so a surface that grows downwards needs the opposite sign. Leaving that
+ * inversion to the call site is what let the SVG tools draw their traces mirrored relative to the
+ * WebGL plot: every quantity in the computation looks right, and only the axis convention differs.
+ *
+ * @param channelPolarity - Polarity of the individual channel, `0` (or undefined) to use the default.
+ * @param defaultPolarity - Display polarity of the active modality, from its settings.
+ * @param axis - Direction the target coordinate system's vertical axis grows in.
+ * @returns `1` or `-1`, ready to be multiplied with a sample value.
+ */
+export const resolveDisplayPolarity = (
+    channelPolarity: SignalPolarity | undefined,
+    defaultPolarity: -1 | 1,
+    axis: VerticalAxis
+): -1 | 1 => {
+    // A modality whose settings declare no display polarity falls through both values; positive up
+    // is the neutral choice, and it keeps the factor a number rather than letting `undefined`
+    // through to multiply a sample into NaN.
+    const polarity = channelPolarity || defaultPolarity || 1
+    return axis === 'down' ? (polarity === 1 ? -1 : 1) : polarity
+}
 
 /**
  * Map a point in recording time onto the canvas column that represents it.

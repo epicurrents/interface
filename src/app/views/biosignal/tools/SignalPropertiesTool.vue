@@ -77,6 +77,7 @@ import { settingsColorToRgba, settingsDashArrayToSvgStrokeDasharray } from "@epi
 import type { PlotTraceSelection } from "#types/plot"
 import { useStore } from "vuex"
 import { useBiosignalContext } from "#config"
+import { resolveDisplayPolarity } from "#util"
 import { NUMERIC_ERROR_VALUE } from "@epicurrents/core/util"
 
 import SignalTool from './SignalTool.vue'
@@ -204,11 +205,13 @@ export default defineComponent({
                 const signalAbsMax = Math.max(max, Math.abs(min))
                 const displayAbsMax = (1 + this.yPadding)*signalAbsMax
                 const pxPeruV = displayAbsMax ? this.svgHeight/(2*displayAbsMax) : 0
-                // Default to channel specific polarity.
-                // If that is zero (undefined), try default EEG polarity, and finally just positive polarity.
-                const sigPol = selection.channel.displayPolarity || this.SETTINGS.displayPolarity
-                props.lowerLimitY = this.svgHeight/2 + (sigPol === 1 ? -min*pxPeruV : max*pxPeruV)
-                props.upperLimitY = this.svgHeight/2 + (sigPol === 1 ? -max*pxPeruV : min*pxPeruV)
+                // Both limits are offsets on the SVG Y axis, which grows downwards, so the
+                // resolved factor matches the one the signal trace is drawn with.
+                const sigPol = resolveDisplayPolarity(
+                    selection.channel.displayPolarity, this.SETTINGS.displayPolarity, 'down'
+                )
+                props.lowerLimitY = this.svgHeight/2 + Math.max(sigPol*min, sigPol*max)*pxPeruV
+                props.upperLimitY = this.svgHeight/2 + Math.min(sigPol*min, sigPol*max)*pxPeruV
             }
         },
         /**
