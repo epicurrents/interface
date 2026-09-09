@@ -241,7 +241,9 @@ export const DefaultInterface: DefaultInterfaceModuleConstructor = class Epicurr
             } else if (mutation.type === 'load-study-folder') {
                 const study = mutation.payload.study
                 const promise = mutation.payload.promise
-                epicApp.loadStudy(study.loader, study.folder, study.name).then(() => {
+                // The name goes in a config object, not on its own: the loader merges this argument
+                // into the study context, and a bare string merges as its own indexed characters.
+                epicApp.loadStudy(study.loader, study.folder, { name: study.name }).then(() => {
                     promise.resolve()
                 })
             } else if (mutation.type === 'load-study-file') {
