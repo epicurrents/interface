@@ -91,8 +91,14 @@ import pdfWorkerSrc from '#root/dist/workers/pdfjs.worker.js?raw'
 /**
  * Register every bundled module, importer, service and worker, gated by
  * `SETUP.activeModules` (an empty list registers them all).
+ *
+ * Exported so a setup of one's own can start from this set and add to it, rather than restate it:
+ * registrations compose by calling one callback after another on the same context, which is not
+ * something merging two configurations can do for them. A local setup wiring up a reader with no
+ * public release is the case that needs it — the reader cannot be imported here, because every
+ * external developer builds this file.
  */
-const registerAllModules = ({ app, useSAB, setup, registerInterfaceModule }: SetupContext) => {
+export const registerAllModules = ({ app, useSAB, setup, registerInterfaceModule }: SetupContext) => {
     // Use the memory manager if we have SAB support.
     if (useSAB) {
         app.setWorkerOverride('memory-manager', memWorker)
