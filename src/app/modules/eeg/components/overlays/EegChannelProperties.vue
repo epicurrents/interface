@@ -241,7 +241,12 @@ export default defineComponent({
                     }
                 }
             }
-            this.sensitivity = commonSensitivity
+            // Channels store sensitivity in the base unit (V), the options are in the display unit
+            // (µV/cm). Round the division back: the scaled value carries float error, and an
+            // unrounded 100.00000000000001 matches no option, leaving the dropdown blank.
+            this.sensitivity = commonSensitivity !== null
+                               ? Math.round(commonSensitivity/this.sensitivityScale())
+                               : null
             this.polarity = commonPolarity
             this.scale = commonScale
             this.highpass = commonHighpass
@@ -262,6 +267,13 @@ export default defineComponent({
         close () {
             this.channel.isActive = false
             this.$emit('close')
+        },
+        /**
+         * Scale factor between the sensitivity unit the dropdown displays and the base unit a channel
+         * stores. One direction without the other leaves the dropdown unable to find its own value.
+         */
+        sensitivityScale () {
+            return this.SETTINGS.sensitivity[this.SETTINGS.sensitivityUnit]?.scale || 1
         },
         setHighpassFilter (value: string) {
             value = value.split(':')[1]
@@ -328,7 +340,7 @@ export default defineComponent({
         setSensitivity (value: string) {
             value = value.split(':')[1]
             this.updating = true
-            const scale = this.SETTINGS.sensitivity[this.SETTINGS.sensitivityUnit]?.scale || 1
+            const scale = this.sensitivityScale()
             for (const chan of this.channels) {
                 chan.sensitivity = parseInt(value)*scale
             }
