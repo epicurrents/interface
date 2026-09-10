@@ -494,7 +494,7 @@ export default defineComponent({
                         id: 'signal-polarity',
                         enabled: true,
                         keepOpen: true,
-                        label: T('Correct inverted signal polarity', 'AppMenubar'),
+                        label: T('Invert signal polarity', 'AppMenubar'),
                         onclick: () => store.dispatch('eeg.toggle-signal-polarity'),
                         selected: signalPolarityInverted(),
                         visible: APP.view.name === 'biosignal',
