@@ -20,7 +20,7 @@ import type {
     BiosignalResource,
     ChannelPositionProperties,
     SettingsColor,
-} from '@epicurrents/core/dist/types'
+} from '@epicurrents/core/types'
 import type { ContextMenuContext, SignalSelectionLimit } from '#types/interface'
 import type { PlotSelection, PointerOverlayHandle } from '#app/views/biosignal/types'
 

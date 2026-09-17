@@ -59,7 +59,7 @@
  * Settings panel for the spectrogram trend.
  * Epoch length changes require a manual recompute to take effect.
  */
-import { resolveTrendEpochLength } from '@epicurrents/core/dist/util'
+import { resolveTrendEpochLength } from '@epicurrents/core/util'
 import { defineComponent } from 'vue'
 import { T } from '#i18n'
 import { useStore } from 'vuex'

@@ -21,7 +21,8 @@ import type { ApplicationInterfaceConfig } from '#types/globals'
 // The framework owns the bootstrap, configuration and launch. Importing it also
 // runs the shared SETUP / global bootstrap exactly once.
 import { createEpicurrentsApp as createFrameworkApp, type SetupContext } from '#setups/index'
-import { inlineWorker } from '@epicurrents/core/dist/util'
+import type { Epicurrents } from '@epicurrents/core'
+import { inlineWorker } from '@epicurrents/core/util'
 // Core (modality) modules.
 import * as accModule from '@epicurrents/acc-module'
 import * as docModule from '@epicurrents/doc-module'
@@ -262,5 +263,5 @@ export const registerAllModules = ({ app, useSAB, setup, registerInterfaceModule
 }
 
 // Create an instance of the core Epicurrents application with every bundled module registered.
-export const createEpicurrentsApp = (config?: ApplicationInterfaceConfig) =>
+export const createEpicurrentsApp = (config?: ApplicationInterfaceConfig): Promise<Epicurrents> =>
     createFrameworkApp(config, registerAllModules)

@@ -5,7 +5,7 @@
  * @license    Apache-2.0
  */
 
-import { safeObjectFrom } from '@epicurrents/core/dist/util'
+import { safeObjectFrom } from '@epicurrents/core/util'
 
 /**
  * Property names that address an object's prototype rather than the object. A host's SETUP is

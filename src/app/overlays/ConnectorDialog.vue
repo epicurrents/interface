@@ -185,7 +185,7 @@ import type {
     FileSystemConnector,
     FileSystemItem,
     TaskResponse,
-} from "@epicurrents/core/dist/types"
+} from "@epicurrents/core/types"
 import type { default as WaDetails } from "@awesome.me/webawesome/dist/components/details/details.js"
 import type { default as WaDialog } from '@awesome.me/webawesome/dist/components/dialog/dialog.js'
 import type { default as WaTree } from '@awesome.me/webawesome/dist/components/tree/tree.js'

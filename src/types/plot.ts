@@ -9,7 +9,7 @@ import {
     BiosignalChannel,
     SettingsColor,
     SignalPart,
-} from '@epicurrents/core/dist/types'
+} from '@epicurrents/core/types'
 
 export interface BiosignalPlot {
     /**

@@ -6,8 +6,11 @@
  */
 
 import { safeObjectFrom } from '@epicurrents/core/util'
-import { SettingsValue, type SettingsColor } from '@epicurrents/core/types'
-import type { BiosignalMontageTemplate } from '@epicurrents/core/types'
+import type {
+    BiosignalMontageTemplate,
+    SettingsColor,
+    SettingsValue,
+} from '@epicurrents/core/types'
 import { EegRecording } from '@epicurrents/eeg-module'
 import { TREND_REGISTRY } from './trends'
 import { type EegInterfaceSettings } from './types'

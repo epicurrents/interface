@@ -18,8 +18,12 @@
  */
 import { defineComponent, PropType, reactive, Ref, ref } from "vue"
 import { T } from "#i18n"
-import { BiosignalChannel, MontageChannel } from "@epicurrents/core/types"
-import type { BiosignalCascadeMontage, SignalCachePart } from "@epicurrents/core/types"
+import type {
+    BiosignalCascadeMontage,
+    BiosignalChannel,
+    MontageChannel,
+    SignalCachePart,
+} from "@epicurrents/core/types"
 import { Log } from "scoped-event-log"
 import { useStore } from "vuex"
 import { settingsColorToRgba, shouldDisplayChannel } from "@epicurrents/core/util"

@@ -15,7 +15,7 @@ import EmptyComponent from './components/EmptyComponent.vue'
 import ErrorComponent from './components/ErrorComponent.vue'
 import LoadingComponent from './components/LoadingComponent.vue'
 import waDirective from './wa-directive'
-import type { SignalPolarity } from '@epicurrents/core/dist/types'
+import type { SignalPolarity } from '@epicurrents/core/types'
 import type { LoadingComponentProps } from '../types/interface'
 
 export { waDirective }

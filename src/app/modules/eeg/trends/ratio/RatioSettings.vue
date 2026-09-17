@@ -91,7 +91,7 @@
  * Threshold and mirror-mode changes take effect on the next render frame; epoch
  * length changes require a manual recompute since they alter the trend signal.
  */
-import { resolveTrendEpochLength } from '@epicurrents/core/dist/util'
+import { resolveTrendEpochLength } from '@epicurrents/core/util'
 import { defineComponent } from 'vue'
 import { T } from '#i18n'
 import { useStore } from 'vuex'

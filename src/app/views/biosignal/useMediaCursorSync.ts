@@ -10,7 +10,7 @@
  * cursor-follows-playback behaviour.
  */
 
-import type { BiosignalResource } from '@epicurrents/core/dist/types'
+import type { BiosignalResource } from '@epicurrents/core/types'
 
 /** A source of playback position, expressed in recording-relative seconds. */
 export interface MediaPlaybackClock {

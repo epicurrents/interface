@@ -20,7 +20,7 @@
  */
 import { defineComponent, ref, PropType } from "vue"
 import { T } from "#i18n"
-import { CommonBiosignalSettings } from '@epicurrents/core/dist/types'
+import { CommonBiosignalSettings } from '@epicurrents/core/types'
 
 export default defineComponent({
     name: 'SidebarLabel',

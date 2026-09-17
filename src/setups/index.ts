@@ -35,7 +35,7 @@
  *   import * as eegModule from '@epicurrents/eeg-module'
  *   import { EdfImporter, EdfWorkerSubstitute } from '@epicurrents/edf-reader'
  *   import * as interfaceEegModule from '@epicurrents/viewer/modules/eeg'
- *   import { inlineWorker } from '@epicurrents/core/dist/util'
+ *   import { inlineWorker } from '@epicurrents/core/util'
  *   import edfWorkerSrc from '@epicurrents/edf-reader/dist/workers/edf.worker.js?raw'
  *
  *   const edfWorker = () => inlineWorker('EdfWorker', edfWorkerSrc).create()
@@ -76,7 +76,7 @@
 // Make sure global is defined.
 window.global ||= window
 
-import { MB_BYTES, MICRO, safeObjectFrom } from '@epicurrents/core/dist/util'
+import { MB_BYTES, MICRO, safeObjectFrom } from '@epicurrents/core/util'
 import type { ApplicationInterfaceConfig } from '#types/globals'
 import { mergeConfig } from '#setups/merge'
 import { Log } from 'scoped-event-log'

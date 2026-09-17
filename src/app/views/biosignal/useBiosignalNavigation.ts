@@ -13,7 +13,7 @@
 
 import { ref } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
-import type { BiosignalResource } from '@epicurrents/core/dist/types'
+import type { BiosignalResource } from '@epicurrents/core/types'
 
 type NavigationSettings = {
     /**

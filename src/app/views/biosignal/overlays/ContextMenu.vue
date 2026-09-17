@@ -59,7 +59,7 @@ import { T } from "#i18n"
 import { ContextMenuContext } from "#types/interface"
 import { useStore } from "vuex"
 import { useBiosignalContext } from "#config"
-import { SettingsColor } from "@epicurrents/core/dist/types"
+import { SettingsColor } from "@epicurrents/core/types"
 import { SignalSelectionLimit } from "#types/interface"
 import type { default as WaDropdown } from "@awesome.me/webawesome/dist/components/dropdown/dropdown.js"
 

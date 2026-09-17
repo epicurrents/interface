@@ -11,7 +11,7 @@ import type { Ref } from 'vue'
 import type {
     BiosignalAnnotationEvent,
     BiosignalResource,
-} from '@epicurrents/core/dist/types'
+} from '@epicurrents/core/types'
 
 export function useBiosignalAnnotationEditor (
     resource: BiosignalResource,

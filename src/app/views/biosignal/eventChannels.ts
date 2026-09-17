@@ -26,7 +26,7 @@ import type {
     BiosignalMontage,
     BiosignalResource,
     DerivedChannelProperties,
-} from '@epicurrents/core/dist/types'
+} from '@epicurrents/core/types'
 
 /** Sentinel used by the montage layer for "this channel maps to no source signal". */
 const NOT_MAPPED = -1

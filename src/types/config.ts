@@ -1,5 +1,6 @@
-import {
+import type {
     Annotation,
+    Modify,
     PropertyChangeHandler,
     RuntimeAppModule,
     SafeObject,
@@ -8,7 +9,6 @@ import {
     SettingsValue,
     StateManager,
 } from "@epicurrents/core/types"
-import { Modify } from "@epicurrents/core/types"
 import { AppModuleSettings } from "#app/modules/app"
 import type { ControlElement, SupportedView } from './interface'
 import { BiosignalPlot, PlotLineStyles } from './plot'

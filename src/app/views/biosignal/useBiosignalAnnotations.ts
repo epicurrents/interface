@@ -15,7 +15,7 @@ import type {
     AnnotationLabel,
     BiosignalAnnotationEvent,
     BiosignalResource,
-} from '@epicurrents/core/dist/types'
+} from '@epicurrents/core/types'
 import type { UndoOrRedoAction } from '#types/interface'
 
 export function useBiosignalAnnotations (resource: BiosignalResource) {

@@ -21,8 +21,11 @@
  */
 import { defineComponent, PropType, reactive, Ref, ref } from "vue"
 import { T } from "#i18n"
-import { BiosignalChannel, MontageChannel } from "@epicurrents/core/types"
-import type { BiosignalCascadeMontage } from "@epicurrents/core/types"
+import type {
+    BiosignalCascadeMontage,
+    BiosignalChannel,
+    MontageChannel,
+} from "@epicurrents/core/types"
 import { useStore } from "vuex"
 import { settingsColorToRgba, shouldDisplayChannel } from "@epicurrents/core/util"
 import { NUMERIC_ERROR_VALUE } from "@epicurrents/core/util"
@@ -269,7 +272,7 @@ export default defineComponent({
                 const chanType = chan.modality
                 // The shared trace.color type is `SettingsColor | { [key]: SettingsColor }`;
                 // narrow to the map form (the only shape the ACC config produces).
-                const traceColor = this.SETTINGS.trace.color as { [key: string]: import('@epicurrents/core/dist/types').SettingsColor }
+                const traceColor = this.SETTINGS.trace.color as { [key: string]: import('@epicurrents/core/types').SettingsColor }
                 const [r, g, b, a] = !useRaw && chanType
                                     ? this.SETTINGS.trace.colorSides && chanType === 'acc'
                                       ? chan.laterality === 's' ? traceColor.sin

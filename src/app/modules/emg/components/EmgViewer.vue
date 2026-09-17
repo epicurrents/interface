@@ -151,8 +151,7 @@ import SplitPanelView from '#app/views/SplitPanelView.vue'
 import VerticalCursors from '#app/views/biosignal/overlays/VerticalCursors.vue'
 import ViewerOverlay, { type PointerEventOverlay } from '#app/overlays/PointerEventOverlay.vue'
 import type { PlotSelection } from '#app/views/biosignal/types'
-import type { AnnotationEventTemplate } from "@epicurrents/core/types"
-import type { BiosignalAnnotationEvent } from "@epicurrents/core/types"
+import type { AnnotationEventTemplate, BiosignalAnnotationEvent } from "@epicurrents/core/types"
 import { type DragAction } from '#app/views/biosignal/useBiosignalPointer'
 
 

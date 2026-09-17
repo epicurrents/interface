@@ -109,9 +109,9 @@ import { T } from "#i18n"
 import { useStore } from "vuex"
 import { useTabDataContext } from '..'
 import { ResourceLabel } from "@epicurrents/core"
-import { lastFractOnlyIfSignificant } from "@epicurrents/core/dist/util"
+import { lastFractOnlyIfSignificant } from "@epicurrents/core/util"
 import { TabularDataTable } from "@epicurrents/tab-module/dist/types"
-import { DataTableRowValue } from "@epicurrents/core/dist/types"
+import { DataTableRowValue } from "@epicurrents/core/types"
 import type { default as WaSplitPanel } from '@awesome.me/webawesome/dist/components/split-panel/split-panel.js'
 
 import AnnotationSidebar from '#app/views/biosignal/sidebars/AnnotationSidebar.vue'

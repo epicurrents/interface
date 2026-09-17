@@ -65,7 +65,7 @@
 <script lang="ts">
 import { defineComponent, ref, Ref } from "vue"
 import { T } from "#i18n"
-import type { DatasourceConnector } from "@epicurrents/core/dist/types"
+import type { DatasourceConnector } from "@epicurrents/core/types"
 //import { useStore } from "vuex"
 
 export default defineComponent({

@@ -185,7 +185,7 @@ import Log from "scoped-event-log"
 import { defineComponent, ref, Ref, reactive } from "vue"
 import { T } from "#i18n"
 import { MixedFileSystemItem, MixedMediaDataset } from "@epicurrents/core"
-import { AssetEvents } from "@epicurrents/core/dist/events"
+import { AssetEvents } from "@epicurrents/core/events"
 import { AssociatedFileType, DatasourceConnector } from "@epicurrents/core/types"
 import { useStore } from 'vuex'
 import { useAppContext } from '#config'

@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import type { BiosignalMontage, BiosignalResource } from '@epicurrents/core/dist/types'
+import type { BiosignalMontage, BiosignalResource } from '@epicurrents/core/types'
 import { eventChannelNames, resolveEventChannelIndices } from '../src/app/views/biosignal/eventChannels'
 
 /** Source signals, by index: 0 Fp1, 1 F7, 2 Fp2, 3 F8. */

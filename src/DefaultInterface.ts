@@ -53,13 +53,13 @@ import SETTINGS from './config'
 import VueApp from "./app/App.vue"
 
 import type {
+    AssetService,
     BiosignalResource,
     DataResource,
     EpicurrentsApp,
     InterfaceModule,
     StateManager,
 } from "@epicurrents/core/types"
-import { AssetService } from "@epicurrents/core/types"
 import { MutationPayload } from "vuex"
 import type { PythonInterpreterService, RunCodeResult } from '@epicurrents/pyodide-service/types'
 import type { ApplicationInterfaceConfig, ModuleConfiguration } from './types/globals'

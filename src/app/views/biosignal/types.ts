@@ -2,7 +2,7 @@
  * Biosignal interface and component types.
  */
 
-import type { Modify, MontageChannel, SourceChannel } from '@epicurrents/core/dist/types'
+import type { Modify, MontageChannel, SourceChannel } from '@epicurrents/core/types'
 import type { PlotTraceSelection } from '#types/plot'
 
 /** A plot trace selection with channel optionally null for global selections. */

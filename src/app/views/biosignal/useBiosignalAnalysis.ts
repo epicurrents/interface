@@ -10,7 +10,7 @@
 
 import { reactive } from 'vue'
 import { Log } from 'scoped-event-log'
-import type { BiosignalResource } from '@epicurrents/core/dist/types'
+import type { BiosignalResource } from '@epicurrents/core/types'
 import type { PlotSelection } from '#app/views/biosignal/types'
 
 export function useBiosignalAnalysis (

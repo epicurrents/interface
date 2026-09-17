@@ -39,7 +39,7 @@
  * the common biosignal trend settings but require a manual recompute via the chrome's
  * recompute button to take effect on the existing trends.
  */
-import { resolveTrendEpochLength } from '@epicurrents/core/dist/util'
+import { resolveTrendEpochLength } from '@epicurrents/core/util'
 import { defineComponent } from 'vue'
 import { T } from '#i18n'
 import { useStore } from 'vuex'

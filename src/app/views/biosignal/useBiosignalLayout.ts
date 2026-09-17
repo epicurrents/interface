@@ -24,7 +24,7 @@
 import { computed, ref } from 'vue'
 import { settingsColorToRgba } from '@epicurrents/core/util'
 import type { ComputedRef, Ref } from 'vue'
-import type { SettingsColor } from '@epicurrents/core/dist/types'
+import type { SettingsColor } from '@epicurrents/core/types'
 
 type BorderSide = { show?: boolean, width?: number } | undefined
 type LayoutSettings = {

@@ -6,7 +6,7 @@
 
 import { computed } from 'vue'
 import { settingsColorToRgba } from '@epicurrents/core/util'
-import type { SettingsColor } from '@epicurrents/core/dist/types'
+import type { SettingsColor } from '@epicurrents/core/types'
 
 /** Minimal shape of the settings fields consumed by this composable. */
 type BorderSide = { show?: boolean, width?: number } | undefined
