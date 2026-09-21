@@ -51,7 +51,7 @@ import * as interfacePdfModule from '#app/modules/pdf'
  * exception — spawned as a MODULE worker (`inlineWorker(..., 'module')`): Pyodide
  * ≥0.27/314 ships an ES module and dynamic-imports `pyodide.mjs` at runtime, and
  * classic workers / `importScripts` are no longer supported by Pyodide. Its bundle
- * is therefore built as ESM (see pyodide-service webpack.config.js).
+ * is therefore built as ESM (see pyodide-service scripts/build-workers.mjs).
  *
  * We use raw text + Blob URLs rather than Vite's `?worker&inline` because the
  * pre-built bundles are self-contained: Vite's dev server would otherwise fetch the
