@@ -252,9 +252,7 @@ export default defineComponent({
     margin: 1em 0;
 }
 [data-component="welcome-dialog"] h5 {
-    height: 1.25em;
-    line-height: 1.25em;
-    margin-bottom: 1.25rem;
+    margin: 0.25rem 0 0.5rem 0;
 }
 [data-component="welcome-dialog"] wa-icon {
     vertical-align: top;
