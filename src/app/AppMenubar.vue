@@ -120,7 +120,7 @@ import { getModuleProperty, isModuleProperty } from "#config/properties"
 import { T } from "#i18n"
 // Import this synchronously
 import { MenuItem, MenubarItem } from "#types/interface"
-import type { BiosignalResource } from "@epicurrents/core/types"
+import type { BiosignalResource, EpicurrentsApp } from "@epicurrents/core/types"
 import { EpiCStore } from "#store"
 
 // The subset of a study importer / exporter context the file menu reads. Kept structural so both
@@ -246,8 +246,56 @@ export default defineComponent({
             fileMenu.items.push({ label: T(section.full, 'AppMenubar'), type: 'header' })
             fileMenu.items.push(...entries.map(entry => entry.item))
         }
+        // Export targets the host registered. They can arrive after the menu is built, so the section is rebuilt
+        // whenever the registry changes (`refreshExportTargets`), and each entry is enabled only while the active
+        // recording is one the application will let go to that target and an exporter writes the target's format.
+        const exportTargetEnabled = (name: string): boolean => {
+            const app = window.__EPICURRENTS__.APP as EpicurrentsApp | null
+            const resource = APP.activeDataset?.activeResources[0]
+            if (!app || !resource) {
+                return false
+            }
+            const target = app.getSignalExportTargets(resource).get(name)
+            if (!target) {
+                return false
+            }
+            for (const context of APP.studyExporters.values()) {
+                const exporter = context.loader?.studyExporter as { format?: string } | null
+                if (exporter?.format === target.format && context.modalities.includes(resource.modality)) {
+                    return true
+                }
+            }
+            return false
+        }
+        const exportTargetItems = (): any[] => {
+            const targets = [...APP.signalExportTargets.entries()]
+            if (!targets.length) {
+                return []
+            }
+            return [
+                { group: 'export-targets', label: T('Send recording to', 'AppMenubar'), type: 'header' },
+                ...targets
+                    .sort((a, b) => a[1].label.localeCompare(b[1].label))
+                    .map(([name, target]) => ({
+                        closeParent: true,
+                        enabled: exportTargetEnabled(name),
+                        group: 'export-targets',
+                        id: `export-target:${name}`,
+                        label: target.label,
+                        onclick: () => emit('export-target', { target: name }),
+                        reloadOn: [
+                            ['set-active-resource'],
+                            (item: MenuItem) => {
+                                item.enabled = exportTargetEnabled(name)
+                            }
+                        ],
+                    })),
+            ]
+        }
+        fileMenu.items.push(...exportTargetItems())
         // Connector.
         fileMenu.items.push({
+            id: 'connectors-divider',
             type: 'divider',
         })
         fileMenu.items.push({
@@ -584,8 +632,11 @@ export default defineComponent({
         } as MenubarItem)
         const visibleMenus = reactive([] as MenubarItem[])
         let unsubscribeActions = null as null | (() => void)
+        let unsubscribeExportTargets = null as null | (() => void)
         let unsubscribeMutations = null as null | (() => void)
         return {
+            exportTargetItems,
+            fileMenu,
             menubarItems,
             // Menubar options have a dedicated property
             options,
@@ -593,6 +644,7 @@ export default defineComponent({
             // Trigger an update in menubar
             // Ubsubscribe from store action
             unsubscribeActions,
+            unsubscribeExportTargets,
             unsubscribeMutations,
             ...useAppContext(store, 'AppMenubar'),
         }
@@ -723,6 +775,24 @@ export default defineComponent({
                 event.stopPropagation()
             }
         },
+        /**
+         * Replace the export-target section of the file menu, in the menu definition and in its displayed copy, from
+         * the targets currently registered.
+         */
+        refreshExportTargets () {
+            const replaceSection = (items: any[]) => {
+                const kept = items.filter(item => item.group !== 'export-targets')
+                const at = kept.findIndex(item => item.id === 'connectors-divider')
+                kept.splice(at < 0 ? kept.length : at, 0, ...this.exportTargetItems())
+                return kept
+            }
+            this.fileMenu.items = replaceSection(this.fileMenu.items)
+            const shown = this.visibleMenus.find(menu => menu.id === 'file')
+            if (shown) {
+                shown.items = replaceSection(shown.items as any[]).map(item => ({ ...item }))
+                shown.iteration = (shown.iteration || 0) + 1
+            }
+        },
         updateVisibleMenus () {
             for (const rawMenu of this.menubarItems.filter(menu => {
                     return menu.visible === undefined || menu.visible
@@ -788,6 +858,14 @@ export default defineComponent({
         for (const property of this._reloadProperties()) {
             this.addPropertyChangeHandler(property, () => this._dispatchReload(property))
         }
+        // The host may register or remove export targets at any time.
+        this.unsubscribeExportTargets = window.__EPICURRENTS__.EVENT_BUS?.addScopedEventListener(
+            'signal-export-targets-changed',
+            () => this.refreshExportTargets(),
+            'AppMenubar',
+            'application',
+            'after'
+        ) || null
         // Subscribe to store mutations
         this.unsubscribeMutations = this.$store.subscribe((mutation) => {
             if (mutation.type === 'set-fullscreen' || mutation.type === 'toggle-expand-viewer') {
@@ -800,6 +878,9 @@ export default defineComponent({
         this.removePropertyChangeHandlers()
         if (this.unsubscribeActions) {
             this.unsubscribeActions()
+        }
+        if (this.unsubscribeExportTargets) {
+            this.unsubscribeExportTargets()
         }
         if (this.unsubscribeMutations) {
             this.unsubscribeMutations()

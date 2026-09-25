@@ -47,7 +47,8 @@
         >
             <app-menubar
                 v-on:add-connector="toggleDialog('connector', true, $event)"
-                v-on:export-file="exportFileClick($event)"
+                v-on:export-file="toggleDialog('export', true, $event)"
+                v-on:export-target="toggleDialog('export', true, $event)"
                 v-on:external-url="importExternalUrl($event)"
                 v-on:import-dataset="importDatasetClick($event)"
                 v-on:import-file="importFileClick($event)"
@@ -129,6 +130,15 @@
             v-on:create-dataset="createDataset"
             v-on:wa-after-hide="toggleDialog('dataset', false)"
         ></dataset-dialog>
+        <!-- Signal export dialog. -->
+        <signal-export-dialog :class="applicationTheme"
+            :open="dialogs.export.open"
+            :request="dialogs.export.request"
+            v-on:close="toggleDialog('export', false)"
+            v-on:exported-file="downloadExport($event)"
+            v-on:sent="reportExport($event)"
+            v-on:wa-after-hide="toggleDialog('export', false)"
+        ></signal-export-dialog>
         <!-- URL loader dialog. -->
         <url-loader-dialog :class="applicationTheme"
             :title="$t('Open resource from URL')"
@@ -207,6 +217,7 @@ import LogDialog from '#/app/log/LogDialog.vue'
 import PointerEventsOverlay from '#app/overlays/PointerEventOverlay.vue'
 import ReloadDialog from '#app/overlays/ReloadDialog.vue'
 import SettingsDialog from '#app/settings/SettingsDialog.vue'
+import SignalExportDialog, { type SignalExportRequest } from '#app/overlays/SignalExportDialog.vue'
 import SplitPanelView from '#app/views/SplitPanelView.vue'
 import ToastStack from '#app/ToastStack.vue'
 import UrlLoaderDialog from '#app/overlays/UrlLoaderDialog.vue'
@@ -238,6 +249,7 @@ export default defineComponent({
         PointerEventsOverlay,
         ReloadDialog,
         SettingsDialog,
+        SignalExportDialog,
         SplitPanelView,
         ToastStack,
         UrlLoaderDialog,
@@ -253,6 +265,10 @@ export default defineComponent({
             },
             dataset: {
                 open: false,
+            },
+            export: {
+                open: false,
+                request: null as SignalExportRequest | null,
             },
             instructions: {
                 open: false,
@@ -623,29 +639,13 @@ export default defineComponent({
             )
         },
         /**
-         * Export the active recording via the given exporter context: encode an anonymized EDF, download it, then
-         * offer the original-metadata sidecar as a second download.
+         * Download a recording the export dialog encoded, then offer the original-metadata sidecar as a separate,
+         * deliberate second download.
          */
-        async exportFileClick (context: StudyContext) {
-            const exporter = this.$store.state.APP.studyExporters.get(context.protocol)?.loader?.studyExporter as
-                unknown as {
-                    exportActiveResource?: (
-                        options?: { anonymize?: boolean, anonymizeSidecar?: boolean }
-                    ) => Promise<{ edf: ArrayBuffer, sidecar: string, fileName: string } | null>
-                } | undefined
-            if (!exporter?.exportActiveResource) {
-                this.notify([this.$t('No exporter is available for this recording.')], 'error')
-                return
-            }
-            const result = await exporter.exportActiveResource()
-            if (!result) {
-                this.notify([this.$t('Exporting the recording failed.')], 'error')
-                return
-            }
+        downloadExport (result: { edf: ArrayBuffer, fileName: string, sidecar: string }) {
             this.downloadBlob(result.edf, `${result.fileName}.edf`, 'application/octet-stream')
-            // Offer the sidecar (original subject metadata) as a separate, deliberate second download.
             const wantSidecar = window.confirm(
-                this.$t('The EDF file has been anonymized. Also download the sidecar file with the original metadata?')
+                this.$t('The EDF file has been de-identified. Also download the sidecar file with the original metadata?')
             )
             if (wantSidecar) {
                 this.downloadBlob(result.sidecar, `${result.fileName}.edf.json`, 'application/json')
@@ -715,6 +715,12 @@ export default defineComponent({
         redoAction () {
             this.$store.dispatch('redo-action')
         },
+        /**
+         * Report the outcome of sending a recording to an export target.
+         */
+        reportExport (outcome: { message: string, success: boolean }) {
+            this.notify([outcome.message], outcome.success ? 'confirm' : 'error')
+        },
         setView (view: 'biosignal' | 'radiology') {
             this.$store.dispatch('set-view', view)
         },
@@ -738,6 +744,9 @@ export default defineComponent({
             const key = dialog as keyof typeof this.dialogs
             if (key === 'url') {
                 this.dialogs.url.name = data?.protocol || ''
+            }
+            if (key === 'export' && state) {
+                this.dialogs.export.request = { protocol: data?.protocol, target: data?.target }
             }
             if (state === undefined) {
                 state = !this.dialogs[key].open

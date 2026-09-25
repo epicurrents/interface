@@ -17,6 +17,9 @@ const messagesEN = {
     },
     // Formatted strings with properties must be declared here.
     'Adjust speed between {min}-{max}': 'Adjust speed between {min}-{max}',
+    'Channels: {count}. Length: {length} s. Sampling rate: {rate}.':
+        'Channels: {count}. Length: {length} s. Sampling rate: {rate}.',
+    'Choose a source channel for {labels}.': 'Choose a source channel for {labels}.',
     date: '{y}/{m}/{d}',
     datetime: '{y}/{m}/{d} {h}:{min}',
     'Dataset {n}': 'Dataset {n}',
@@ -33,7 +36,10 @@ const messagesEN = {
     'Memory use: {p} % ({u} / {t} MiB)': 'Memory use: {p} % ({u} / {t} MiB)',
     'Number {n}': 'Number {n}',
     'Peak at {t} ms': 'Peak at {t} ms',
+    'Samples are clipped to {min} … {max} {unit}.': 'Samples are clipped to {min} … {max} {unit}.',
+    'Send to {label}': 'Send to {label}',
     'Setting up montage {current} of {total}': 'Setting up montage {current} of {total}',
+    'The recording is {duration} s long.': 'The recording is {duration} s long.',
     'Voltage / Δ ({unit})': 'Voltage / Δ ({unit})',
     'uV': 'µV', // Display ASCII-compatible unit uV in the interface as µV.
     welcome: {
@@ -62,6 +68,8 @@ const messagesEN = {
     '{n} studies': '{n} study | {n} studies',
     '{n} tables': '{n} table | {n} tables',
     '{n} warnings': '{n} warning | {n} warnings',
+    '{rate} Hz': '{rate} Hz',
+    '{rate} Hz, as the destination requires.': '{rate} Hz, as the destination requires.',
     '{value} {unit}': '{value} {unit}',
 }
 
