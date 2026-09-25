@@ -269,11 +269,19 @@ export default defineComponent({
         },
         /**
          * Options for the exporter. A file and, for a target, its sidecar are de-identified unless the target says
-         * otherwise; the selection is always the dialog's.
+         * otherwise; the selection is always the dialog's, and the metadata keys the target's constraints forbid are
+         * always removed, on top of any the target's own options name.
          */
         exportOptions (): Record<string, unknown> {
             const defaults = this.target ? { deidentify: true, deidentifySidecar: true } : { deidentify: true }
-            return { ...defaults, ...(this.target?.options || {}), selection: this.selection }
+            const options = { ...defaults, ...(this.target?.options || {}), selection: this.selection } as
+                Record<string, unknown>
+            const forbidden = this.constraints?.forbiddenMetadataKeys || []
+            if (forbidden.length) {
+                const named = Array.isArray(options.removeMetadataKeys) ? options.removeMetadataKeys as string[] : []
+                options.removeMetadataKeys = [...new Set([...named, ...forbidden])]
+            }
+            return options
         },
         fixedChannels (): boolean {
             return !!this.constraints?.channels?.length
