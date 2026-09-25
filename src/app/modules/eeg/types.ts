@@ -344,6 +344,16 @@ export type EegModuleConfiguration = ModuleConfiguration & {
         [setup: string]: (BiosignalMontageTemplate | string)[]
     }
     extraSetups?: (ConfigBiosignalSetup | string)[]
+    /**
+     * Filters applied to a recording when it is opened, in Hz; 0 turns a filter off. Each replaces the default of
+     * the matching filter control, and an omitted one keeps the built-in default. A negative or non-numeric value is
+     * ignored with a warning. A value outside the control's list is kept and shown in the dropdown as "Custom".
+     */
+    filters?: {
+        highpass?: number
+        lowpass?: number
+        notch?: number
+    }
     hotkeys?: Partial<EegInterfaceSettings['hotkeys']>
     /**
      * Source of pre-computed lead fields for the source-localisation tool. Omit it and the tool

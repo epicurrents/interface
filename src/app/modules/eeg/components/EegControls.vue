@@ -195,6 +195,43 @@ export default defineComponent({
             // per-control build blocks.
             const control = (controlId: string) => this.eegControls.find(c => c.id === controlId)!
             const wants = (controlId: string) => id === undefined || id === controlId
+            /**
+             * Build a filter dropdown's options. A frequency outside `available` — the configured
+             * default a research protocol calls for, or whatever the resource is filtered at — gets
+             * a "Custom" entry at its numeric position, so the step buttons still move in frequency
+             * order and the value stays reachable after the user has stepped away from it.
+             */
+            const filterOptions = (
+                prefix: string,
+                action: string,
+                available: number[],
+                current: number,
+                configured: number,
+            ) => {
+                const items = available.map(filter => ({
+                    id: `${prefix}-${filter}`,
+                    enabled: true,
+                    label: filter ? T(filter.toString(), 'LocaleNumbers') : '-',
+                    onclick: [action, filter],
+                    suffix: filter ? this.$t('Hz') : undefined,
+                    value: filter,
+                }) as DropdownItem)
+                const custom = !available.includes(current) ? current
+                             : !available.includes(configured) ? configured
+                             : null
+                if (custom === null) {
+                    return { items, value: `${prefix}-${current}` }
+                }
+                const position = available.findIndex(filter => filter > custom)
+                items.splice(position === -1 ? items.length : position, 0, {
+                    id: `${prefix}-custom`,
+                    enabled: true,
+                    label: this.$t('Custom'),
+                    onclick: [action, custom],
+                    value: custom,
+                })
+                return { items, value: current === custom ? `${prefix}-custom` : `${prefix}-${current}` }
+            }
             if (wants('active-montage')) {
                 const c = control('active-montage')
                 // Construct montages.
@@ -328,56 +365,31 @@ export default defineComponent({
             }
             if (wants('lowpass-filter')) {
                 const c = control('lowpass-filter')
-                // Construct filters
-                c.options = []
-                // TODO: Ability to modify these?
-                const availableLowFilters = this.SETTINGS.filters.highpass.availableValues
-                for (const filter of availableLowFilters) {
-                    c.options.push({
-                        id: `low-filter-${filter}`,
-                        enabled: true,
-                        label: filter ? T(filter.toString(), 'LocaleNumbers') : '-',
-                        onclick: ['eeg.set-highpass-filter', filter],
-                        suffix: filter ? this.$t('Hz') : undefined,
-                        value: filter,
-                    })
-                }
-                c.value = `low-filter-${this.RESOURCE.filters.highpass}`
+                const filters = this.SETTINGS.filters.highpass
+                const options = filterOptions('low-filter', 'eeg.set-highpass-filter', filters.availableValues,
+                                              this.RESOURCE.filters.highpass, filters.default)
+                c.options = options.items
+                c.value = options.value
                 c.version++
             }
             if (wants('highpass-filter')) {
                 const c = control('highpass-filter')
-                c.options = []
-                const availableHighFilters = this.SETTINGS.filters.lowpass.availableValues
-                for (const filter of availableHighFilters) {
-                    c.options.push({
-                        id: `high-filter-${filter}`,
-                        enabled: true,
-                        label: filter ? T(filter.toString(), 'LocaleNumbers') : '-',
-                        onclick: ['eeg.set-lowpass-filter', filter],
-                        suffix: filter ? this.$t('Hz') : undefined,
-                        value: filter,
-                    })
-                }
-                c.value = `high-filter-${this.RESOURCE.filters.lowpass}`
+                const filters = this.SETTINGS.filters.lowpass
+                const options = filterOptions('high-filter', 'eeg.set-lowpass-filter', filters.availableValues,
+                                              this.RESOURCE.filters.lowpass, filters.default)
+                c.options = options.items
+                c.value = options.value
                 c.version++
             }
             if (wants('notch-filter')) {
                 const c = control('notch-filter')
                 c.options = []
                 if (c.type === 'dropdown') {
-                    const availableNotchFilters = this.SETTINGS.filters.notch.availableValues
-                    for (const filter of availableNotchFilters) {
-                        c.options.push({
-                            id: `notch-filter-${filter}`,
-                            enabled: true,
-                            label: filter ? T(filter.toString(), 'LocaleNumbers') : '-',
-                            onclick: ['eeg.set-notch-filter', filter],
-                            suffix: filter ? this.$t('Hz') : undefined,
-                            value: filter,
-                        })
-                    }
-                    c.value = `notch-filter-${this.RESOURCE.filters.notch}`
+                    const filters = this.SETTINGS.filters.notch
+                    const options = filterOptions('notch-filter', 'eeg.set-notch-filter', filters.availableValues,
+                                                  this.RESOURCE.filters.notch, filters.default)
+                    c.options = options.items
+                    c.value = options.value
                 } else {
                     // This is a toggle control.
                     const isActive = this.RESOURCE.filters.notch === this.SETTINGS.notchDefaultFrequency

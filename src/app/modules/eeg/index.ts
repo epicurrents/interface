@@ -242,6 +242,22 @@ export const runtime = {
                 settings.extraSetups.push(setup)
             }
         }
+        // Default filters. Compared against undefined rather than tested for truth, because 0 is a
+        // real value (filter off) that a deployment may want in place of a non-zero default. A value
+        // missing from the control's list is accepted: the dropdown shows it as "Custom".
+        if (config.filters) {
+            for (const type of ['highpass', 'lowpass', 'notch'] as const) {
+                const value = config.filters[type]
+                if (value === undefined) {
+                    continue
+                }
+                if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+                    Log.warn(`Ignoring invalid default ${type} filter '${value}'; expected a frequency >= 0.`, SCOPE)
+                    continue
+                }
+                settings.filters[type].default = value
+            }
+        }
         // Lead-field source for the source-localisation tool. The interface owns no URLs for it;
         // the host injects a provider and keeps its own fetching strategy to itself.
         if (config.leadFieldProvider) {
