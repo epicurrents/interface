@@ -6,6 +6,8 @@
         :open="open"
         :style="`--width:48rem;`"
         @click.stop=""
+        @keydown.stop=""
+        @keyup.stop=""
         @wa-close="closeDialog"
     >
         <p v-if="!resource" class="epicv-text-faint">{{ $t('There is no recording to export.') }}</p>
@@ -15,6 +17,7 @@
             <div class="row">
                 <wa-input
                     :label="$t('Start (s)')"
+                    :max="String(maxStart)"
                     min="0"
                     size="s"
                     type="number"
@@ -31,6 +34,7 @@
                 >
                     <wa-option v-for="duration in durations"
                         :key="`duration-${duration}`"
+                        :disabled="!fits(start, duration)"
                         :value="String(duration)"
                     >{{ duration }}</wa-option>
                 </wa-select>
@@ -233,6 +237,12 @@ export default defineComponent({
             rate: null as number | null,
             rows: [] as ChannelRow[],
             start: 0,
+            /**
+             * The recording whose start the person set by hand. Until they do, the start follows the view; once they
+             * have, it stays where they put it, across reopening the dialog, for as long as the same recording is
+             * active.
+             */
+            startSetFor: null as string | null,
         }
     },
     computed: {
@@ -290,6 +300,12 @@ export default defineComponent({
             return (this.resource?.interruptions || []).map(
                 ({ start, duration }): [number, number] => [start, duration]
             )
+        },
+        /** The latest start from which the shortest permitted length still fits in the recording. */
+        maxStart (): number {
+            const total = this.resource?.totalDuration || 0
+            const shortest = this.durations.length ? Math.min(...this.durations) : 0
+            return Math.max(0, total - shortest)
         },
         problems (): string[] {
             if (!this.resource) {
@@ -378,11 +394,19 @@ export default defineComponent({
                    ? this.$t('Send to {label}', { label: this.target.label })
                    : this.$t('Export recording')
         },
+        viewStart (): number {
+            return this.resource?.viewStart || 0
+        },
     },
     watch: {
         open (value: boolean) {
             if (value) {
                 this.initialise()
+            }
+        },
+        viewStart () {
+            if (this.open) {
+                this.followView()
             }
         },
     },
@@ -401,6 +425,42 @@ export default defineComponent({
                 this.$emit('close')
             }
         },
+        /**
+         * Does a range of `length` seconds from `start` fit in the recording.
+         * @param start - Range start in seconds.
+         * @param length - Range length in seconds.
+         */
+        fits (start: number, length: number) {
+            return start + length <= (this.resource?.totalDuration || 0) + 1e-6
+        },
+        /**
+         * The length to use from `start`: the current one while it still fits, otherwise the first permitted length
+         * that does, and with no fixed lengths the rest of the recording. Falls back to the current length when no
+         * permitted one fits, so the dialog reports the problem rather than choosing silently.
+         * @param start - Range start in seconds.
+         */
+        fittingLength (start: number) {
+            if (!this.durations.length) {
+                return this.length > 0 && this.fits(start, this.length)
+                       ? this.length
+                       : Math.max(0, (this.resource?.totalDuration || 0) - start)
+            }
+            if (this.durations.includes(this.length) && this.fits(start, this.length)) {
+                return this.length
+            }
+            return this.durations.find(duration => this.fits(start, duration)) ?? this.length
+        },
+        /**
+         * Move the start to what the person is looking at, unless they have set it by hand for this recording. Moved
+         * back where needed so a permitted length still fits.
+         */
+        followView () {
+            if (this.resource && this.startSetFor === this.resource.id) {
+                return
+            }
+            this.start = Math.min(Math.max(0, this.viewStart), this.maxStart)
+            this.length = this.fittingLength(this.start)
+        },
         formatNumber (value: number) {
             return Number.isInteger(value) ? String(value) : value.toFixed(2)
         },
@@ -409,9 +469,17 @@ export default defineComponent({
          */
         initialise () {
             this.busy = false
-            this.start = 0
             this.rate = null
-            this.length = this.durations.length ? this.durations[0] : (this.resource?.totalDuration || 0)
+            if (this.resource && this.startSetFor !== this.resource.id) {
+                this.startSetFor = null
+            }
+            this.length = this.durations.length ? this.durations[0] : 0
+            if (this.startSetFor) {
+                this.start = Math.min(this.start, this.maxStart)
+                this.length = this.fittingLength(this.start)
+            } else {
+                this.followView()
+            }
             if (this.constraints?.channels?.length) {
                 this.rows = this.constraints.channels.map(label => ({
                     include: true,
@@ -485,6 +553,8 @@ export default defineComponent({
         setStart (value: string) {
             const start = Number(value)
             this.start = Number.isFinite(start) && start > 0 ? start : 0
+            this.startSetFor = this.resource?.id ?? null
+            this.length = this.fittingLength(this.start)
         },
     },
     beforeMount () {
@@ -499,6 +569,8 @@ export default defineComponent({
 
 <style scoped>
 [data-component="signal-export-dialog"]::part(body) {
+    /* The application's dialogs clip their body; this one outgrows the viewport with a full channel template. */
+    overflow-y: auto;
     padding-bottom: 1rem;
     padding-top: 0.25rem;
 }
