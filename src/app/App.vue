@@ -139,6 +139,14 @@
             v-on:sent="reportExport($event)"
             v-on:wa-after-hide="toggleDialog('export', false)"
         ></signal-export-dialog>
+        <!-- Receipt an export target handed back. -->
+        <signal-export-receipt-dialog :class="applicationTheme"
+            :open="dialogs.receipt.open"
+            :receipt="dialogs.receipt.receipt"
+            v-on:close="toggleDialog('receipt', false)"
+            v-on:download="downloadReceipt($event)"
+            v-on:wa-after-hide="toggleDialog('receipt', false)"
+        ></signal-export-receipt-dialog>
         <!-- URL loader dialog. -->
         <url-loader-dialog :class="applicationTheme"
             :title="$t('Open resource from URL')"
@@ -196,7 +204,12 @@ import { defineComponent, ref, Ref, reactive } from "vue"
 import { T } from "#i18n"
 import { MixedFileSystemItem, MixedMediaDataset } from "@epicurrents/core"
 import { AssetEvents } from "@epicurrents/core/events"
-import { AssociatedFileType, DatasourceConnector } from "@epicurrents/core/types"
+import {
+    AssociatedFileType,
+    DatasourceConnector,
+    SignalExportReceipt,
+    SignalExportTargetResult,
+} from "@epicurrents/core/types"
 import { useStore } from 'vuex'
 import { useAppContext } from '#config'
 
@@ -218,6 +231,7 @@ import PointerEventsOverlay from '#app/overlays/PointerEventOverlay.vue'
 import ReloadDialog from '#app/overlays/ReloadDialog.vue'
 import SettingsDialog from '#app/settings/SettingsDialog.vue'
 import SignalExportDialog, { type SignalExportRequest } from '#app/overlays/SignalExportDialog.vue'
+import SignalExportReceiptDialog from '#app/overlays/SignalExportReceiptDialog.vue'
 import SplitPanelView from '#app/views/SplitPanelView.vue'
 import ToastStack from '#app/ToastStack.vue'
 import UrlLoaderDialog from '#app/overlays/UrlLoaderDialog.vue'
@@ -250,6 +264,7 @@ export default defineComponent({
         ReloadDialog,
         SettingsDialog,
         SignalExportDialog,
+        SignalExportReceiptDialog,
         SplitPanelView,
         ToastStack,
         UrlLoaderDialog,
@@ -272,6 +287,10 @@ export default defineComponent({
             },
             instructions: {
                 open: false,
+            },
+            receipt: {
+                open: false,
+                receipt: null as SignalExportReceipt | null,
             },
             log: {
                 open: false,
@@ -652,6 +671,12 @@ export default defineComponent({
             }
         },
         /**
+         * Save a receipt an export target handed back.
+         */
+        downloadReceipt (receipt: SignalExportReceipt) {
+            this.downloadBlob(receipt.data, receipt.fileName, receipt.mimeType)
+        },
+        /**
          * Trigger a browser download of the given data.
          */
         downloadBlob (data: BlobPart, fileName: string, mimeType: string) {
@@ -716,10 +741,15 @@ export default defineComponent({
             this.$store.dispatch('redo-action')
         },
         /**
-         * Report the outcome of sending a recording to an export target.
+         * Report the outcome of sending a recording to an export target. A receipt the target handed back is shown in
+         * its own dialog rather than downloaded unasked, so a declined or missed download can be repeated.
          */
-        reportExport (outcome: { message: string, success: boolean }) {
+        reportExport (outcome: SignalExportTargetResult) {
             this.notify([outcome.message], outcome.success ? 'confirm' : 'error')
+            if (outcome.receipt) {
+                this.dialogs.receipt.receipt = outcome.receipt
+                this.toggleDialog('receipt', true)
+            }
         },
         setView (view: 'biosignal' | 'radiology') {
             this.$store.dispatch('set-view', view)
