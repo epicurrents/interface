@@ -1674,6 +1674,12 @@ export default defineComponent({
         // `dataSetupDone` guards make this a no-op for a resource that has not been prepared yet,
         // and the montage pass is awaited so the data pass cannot resolve a montage against a list
         // it is still extending.
+        //
+        // The host's extra setups go in first: `extraMontages` name their setup, and
+        // `addMontage` resolves that name before its first await.
+        for (const setup of this.SETTINGS.extraSetups) {
+            this.RESOURCE.addSetup(setup)
+        }
         this.montagesChanged().then(() => this.signalCacheChanged())
         this.RESOURCE.onPropertyChange('timebase', this.timebaseChanged, this.ID)
         this.RESOURCE.onPropertyChange('viewStart', this.viewStartChanged, this.ID)
@@ -1748,11 +1754,6 @@ export default defineComponent({
                 this.video.blur()
             }
         }
-        // Set up missing additional setups.
-        for (const setup of this.SETTINGS.extraSetups) {
-            this.RESOURCE.addSetup(setup)
-        }
-        this.montagesChanged()
         //const ONNX = window.__EPICURRENTS__.RUNTIME?.SERVICES.get('ONNX') as OnnxService
         //if (ONNX) {
         //    ONNX.resetProgress()
