@@ -223,6 +223,23 @@ export const createEpicurrentsApp = async (
     config?: ApplicationInterfaceConfig,
     register?: RegisterModules,
 ) => {
+    if (window.__EPICURRENTS__?.APP) {
+        // One application per document. The global holds a single APP, EVENT_BUS and RUNTIME, so a
+        // second instance overwrites all three: the first app's services keep running against a
+        // runtime nothing reaches any more, its memory manager keeps a worker and a shared buffer
+        // sized by `signalCacheMaxSize`, and nothing releases either until the document goes away.
+        //
+        // The existing app is handed back rather than a new one built, but its configuration is not
+        // revisited — settings are applied before launch and the interface has already loaded its
+        // modules against them, so a merge here would leave SETUP claiming values the running app
+        // never received. A host that needs a differently configured app needs a new document.
+        Log.warn(
+            `An Epicurrents application already exists in this document; returning it and ignoring ` +
+            `this configuration. Load a new document to start an application afresh.`,
+            'entry'
+        )
+        return window.__EPICURRENTS__.APP as Epicurrents
+    }
     // Update setup.
     mergeConfig(SETUP, config)
     // Resolve the runtime configuration a host's HTML entry used to set, so every consumer — the
@@ -318,5 +335,18 @@ export const createEpicurrentsApp = async (
     // never prevents it.
     coreApp.registerInterface(DefaultInterface)
     await coreApp.launch(SETUP)
+    // The document half of the unload guard: closing the tab, reloading, and navigating the document
+    // away. That is the standalone viewer's only exit, so the guard belongs here rather than in a
+    // host. An embedding host's own in-app navigation never unloads the document and is the host's
+    // to intercept — the platform SPA does it through its router.
+    window.addEventListener('beforeunload', (event) => {
+        if (!coreApp.unloadNeedsConfirmation) {
+            return
+        }
+        // The wording is the browser's; a page cannot set it. Both calls are here because browsers
+        // disagree on which one arms the dialog.
+        event.preventDefault()
+        event.returnValue = ''
+    })
     return coreApp
 }

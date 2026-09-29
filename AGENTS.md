@@ -51,6 +51,16 @@ Signal rendering uses two strategies:
 
 ---
 
+## What `createEpicurrentsApp` owns at the document level
+
+[src/setups/index.ts](src/setups/index.ts) is the entry every consumer goes through, which makes it the place for the two things that are properties of the document rather than of any one host.
+
+**One application per document.** `window.__EPICURRENTS__` holds a single `APP`, `EVENT_BUS` and `RUNTIME`, so a second instance overwrites all three: the first application's services keep running against a runtime nothing can reach, its memory manager keeps a worker and a shared buffer the size of `signalCacheMaxSize`, and nothing releases either until the document goes away. The factory therefore returns the existing application when one is already there, warns, and does not revisit its configuration — settings are applied before launch and the interface has already loaded its modules against them, so merging a second config would leave `SETUP` claiming values the running application never received. A host that needs a differently configured application needs a new document. A host embedding the viewer in a single-page application has to expect this: a route change that unmounts the container and later mounts a new one gets the old application back, attached to a container that no longer exists, so it should reload the document instead (the platform's viewer view does).
+
+**The unload guard.** The factory installs the `beforeunload` handler that asks `unloadNeedsConfirmation` on the core application, which covers closing the tab, reloading, and navigating the document away — the standalone viewer's only exits. It answers true while anything is open in the viewer, not only when annotations have been edited, because relocating a long recording and navigating back to the same position is the expensive part of an interrupted session. So a viewer with a recording open prompts on the way out, by design. The prompt wording is the browser's and cannot be set. In-app navigation never unloads the document and is the host's to intercept; core's side of this, including the `allowUnload` waiver a programmatic reload needs, is documented under "Leaving the document" in the core package's AGENTS.md.
+
+---
+
 ## Adding icons to the interface
 
 Every icon used in `src/` requires **three edits** to [src/app/icons.ts](src/app/icons.ts):
