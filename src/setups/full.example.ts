@@ -31,7 +31,7 @@ import * as eegModule from '@epicurrents/eeg-module'
 import { CsvImporter, CsvWorkerSubstitute } from '@epicurrents/csv-reader'
 import { EdfExporter, EdfImporter, EdfWorkerSubstitute } from '@epicurrents/edf-reader'
 import { DicomImporter, DicomWorkerSubstitute } from '@epicurrents/dicom-reader'
-import { HtmImporter, MarkdownWorkerSubstitute } from '@epicurrents/htm-reader'
+import { HtmImporter, HtmlWorkerSubstitute, MarkdownWorkerSubstitute } from '@epicurrents/htm-reader'
 import { PdfImporter } from '@epicurrents/pdf-reader'
 // Analysis service.
 import { PyodideService } from '@epicurrents/pyodide-service'
@@ -65,6 +65,8 @@ const montWorker = () => inlineWorker('MontageWorker', montWorkerSrc).create()
 import trendWorkerSrc from '#root/dist/workers/trend.worker.js?raw'
 const trendWorker = () => inlineWorker('TrendWorker', trendWorkerSrc).create()
 // Markdown.
+import htmlWorkerSrc from '#root/dist/workers/html.worker.js?raw'
+const htmlWorker = () => inlineWorker('HtmlWorker', htmlWorkerSrc).create()
 import mdWorkerSrc from '#root/dist/workers/markdown.worker.js?raw'
 const mdWorker = () => inlineWorker('MarkdownWorker', mdWorkerSrc).create()
 // Pyodide — the virtual compiler has significant startup cost, so the worker is
@@ -219,28 +221,46 @@ export const registerAllModules = ({ app, useSAB, setup, registerInterfaceModule
         registerInterfaceModule('acc', interfaceAccModule)
     }
 
-    // Markdown module setup.
+    // Document module setup.
     if (!setup.activeModules.length || setup.activeModules.includes('htm')) {
-        // Register the document module and htm reader.
+        // Register the document module and both htm readers. Each format needs an importer of its
+        // own: a reader hands over the worker for the format it was constructed with, and a document
+        // module asks for that worker without naming a file.
         app.registerModule('htm', docModule)
-        const htmReader = new HtmImporter('markdown')
-        htmReader.setWorkerOverride('markdown',
+        const inWorker = () => {
+            return useSAB && window.__EPICURRENTS__.RUNTIME!.SETTINGS.getFieldValue('doc.useMemoryManager')
+        }
+
+        const mdReader = new HtmImporter('markdown')
+        mdReader.setWorkerOverride('markdown',
             () => {
-                const docSAB = window.__EPICURRENTS__.RUNTIME!.SETTINGS.getFieldValue('doc.useMemoryManager')
-                if (useSAB && docSAB) {
-                    return mdWorker()
-                }
-                return new MarkdownWorkerSubstitute()
+                return inWorker() ? mdWorker() : new MarkdownWorkerSubstitute()
             }
         )
-        const htmLoader = new docModule.DocumentLoader(
+        const mdLoader = new docModule.DocumentLoader(
             'HTMLoader',
             'htm',
-            htmReader
+            mdReader
         )
-        app.registerStudyImporter('doc/htm-file', 'Open markdown file', 'file', htmLoader)
-        app.registerStudyImporter('doc/htm-folder', 'Open markdown files from folder', 'folder', htmLoader)
-        app.registerStudyImporter('doc/htm-url', 'Open markdown from URL', 'url', htmLoader)
+        app.registerStudyImporter('doc/htm-file', 'Open markdown file', 'file', mdLoader)
+        app.registerStudyImporter('doc/htm-folder', 'Open markdown files from folder', 'folder', mdLoader)
+        app.registerStudyImporter('doc/htm-url', 'Open markdown from URL', 'url', mdLoader)
+
+        const htmlReader = new HtmImporter('html')
+        htmlReader.setWorkerOverride('html',
+            () => {
+                return inWorker() ? htmlWorker() : new HtmlWorkerSubstitute()
+            }
+        )
+        const htmlLoader = new docModule.DocumentLoader(
+            'HTMLLoader',
+            'htm',
+            htmlReader
+        )
+        app.registerStudyImporter('doc/html-file', 'Open HTML file', 'file', htmlLoader)
+        app.registerStudyImporter('doc/html-folder', 'Open HTML files from folder', 'folder', htmlLoader)
+        app.registerStudyImporter('doc/html-url', 'Open HTML from URL', 'url', htmlLoader)
+
         registerInterfaceModule('htm', interfaceDocModule)
     }
 
