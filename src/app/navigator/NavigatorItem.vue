@@ -135,9 +135,10 @@ export default defineComponent({
                     } else {
                         // State / dependency messages from `getMainProperties()` come back with the
                         // message text as the map key and a placeholder object as the value, e.g.
-                        // `'Loading dependency {n}/{t}...'` → `{ n: 1, t: 2 }`. The return type
-                        // claims string | number for value, but state messages put an object
-                        // there — hence the cast through unknown.
+                        // `'Loading dependency {n}/{t}...'` → `{ n: 1, t: 2 }`. This branch takes
+                        // every entry the two branches above do not name, so the value is any
+                        // member of `MainProperty` — only the placeholder objects among them are
+                        // meaningful as parameters, and the rest interpolate into nothing.
                         props.push({ text: this.$t(name, value as unknown as Record<string, unknown>) })
                     }
                 } else if (name === 'pages') {
