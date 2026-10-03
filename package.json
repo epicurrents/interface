@@ -87,7 +87,7 @@
     "@vitejs/plugin-vue": "^6.0.2",
     "dotenv": "^17.3.1",
     "isomorphic-fetch": "^3.0.0",
-    "scoped-event-bus": "^0.3.0 || ^1.0.0",
+    "scoped-event-bus": "^0.4.0",
     "scoped-event-log": "^3.2.0",
     "tsconfig-replace-paths": "^0.0.14",
     "typescript": "5.7",
