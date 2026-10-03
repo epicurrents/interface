@@ -1,5 +1,8 @@
 /**
  * Interface-side types for the ACC module.
+ * @package    epicurrents/interface
+ * @copyright  2026 Sampsa Lohi
+ * @license    Apache-2.0
  */
 
 import type { InterfaceSchema } from '#types/interface'

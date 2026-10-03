@@ -1,3 +1,10 @@
+/**
+ * Registration for the default application view, which is what the interface shows before any
+ * other view has been activated.
+ * @package    epicurrents/interface
+ * @copyright  2026 Sampsa Lohi
+ * @license    Apache-2.0
+ */
 import DefaultInterface from './DefaultInterface.vue'
 import type { ApplicationView } from '#types/config'
 

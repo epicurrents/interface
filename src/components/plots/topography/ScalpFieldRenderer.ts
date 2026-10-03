@@ -120,7 +120,10 @@ const DEFAULT_OPTIONS = {
     // this ambient/diffuse/wrap split, never moving the light back towards the camera.
     shade: [0.66, 0.72, 0.45] as [number, number, number],
 }
-/** Default yaw, and a pitch that looks slightly down. From below, the open neck shows grey interior across 13% of the head; from here, 1%. */
+/**
+ * Default yaw, and a pitch that looks slightly down. From below, the open neck shows grey interior
+ * across 13% of the head; from here, 1%.
+ */
 const DEFAULT_YAW = -0.62
 const DEFAULT_PITCH = -0.10
 

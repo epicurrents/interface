@@ -896,7 +896,12 @@ export default defineComponent({
     font-size: 0.75rem !important;
     border-bottom: solid 1px var(--epicv-border) !important;
 }
-    .button, .button::part(base), .button::part(label), .button::part(prefix), .button::part(suffix), .button::part(caret) {
+    .button,
+    .button::part(base),
+    .button::part(label),
+    .button::part(prefix),
+    .button::part(suffix),
+    .button::part(caret) {
         height: 1.5rem;
         min-height: 1.5rem;
         line-height: 1.5rem;

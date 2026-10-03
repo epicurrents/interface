@@ -1,13 +1,18 @@
 <template>
     <div data-component="ncs-plot" ref="wrapper">
+        <!--
+            `.prevent` is load-bearing where it appears: a touch move scrolls the page instead of
+            reaching the plot unless the default is stopped, which breaks channel selection, and the
+            right mouse button cannot drag while the context menu opens on it.
+        -->
         <div ref="plot" class="plot"
             @pointerdown.prevent="handlePointerdown"
             @pointermove.prevent="handleTouchmove"
             @pointerup="handlePointerleave"
             @touchend="handleTouchend"
-            @touchstart.prevent="handleTouchstart/* Prevent scrolling with touch move or channel selections won't work. */"
+            @touchstart.prevent="handleTouchstart"
             @wheel="handleWheelEvent"
-            @contextmenu.prevent="null/* Prevent context menu or dragging with the right mouse button won't work. */"
+            @contextmenu.prevent="null"
         ></div>
         <span v-for="(chan, idx) of RESOURCE.channels"
             :key="`ncs-plot-channel-label-${idx}`"

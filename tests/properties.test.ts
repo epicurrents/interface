@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { EventBus } from 'scoped-event-bus'
 import { createPropertySetter, isModuleProperty, registerModuleProperties } from '../src/config/properties'
 
@@ -10,9 +10,18 @@ const registry = {
     'trend-visible': { field: 'trendVisible', type: 'Boolean' },
     'open-sidebar': { field: 'openSidebar', type: 'String?' },
 }
-const runtime: Record<string, unknown> = { trendVisible: false, openSidebar: null }
-const set = createPropertySetter('eeg', () => runtime, registry)
-registerModuleProperties('eeg', registry)
+let runtime: Record<string, unknown>
+let set: ReturnType<typeof createPropertySetter>
+
+// The setter writes through to the runtime object, so the cases below cannot share one: a case
+// that leaves a property changed makes a later write of the same value a no-op, and a no-op is
+// indistinguishable from the setter having refused it. Rebuilt per case rather than reset, so the
+// registry the setter reads always points at the object this case will assert on.
+beforeEach(() => {
+    runtime = { trendVisible: false, openSidebar: null }
+    set = createPropertySetter('eeg', () => runtime, registry)
+    registerModuleProperties('eeg', registry, () => runtime)
+})
 
 describe('module property setter', () => {
     it('applies a valid write and announces it under the qualified name', () => {

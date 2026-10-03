@@ -6,6 +6,9 @@
  * Viewer-specific operations (opening/closing the analysis window, exiting the
  * annotation editor) are injected as callbacks so this composable stays
  * modality-agnostic.
+ * @package    epicurrents/interface
+ * @copyright  2026 Sampsa Lohi
+ * @license    Apache-2.0
  */
 
 import { computed, nextTick } from 'vue'

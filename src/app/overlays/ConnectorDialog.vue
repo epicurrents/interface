@@ -625,7 +625,9 @@ export default defineComponent({
                 return
             }
             if (name.includes('/') || name.includes('\\')) {
-                this.error = this.$t(`Folder name cannot contain slashes or backslashes; create nested folders separately.`)
+                this.error = this.$t(
+                    `Folder name cannot contain slashes or backslashes; create nested folders separately.`
+                )
                 return
             }
             const path = this.subPath.endsWith('/') ? this.subPath + name : this.subPath + '/' + name

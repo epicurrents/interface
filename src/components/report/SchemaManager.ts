@@ -234,7 +234,8 @@ export default class SchemaManager {
                                 }
                             } else {
                                 Log.error(
-                                    `Category ${category} item ${item} inputs fetch error: ${inputResponse.statusText}.`,
+                                    `Category ${category} item ${item} inputs fetch error: `
+                                    + `${inputResponse.statusText}.`,
                                     SCOPE
                                 )
                                 return false
@@ -278,7 +279,8 @@ export default class SchemaManager {
                                 }
                             } else {
                                 Log.error(
-                                    `Category ${category} item ${item} report fetch error: ${reportResponse.statusText}.`,
+                                    `Category ${category} item ${item} report fetch error: `
+                                    + `${reportResponse.statusText}.`,
                                     SCOPE
                                 )
                                 return false

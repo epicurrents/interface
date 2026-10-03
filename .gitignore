@@ -30,6 +30,7 @@ vite.config.*.ts
 !/src/setups/standalone.ts
 !/src/setups/*.example.ts
 tsconfig.*.json
+!tsconfig.test.json
 !tsconfig.types.json
 *.local.json
 

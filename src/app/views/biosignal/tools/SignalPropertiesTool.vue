@@ -22,8 +22,12 @@
                     :points="`
                         ${-SETTINGS.tools.excludeArea.width},${-SETTINGS.tools.excludeArea.width}
                         ${svgWidth + SETTINGS.tools.excludeArea.width},${-SETTINGS.tools.excludeArea.width}
-                        ${svgWidth + SETTINGS.tools.excludeArea.width},${activeProps.upperLimitY - SETTINGS.tools.excludeArea.width}
-                        ${-SETTINGS.tools.excludeArea.width},${activeProps.upperLimitY - SETTINGS.tools.excludeArea.width}
+                        ${svgWidth + SETTINGS.tools.excludeArea.width},${
+                            activeProps.upperLimitY - SETTINGS.tools.excludeArea.width
+                        }
+                        ${-SETTINGS.tools.excludeArea.width},${
+                            activeProps.upperLimitY - SETTINGS.tools.excludeArea.width
+                        }
                         ${-SETTINGS.tools.excludeArea.width},${-SETTINGS.tools.excludeArea.width}
                     `"
                 />
@@ -31,8 +35,12 @@
                     :points="`
                         ${-SETTINGS.tools.excludeArea.width},${svgHeight + SETTINGS.tools.excludeArea.width}
                         ${svgWidth + SETTINGS.tools.excludeArea.width},${svgHeight + SETTINGS.tools.excludeArea.width}
-                        ${svgWidth + SETTINGS.tools.excludeArea.width},${activeProps.lowerLimitY + SETTINGS.tools.excludeArea.width}
-                        ${-SETTINGS.tools.excludeArea.width},${activeProps.lowerLimitY + SETTINGS.tools.excludeArea.width}
+                        ${svgWidth + SETTINGS.tools.excludeArea.width},${
+                            activeProps.lowerLimitY + SETTINGS.tools.excludeArea.width
+                        }
+                        ${-SETTINGS.tools.excludeArea.width},${
+                            activeProps.lowerLimitY + SETTINGS.tools.excludeArea.width
+                        }
                         ${-SETTINGS.tools.excludeArea.width},${svgHeight + SETTINGS.tools.excludeArea.width}
                     `"
                 />

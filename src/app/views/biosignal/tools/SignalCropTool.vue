@@ -33,7 +33,9 @@
                     :points="
                         `${-SETTINGS.tools.excludeArea.width},${-SETTINGS.tools.excludeArea.width}
                         ${(startX || 0) - SETTINGS.tools.excludeArea.width},${-SETTINGS.tools.excludeArea.width}
-                        ${(startX || 0) - SETTINGS.tools.excludeArea.width},${svgHeight + SETTINGS.tools.excludeArea.width}
+                        ${(startX || 0) - SETTINGS.tools.excludeArea.width},${
+                            svgHeight + SETTINGS.tools.excludeArea.width
+                        }
                         ${-SETTINGS.tools.excludeArea.width},${svgHeight + SETTINGS.tools.excludeArea.width}
                         `
                     "

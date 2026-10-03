@@ -7,6 +7,9 @@
  *
  * Also manages the per-component undo/redo stacks and the corresponding
  * store flags (`has-undoable-action`, `has-redoable-action`).
+ * @package    epicurrents/interface
+ * @copyright  2026 Sampsa Lohi
+ * @license    Apache-2.0
  */
 
 import { computed, ref } from 'vue'

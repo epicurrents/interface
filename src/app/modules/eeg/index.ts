@@ -92,7 +92,10 @@ export const actions = {
     [EegActionTypes.SET_TREND_VISIBLE] (_injectee: ActionContext<State, State>, payload: boolean) {
         runtime.setPropertyValue('trend-visible', payload)
     },
-    [EegActionTypes.TOGGLE_ANNOTATION_SIDEBAR] (_injectee: ActionContext<State, State>, _payload: boolean | undefined ) {
+    [EegActionTypes.TOGGLE_ANNOTATION_SIDEBAR] (
+        _injectee: ActionContext<State, State>,
+        _payload: boolean | undefined,
+    ) {
         // This is merely a broadcast.
     },
     async [EegActionTypes.TOGGLE_SIGNAL_POLARITY] (

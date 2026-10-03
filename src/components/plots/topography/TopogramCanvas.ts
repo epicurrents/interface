@@ -37,7 +37,10 @@ const DEFAULT_OPTIONS = {
     // the inherited text colour is the canvas equivalent of `currentColor` and follows the theme.
     outlineColor: 'currentColor',
 }
-/** Opacity of the head circle, nose and ears. Low enough not to compete with the field, high enough to survive a light theme. */
+/**
+ * Opacity of the head circle, nose and ears. Low enough not to compete with the field, high enough
+ * to survive a light theme.
+ */
 const OUTLINE_ALPHA = 0.5
 
 export default class TopogramCanvas {

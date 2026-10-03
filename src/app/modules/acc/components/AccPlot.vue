@@ -1,13 +1,18 @@
 <template>
     <div data-component="acc-plot" ref="wrapper">
+        <!--
+            `.prevent` is load-bearing where it appears: a touch move scrolls the page instead of
+            reaching the plot unless the default is stopped, which breaks channel selection, and the
+            right mouse button cannot drag while the context menu opens on it.
+        -->
         <div ref="plot" class="plot"
             @pointerdown.prevent="handlePointerdown"
             @pointermove.prevent="handleTouchmove"
             @pointerup="handlePointerleave"
             @touchend="handleTouchend"
-            @touchstart.prevent="handleTouchstart/* Prevent scrolling with touch move or channel selections won't work. */"
+            @touchstart.prevent="handleTouchstart"
             @wheel="handleWheelEvent"
-            @contextmenu.prevent="null/* Prevent context menu or dragging with the right mouse button won't work. */"
+            @contextmenu.prevent="null"
         ></div>
     </div>
 </template>
@@ -37,6 +42,7 @@ import type {
     OverlayPointerEventMeta,
     PointerEventOverlay,
 } from "#app/overlays/PointerEventOverlay.vue"
+import { Log } from "scoped-event-log"
 import { WebGlPlot, PlotColor, WebGlPlotTrace } from "#components"
 import type { WebGlPlotConfig } from "#types/plot"
 
@@ -272,7 +278,9 @@ export default defineComponent({
                 const chanType = chan.modality
                 // The shared trace.color type is `SettingsColor | { [key]: SettingsColor }`;
                 // narrow to the map form (the only shape the ACC config produces).
-                const traceColor = this.SETTINGS.trace.color as { [key: string]: import('@epicurrents/core/types').SettingsColor }
+                const traceColor = this.SETTINGS.trace.color as {
+                    [key: string]: import('@epicurrents/core/types').SettingsColor
+                }
                 const [r, g, b, a] = !useRaw && chanType
                                     ? this.SETTINGS.trace.colorSides && chanType === 'acc'
                                       ? chan.laterality === 's' ? traceColor.sin
@@ -286,7 +294,8 @@ export default defineComponent({
                 const sensitivity = chan.sensitivity || this.RESOURCE.sensitivity
                 const scale = chan.scale || 0
                 const sigLen = this.viewRange*chan.samplingRate/this.downSampleFactor
-                const samplesPerPx = Math.floor(this.viewRange*chan.samplingRate/this.downSampleFactor)/this.plot.offsetWidth
+                const samplesPerPx = Math.floor(this.viewRange*chan.samplingRate/this.downSampleFactor)
+                                     / this.plot.offsetWidth
                 const line = new WebGlPlotTrace(
                     this.wglPlot,
                     color,
@@ -413,7 +422,14 @@ export default defineComponent({
                 this.drawPlot()
                 // Start the caching process only after the first view has been loaded,
                 // because it can take some time to calculate the first cached segment.
+                // Deliberately not awaited: the caching runs alongside the drawn view, and the
+                // handler is what keeps it from surfacing as an unhandled rejection. A study closed
+                // while a cache read is in flight rejects it, which is a routine way for this call
+                // to end rather than a failure the reader has to act on.
                 this.RESOURCE.activeMontage?.cacheSignals()
+                    .catch((reason: unknown) => Log.warn(
+                        `Caching the active montage did not complete: ${String(reason)}`, 'AccPlot'
+                    ))
             })
         },
         handleKeydown (event: KeyboardEvent) {

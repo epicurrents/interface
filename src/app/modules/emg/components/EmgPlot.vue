@@ -1,13 +1,18 @@
 <template>
     <div data-component="emg-plot" ref="wrapper">
+        <!--
+            `.prevent` is load-bearing where it appears: a touch move scrolls the page instead of
+            reaching the plot unless the default is stopped, which breaks channel selection, and the
+            right mouse button cannot drag while the context menu opens on it.
+        -->
         <div ref="plot" class="plot"
             @pointerdown.prevent="handlePointerdown"
             @pointermove.prevent="handleTouchmove"
             @pointerup="handlePointerleave"
             @touchend="handleTouchend"
-            @touchstart.prevent="handleTouchstart/* Prevent scrolling with touch move or channel selections won't work. */"
+            @touchstart.prevent="handleTouchstart"
             @wheel="handleWheelEvent"
-            @contextmenu.prevent="null/* Prevent context menu or dragging with the right mouse button won't work. */"
+            @contextmenu.prevent="null"
         ></div>
     </div>
 </template>
@@ -282,7 +287,8 @@ export default defineComponent({
                 const sensitivity = chan.sensitivity || this.RESOURCE.sensitivity
                 const scale = chan.scale || 0
                 const sigLen = this.viewRange*chan.samplingRate/this.downSampleFactor
-                const samplesPerPx = Math.floor(this.viewRange*chan.samplingRate/this.downSampleFactor)/this.plot.offsetWidth
+                const samplesPerPx = Math.floor(this.viewRange*chan.samplingRate/this.downSampleFactor)
+                                     / this.plot.offsetWidth
                 const line = new WebGlPlotTrace(
                     this.wglPlot,
                     color,

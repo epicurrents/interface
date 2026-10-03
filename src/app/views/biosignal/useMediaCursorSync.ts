@@ -8,6 +8,9 @@
  * modality-agnostic — the synthesised-audio player drives it today, and a video
  * track reuses it unchanged later — so any clock source produces the same
  * cursor-follows-playback behaviour.
+ * @package    epicurrents/interface
+ * @copyright  2026 Sampsa Lohi
+ * @license    Apache-2.0
  */
 
 import type { BiosignalResource } from '@epicurrents/core/types'

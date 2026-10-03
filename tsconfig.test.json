@@ -1,0 +1,20 @@
+{
+  // The suite is type-checked as a step of `npm test`, ahead of the unit run. It needs no ambient
+  // type package: the test globals are imported from vitest by name, which is why the build config's
+  // empty `types` carries over unchanged. The checker is `vue-tsc` rather than `tsc`, because the
+  // suite reaches into `src` and anything it pulls in may be a single-file component. No `rootDir`
+  // is set: nothing is emitted, and a root would reject the sibling-package imports below.
+  //
+  // `settings-paths.test.ts` is the one file left out, and it cannot be included. It imports four
+  // core module packages' `src/config` so it can assert against the live settings tree rather than a
+  // built copy, and those files resolve `#types` through their own package's alias map. Under this
+  // package's map the same specifier lands in `interface/src/types`, so type-checking them here
+  // reports members that do exist where the files actually live. That collision is why the test
+  // keeps those imports type-only, and it is described in the file's own docstring.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["src", "tests"],
+  "exclude": ["dist", "node_modules", "tests/settings-paths.test.ts"]
+}

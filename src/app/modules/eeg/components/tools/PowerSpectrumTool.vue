@@ -154,7 +154,8 @@ export default defineComponent({
         )
         /**
          * The last time(stamp) frequency powers have been updated.
-         * The frequency power plot won't update merely by changing the `powers` contents, we must change the component key as well.
+         * The frequency power plot won't update merely by changing the `powers` contents, we must
+         * change the component key as well.
          */
         const powerTS = ref(0)
         const rBSI = ref([] as { symbol: string | undefined, value: number }[])
@@ -293,7 +294,10 @@ export default defineComponent({
             this.tarR = (thetaR - alphaR)/(thetaR + alphaR)
             this.tarD = (this.tarR - this.tarL)/(this.tarR + this.tarL)
             if (this.loadingIndices) {
-                Log.debug(`Basic indices calculation took ${Date.now() - this.loadingIndices} ms.`, this.$options.name || '')
+                Log.debug(
+                    `Basic indices calculation took ${Date.now() - this.loadingIndices} ms.`,
+                    this.$options.name || ''
+                )
                 this.loadingIndices = 0
             }
         },

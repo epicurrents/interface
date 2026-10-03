@@ -1,3 +1,10 @@
+/**
+ * Registration for the biosignal application view: the view configuration the interface reads
+ * when offering it, and the component that renders it.
+ * @package    epicurrents/interface
+ * @copyright  2026 Sampsa Lohi
+ * @license    Apache-2.0
+ */
 import BiosignalInterface from './BiosignalInterface.vue'
 import type { ApplicationView } from '#types/config'
 

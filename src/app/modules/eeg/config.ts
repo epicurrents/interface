@@ -172,7 +172,9 @@ export const schemas: InterfaceModuleSchema = safeObjectFrom({
             {
                 text: 'Montage options',
                 type: 'subtitle',
-                info: 'Montage options apply to the four universal montages; As recorded, Average reference, Longutudina bipolar, and Transverse bipolar. Possible setup-specific additional montages are not affected by these settings.',
+                info: 'Montage options apply to the four universal montages; As recorded, Average '
+                      + 'reference, Longutudina bipolar, and Transverse bipolar. Possible '
+                      + 'setup-specific additional montages are not affected by these settings.',
             },
             {
                 component: 'settings-dropdown',

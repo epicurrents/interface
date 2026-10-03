@@ -104,7 +104,10 @@ export const actions = {
         runtime.setPropertyValue('timebase-unit', payload[0])
         runtime.setPropertyValue('timebase', payload[1])
     },
-    [NcsActionTypes.TOGGLE_ANNOTATION_SIDEBAR] (_injectee: ActionContext<State, State>, _payload: boolean | undefined ) {
+    [NcsActionTypes.TOGGLE_ANNOTATION_SIDEBAR] (
+        _injectee: ActionContext<State, State>,
+        _payload: boolean | undefined,
+    ) {
         // This is merely a broadcast.
     },
 }

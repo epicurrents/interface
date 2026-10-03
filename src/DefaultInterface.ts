@@ -68,7 +68,8 @@ import EpicurrentsPlugin from './epicurrents/EpicurrentsPlugin'
 
 const SCOPE = 'interface'
 
-export const DefaultInterface: DefaultInterfaceModuleConstructor = class EpicurrentsInterface implements InterfaceModule {
+export const DefaultInterface: DefaultInterfaceModuleConstructor
+    = class EpicurrentsInterface implements InterfaceModule {
 
     /** Available interface modules. */
     static MODULES: Record<string, ResourceModuleContext> = {}
@@ -198,7 +199,8 @@ export const DefaultInterface: DefaultInterfaceModuleConstructor = class Epicurr
         epicApp.eventBus.subscribe('add-resource', event => {
             const context = event.detail.payload as { resource: BiosignalResource }
             const resource = context.resource
-            const pyodide = window.__EPICURRENTS__.RUNTIME!.SERVICES.get('pyodide') as unknown as PythonInterpreterService | null
+            const pyodide = window.__EPICURRENTS__.RUNTIME!.SERVICES
+                .get('pyodide') as unknown as PythonInterpreterService | null
             const memoryManager = window.__EPICURRENTS__.RUNTIME!.SETTINGS.app.useMemoryManager
             // Only a consumer that computes the montage in Python needs the interpreter before the
             // resource can be shown; `usePyodideBiosignal` is how it says so. Otherwise the service
@@ -321,7 +323,9 @@ export const DefaultInterface: DefaultInterfaceModuleConstructor = class Epicurr
         if (!this.store) {
             return
         }
-        const appCont = document.querySelector(`#epicurrents${this.store?.instance?.state.APP.containerId}`) as HTMLDivElement
+        const appCont = document.querySelector(
+            `#epicurrents${this.store?.instance?.state.APP.containerId}`
+        ) as HTMLDivElement
         if (document.fullscreenElement === appCont) {
             this.store.instance?.commit('set-fullscreen', true)
         } else {

@@ -84,7 +84,10 @@ type AnnotationContext = {
 
 /** Margin size in pixels for a "grabbing zone" around an annotation marker line. */
 const ANNOTATION_MARGIN = 5
-/** Preserve a minimum visible duration (in seconds) to make it easier to grab the annotation label ends for dragging. */
+/**
+ * Preserve a minimum visible duration (in seconds) to make it easier to grab the annotation label
+ * ends for dragging.
+ */
 const MIN_VISIBLE_DURATION = 0.25
 
 export default defineComponent({
@@ -255,7 +258,9 @@ export default defineComponent({
             } & Partial<typeof this.SETTINGS.annotations.classes[string]>
             const evtPos = this.getPagePosition(event.start)
             properties.styles = [
-                `left: ${Math.max((event.start - this.RESOURCE.viewStart) * this.pxPerSecond, 0) - ANNOTATION_MARGIN}px`,
+                `left: ${
+                    Math.max((event.start - this.RESOURCE.viewStart) * this.pxPerSecond, 0) - ANNOTATION_MARGIN
+                }px`,
                 `${this.annotationStyles}`,
             ]
             if (event.duration) {
@@ -335,7 +340,9 @@ export default defineComponent({
                 if (this.draggingAnnotation.overThreshold) {
                     // Deactivate the event and update to reflect the new position.
                     this.deactivateAnnotation(context.event)
-                    this.RESOURCE.dispatchPropertyChangeEvent('events', undefined, undefined, 'after', { source: 'user' })
+                    this.RESOURCE.dispatchPropertyChangeEvent(
+                        'events', undefined, undefined, 'after', { source: 'user' }
+                    )
                 }
             }
             this.overlay.trackPointer(
@@ -348,7 +355,8 @@ export default defineComponent({
             this.handleAnnotationPointerup(id, event)
         },
         handleAnnotationPointerup (id: string, event: PointerEvent) {
-            // Only handle pointerup events that originate from the same annotation and the same button as the last pointerdown.
+            // Only handle pointerup events that originate from the same annotation and the same
+            // button as the last pointerdown.
             if (id !== this.lastClicked.id || event.button !== this.lastClicked.button) {
                 return
             }
@@ -423,7 +431,9 @@ export default defineComponent({
                 if (this.draggingAnnotation.overThreshold) {
                     // Deactivate the annotation and update to reflect new duration.
                     this.deactivateAnnotation(context.event)
-                    this.RESOURCE.dispatchPropertyChangeEvent('events', undefined, undefined, 'after', { source: 'user' })
+                    this.RESOURCE.dispatchPropertyChangeEvent(
+                        'events', undefined, undefined, 'after', { source: 'user' }
+                    )
                 }
             }
             this.overlay.trackPointer(
@@ -519,7 +529,9 @@ export default defineComponent({
                 if (this.draggingAnnotation.overThreshold) {
                     // Deactivate the annotation and update to reflect new start and duration.
                     this.deactivateAnnotation(context.event)
-                    this.RESOURCE.dispatchPropertyChangeEvent('events', undefined, undefined, 'after', { source: 'user' })
+                    this.RESOURCE.dispatchPropertyChangeEvent(
+                        'events', undefined, undefined, 'after', { source: 'user' }
+                    )
                 }
             }
             this.overlay.trackPointer(
@@ -601,14 +613,20 @@ export default defineComponent({
         storeAnnotationRef (el: any) {
             if (el) {
                 if (!el.dataset?.annotationId) {
-                    Log.error(`Annotation element did not have annotation ID data property.`, this.$options.name as string)
+                    Log.error(
+                        `Annotation element did not have annotation ID data property.`,
+                        this.$options.name as string
+                    )
                     return
                 }
                 const annoCtx = this.annotationContexts.get(el.dataset.annotationId)
                 if (annoCtx) {
                     annoCtx.el = el
                 } else {
-                    Log.error(`${el.dataset.annotationId} did not have a corresponding context.`, this.$options.name as string)
+                    Log.error(
+                        `${el.dataset.annotationId} did not have a corresponding context.`,
+                        this.$options.name as string
+                    )
                 }
             }
         },
@@ -782,7 +800,8 @@ export default defineComponent({
                         continue
                     }
                     const otherLabelStart = Math.max(otherStart, 0)
-                    const otherEnd = otherLabelStart + (otherCtx.el.querySelector('#wrapper') as HTMLDivElement)?.offsetWidth || 0
+                    const otherEnd = otherLabelStart
+                                     + (otherCtx.el.querySelector('#wrapper') as HTMLDivElement)?.offsetWidth || 0
                     if (
                         (otherLabelStart <= thisStart && thisStart < otherEnd) ||
                         (thisStart <= otherLabelStart && otherStart < thisEnd)
@@ -804,7 +823,8 @@ export default defineComponent({
                         if (!range[1]) {
                             // This is a range start. Add its height to the final height.
                             overlapRows.push(range[2])
-                            // Calculate total height from the elements and save the top sum (2 is for padding between labels).
+                            // Calculate total height from the elements and save the top sum
+                            // (2 is for padding between labels).
                             // This has been replaced by annotation rows, but will keep it here just in case I want to
                             // return to flexible annotation label heights.
                             //const sum = overlapHeights.reduce((partial, a) => partial + a + 2, 0)

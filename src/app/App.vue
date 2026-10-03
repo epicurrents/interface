@@ -171,7 +171,9 @@
             v-on:wa-after-hide="toggleDialog('settings', false)"
         ></settings-dialog>
         <reload-dialog :class="applicationTheme"
-            :content="$t('Some settings may require reloading the application to take effect.\nDo you want to reload now?')"
+            :content="$t(
+                'Some settings may require reloading the application to take effect.\nDo you want to reload now?'
+            )"
             :title="$t('Reload application')"
             :open="dialogs.reload.open"
             v-on:close="toggleDialog('reload', false)"
@@ -189,9 +191,33 @@
         <toast-stack></toast-stack>
         <!-- File inputs for opening a select file or folder dialog -->
         <input type="file" ref="open-file" style="visibility:hidden" multiple="true" @change="handleFileSelect" />
-        <input type="file" ref="open-folder" style="visibility:hidden" webkitdirectory="true" directory="true" multiple="true" @change="handleFolderSelect" />
-        <input type="file" ref="open-study" style="visibility:hidden" webkitdirectory="true" directory="true" multiple="true" @change="handleStudySelect" />
-        <input type="file" ref="open-dataset" style="visibility:hidden" webkitdirectory="true" directory="true" multiple="true" @change="handleDatasetSelect" />
+        <input
+            directory="true"
+            multiple="true"
+            ref="open-folder"
+            style="visibility:hidden"
+            type="file"
+            webkitdirectory="true"
+            @change="handleFolderSelect"
+        />
+        <input
+            directory="true"
+            multiple="true"
+            ref="open-study"
+            style="visibility:hidden"
+            type="file"
+            webkitdirectory="true"
+            @change="handleStudySelect"
+        />
+        <input
+            directory="true"
+            multiple="true"
+            ref="open-dataset"
+            style="visibility:hidden"
+            type="file"
+            webkitdirectory="true"
+            @change="handleDatasetSelect"
+        />
     </div>
 </template>
 
@@ -467,7 +493,7 @@ export default defineComponent({
          * Handle file selection.
          */
         async handleFileSelect (event: any) {
-            const selected = (event.target as any).files as FileList
+            const selected = (event.target as HTMLInputElement).files as FileList
             if (selected.length) {
                 this.importFile(selected[0], this.fileContext.protocol, this.fileContext.types)
             }
@@ -477,7 +503,7 @@ export default defineComponent({
          * Handle file folder selection.
          */
         async handleFolderSelect (event: any) {
-            const fileList = (event.target as any).files as FileList
+            const fileList = (event.target as HTMLInputElement).files as FileList
             const acceptExts = this.fileContext.types.map(t => {
                 return Object.values(t.accept).flat()
             }).flat()
@@ -647,7 +673,10 @@ export default defineComponent({
                         this.resetContext()
                         return
                     } else {
-                        Log.error(`Opening file with file picker failed, defaulting to file input (${e.toString()}).`, 'App', e)
+                        Log.error(
+                            `Opening file with file picker failed, defaulting to file input (${e.toString()}).`,
+                            'App', e
+                        )
                     }
                 }
             }
@@ -664,7 +693,10 @@ export default defineComponent({
         downloadExport (result: { edf: ArrayBuffer, fileName: string, sidecar: string }) {
             this.downloadBlob(result.edf, `${result.fileName}.edf`, 'application/octet-stream')
             const wantSidecar = window.confirm(
-                this.$t('The EDF file has been de-identified. Also download the sidecar file with the original metadata?')
+                this.$t(
+                    'The EDF file has been de-identified. '
+                    + 'Also download the sidecar file with the original metadata?'
+                )
             )
             if (wantSidecar) {
                 this.downloadBlob(result.sidecar, `${result.fileName}.edf.json`, 'application/json')
@@ -800,7 +832,10 @@ export default defineComponent({
         // Listen to style update requests.
         this.$store.subscribe((mutation) => {
             Log.debug(
-                `Store commit event ${mutation.type + (mutation.payload?.component ? ' (' + mutation.payload.component + ')' : '')}.`,
+                `Store commit event ${
+                    mutation.type
+                    + (mutation.payload?.component ? ' (' + mutation.payload.component + ')' : '')
+                }.`,
                 this.$options.name!
             )
             if (this.$store.state.APP.shadowRoot && mutation.type === 'add-styles') {

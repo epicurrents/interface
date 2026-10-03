@@ -411,8 +411,7 @@ function drawTrends() {
     ctx.clearRect(0, 0, w, h)
 
     const totalDuration = RESOURCE.totalDuration
-    const interruptions = (RESOURCE as unknown as { getInterruptions?: () => { start: number; duration: number }[] })
-        .getInterruptions?.() ?? []
+    const interruptions = RESOURCE.getInterruptions()
     const isMirrored = mirrorMode.value && labelMode.value === 'separate'
 
     if (totalDuration && trends.value.length) {

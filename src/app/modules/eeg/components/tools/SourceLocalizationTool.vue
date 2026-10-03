@@ -222,7 +222,7 @@ export default defineComponent({
          * maps from the setup name, falling back to 'standard_1020'.
          */
         getMneMontage (): string {
-            const setupName = (this.RESOURCE as unknown as { setup?: { name?: string } })?.setup?.name ?? ''
+            const setupName = this.RESOURCE.setup?.name ?? ''
             return SETUP_TO_MNE[setupName] ?? 'standard_1020'
         },
         /**
@@ -299,7 +299,7 @@ export default defineComponent({
 
             // 3. Push the lead field + parameters into the Pyodide worker.
             this.statusMessage = this.$t('Setting up inverse solver…')
-            const sfreq = (this.RESOURCE as unknown as { samplingRate?: number }).samplingRate ?? 256
+            const sfreq = this.RESOURCE.samplingRate ?? 256
             const setupOk = await this.sourceLoc.setup(
                 service,
                 sfreq,
@@ -314,7 +314,10 @@ export default defineComponent({
                 return
             }
 
-            Log.debug(`Source localisation ready (${setup.channelNames.length} channels, ${setup.nSources} sources).`, SCOPE)
+            Log.debug(
+                `Source localisation ready (${setup.channelNames.length} channels, ${setup.nSources} sources).`,
+                SCOPE
+            )
             this.state = 'ready'
             // Transfer canvas control to the Pyodide worker now that the DOM
             // is in its final state.  transferControlToOffscreen() can only be
@@ -339,7 +342,7 @@ export default defineComponent({
             this.state = 'computing'
             this.resultSummary = null
             // Re-push method + SNR in case the user changed them since load.
-            const sfreq = (this.RESOURCE as unknown as { samplingRate?: number }).samplingRate ?? 256
+            const sfreq = this.RESOURCE.samplingRate ?? 256
             await this.sourceLoc.setup(
                 service,
                 sfreq,
@@ -351,7 +354,7 @@ export default defineComponent({
             const half = this.windowSec / 2
             const start = Math.max(0, this.cursorPos - half)
             const end   = Math.min(
-                (this.RESOURCE as unknown as { totalDuration?: number }).totalDuration ?? 0,
+                this.RESOURCE.totalDuration,
                 this.cursorPos + half,
             )
             const result = await this.sourceLoc.analyze(

@@ -12,6 +12,9 @@
  * Escape key: the composable calls cancelHotkeyEvents() then invokes the
  * viewer-supplied onEscape callback, which handles cursor-tool clearing,
  * overlay/sidebar teardown, and drag-state cleanup using setup()-scope refs.
+ * @package    epicurrents/interface
+ * @copyright  2026 Sampsa Lohi
+ * @license    Apache-2.0
  */
 
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'

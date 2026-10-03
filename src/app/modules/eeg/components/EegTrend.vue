@@ -149,20 +149,18 @@ export default defineComponent({
          * `selectedTrend` (or move the hook resolution into the registry entry).
          */
         recomputeTrends () {
-            const resource = this.RESOURCE as unknown as {
-                clearTrendTypes?: () => void
-                ensureTrendSetup?: (type?: string) => void
-                removeAllTrends?: () => void
-            }
+            const resource = this.RESOURCE
             const selectedTrend = (this.$store.state.INTERFACE as { modules?: Map<string, { selectedTrend?: string }> })
                 .modules?.get('eeg')?.selectedTrend ?? 'aeeg'
-            const trendType = TREND_REGISTRY[selectedTrend]?.derivationType ?? selectedTrend
+            // See `EegViewer.toggleTrend`: an unregistered selection resolves to the default
+            // rather than reaching `ensureTrendSetup` as a trend type the recording cannot build.
+            const trendType = TREND_REGISTRY[selectedTrend]?.derivationType ?? 'amplitude'
             // Remove trend objects, then clear the enabled-types set so stale types
             // (e.g. 'spectrogram' when switching to 'amplitude') don't cause both
             // trend types to be built in the same setup pass.
-            resource.removeAllTrends?.()
-            resource.clearTrendTypes?.()
-            resource.ensureTrendSetup?.(trendType)
+            resource.removeAllTrends()
+            resource.clearTrendTypes()
+            resource.ensureTrendSetup(trendType)
         },
     },
     beforeMount () {

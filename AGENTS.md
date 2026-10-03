@@ -577,8 +577,20 @@ The Vuex state has two superficially-similar `Map`s. They actually contain diffe
 
 `store.subscribeAction(handler)` invokes the handler *before* the action's mutation handler runs. When `AppMenubar`'s subscribeAction iterates menu items' `reloadOn` callbacks, those callbacks need the post-action state. Use the `store.subscribeAction({ before, after })` form and put the reloadOn dispatch in `after`. Menu-closing logic (pointer-left-app, overlay-clicked) stays in `before` because its effect is independent of any state mutation.
 
+### A main property the navigator has no branch for renders as its own key
+
+`DataResource.getMainProperties()` returns a `Map` that is two things at once: for a state or progress message the key *is* the message and the value carries its interpolation parameters, and for a measured property the key is a field name and the value is the field's value. [NavigatorItem.vue](src/app/navigator/NavigatorItem.vue) branches on the key, and its final branch assumes the first shape — it hands the key to the translator as a message.
+
+So a resource that reports a new field name without a branch here does not fail; it renders whatever the locale makes of that name. A collection's `date` did, and because [en.ts](src/i18n/locales/en.ts) happens to define `date` as a date *format* (`{y}/{m}/{d}`), the value interpolated into placeholders a `Date` has no properties for and the panel showed `//`. Add a branch whenever a resource starts reporting a new key, and render a date through the locale's own `date` / `datetime` format rather than `toLocaleDateString`, so the order follows the language chosen in the application instead of the one the browser is set to.
+
 ### A settings menu path that names nothing is inert, not an error
 
 A module's settings live in two objects: the interface config in this package (`src/app/modules/<code>/config.ts`) and the core module package's own config (`epicurrents/<code>-module/src/config/`). `useContext`'s `SETTINGS` proxy joins them, so a menu field's `setting:` path may legitimately name a field in either one. A path that exists in neither resolves to nothing and `setFieldValue` returns false — the control renders, moves, and changes no state. The same applies to a `_userDefinable` key, which then quietly stops the field from persisting.
 
 [tests/settings-paths.test.ts](tests/settings-paths.test.ts) walks every menu path and every `_userDefinable` key of the four biosignal modules against the union of both trees, so a renamed setting fails the suite instead of shipping a control that does nothing.
+
+The two name the same field differently, which is its own trap. A menu field's `setting:` is the qualified path (`emg.trace.color`) and a `_userDefinable` key is the path within the module (`trace.color`), so anything comparing one against the other matches nothing and answers the same way for every field. `getSettingForInput` and `getInputForSetting` in [src/config/index.ts](src/config/index.ts) do exactly that comparison and drop the leading segment before making it; a new caller that resolves user-definability itself has to do the same.
+
+### `valueMap` is `[setting value, input value]`
+
+A settings control whose input cannot hold the stored value declares the correspondence as a `valueMap` on the menu field, stored value first. `[[1, false], [-1, true]]` on a checkbox over a numeric polarity presents `1` as unchecked and `-1` as checked. Both conversion helpers read the pair in that order, and the order is not self-evident from the data: for a boolean-over-number mapping either element satisfies the other's declared type, so a reversed declaration type-checks and converts nothing. [tests/settings-conversion.test.ts](tests/settings-conversion.test.ts) pins it with a colour setting, whose stored value is an array that the input side's type does not admit, so the reversal fails `test:types` rather than passing quietly.

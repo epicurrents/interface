@@ -14,12 +14,16 @@
  *
  * This file can be used as a template for adding more icon libraries in the future, if needed. The resolver can be
  * extended to support multiple libraries and the icon name can be used to determine which library to pull from.
+ * @package    epicurrents/interface
+ * @copyright  2025 Sampsa Lohi
+ * @license    Apache-2.0
  */
 
 // outlined
 import add from '@material-symbols/svg-400/outlined/add.svg?raw'
 import biotech from '@material-symbols/svg-400/outlined/biotech.svg?raw'
 import bookmark_add from '@material-symbols/svg-400/outlined/bookmark_add.svg?raw'
+import calendar_month from '@material-symbols/svg-400/outlined/calendar_month.svg?raw'
 import cancel from '@material-symbols/svg-400/outlined/cancel.svg?raw'
 import chat from '@material-symbols/svg-400/outlined/chat.svg?raw'
 import chat_bubble from '@material-symbols/svg-400/outlined/chat_bubble.svg?raw'
@@ -90,6 +94,7 @@ export const ICON_SVGS: Record<string, { outlined: string; filled?: string }> = 
     add:                            { outlined: add },
     biotech:                        { outlined: biotech },
     bookmark_add:                   { outlined: bookmark_add },
+    calendar_month:                 { outlined: calendar_month },
     cancel:                         { outlined: cancel },
     chat:                           { outlined: chat },
     chat_bubble:                    { outlined: chat_bubble },
@@ -170,6 +175,7 @@ const FA_TO_MATERIAL: Record<string, string> = {
     'bars':                             'menu',
     'book':                             'menu_book',
     'bookmark-plus':                    'bookmark_add',
+    'calendar':                         'calendar_month',
     'check':                            'check',
     'check-circle':                     'check_circle',
     'chevron-down':                     'keyboard_arrow_down',

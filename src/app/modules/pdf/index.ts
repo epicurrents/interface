@@ -72,7 +72,8 @@ export const actions = {
         if (!activeSet.resources) {
             return
         }
-        const resource = activeSet.resources.filter(ctx => ctx.resource.isActive)[0].resource as PaginatedDocumentResource
+        const resource = activeSet.resources
+            .filter(ctx => ctx.resource.isActive)[0].resource as PaginatedDocumentResource
         if (resource.modality !== 'pdf' && resource.modality !== 'htm') {
             return
         }
@@ -88,7 +89,8 @@ export const actions = {
         if (!activeSet.resources) {
             return
         }
-        const resource = activeSet.resources.filter(ctx => ctx.resource.isActive)[0].resource as PaginatedDocumentResource
+        const resource = activeSet.resources
+            .filter(ctx => ctx.resource.isActive)[0].resource as PaginatedDocumentResource
         if (resource.modality !== 'pdf' && resource.modality !== 'htm') {
             return
         }
@@ -104,7 +106,8 @@ export const actions = {
         if (!activeSet.resources) {
             return
         }
-        const resource = activeSet.resources.filter(ctx => ctx.resource.isActive)[0].resource as PaginatedDocumentResource
+        const resource = activeSet.resources
+            .filter(ctx => ctx.resource.isActive)[0].resource as PaginatedDocumentResource
         if (resource.modality !== 'pdf') {
             return
         }
@@ -120,7 +123,8 @@ export const actions = {
         if (!activeSet.resources) {
             return
         }
-        const resource = activeSet.resources.filter(ctx => ctx.resource.isActive)[0].resource as PaginatedDocumentResource
+        const resource = activeSet.resources
+            .filter(ctx => ctx.resource.isActive)[0].resource as PaginatedDocumentResource
         if (resource.modality !== 'pdf') {
             return
         }
@@ -136,7 +140,8 @@ export const actions = {
         if (!activeSet.resources) {
             return
         }
-        const resource = activeSet.resources.filter(ctx => ctx.resource.isActive)[0].resource as PaginatedDocumentResource
+        const resource = activeSet.resources
+            .filter(ctx => ctx.resource.isActive)[0].resource as PaginatedDocumentResource
         if (resource.modality !== 'pdf') {
             return
         }
@@ -152,7 +157,8 @@ export const actions = {
         if (!activeSet.resources) {
             return
         }
-        const resource = activeSet.resources.filter(ctx => ctx.resource.isActive)[0].resource as PaginatedDocumentResource
+        const resource = activeSet.resources
+            .filter(ctx => ctx.resource.isActive)[0].resource as PaginatedDocumentResource
         if (resource.modality !== 'pdf' && resource.modality !== 'htm') {
             return
         }

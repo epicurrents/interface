@@ -107,7 +107,9 @@ export default defineComponent({
             const startX = Math.max(highlight.start - this.RESOURCE.viewStart, 0) * this.pxPerSecond
             const endX = Math.max(highlight.end - this.RESOURCE.viewStart, 0) * this.pxPerSecond
             const bg = Array.isArray(highlight.opacity)
-                ? `background-image: linear-gradient(to right, ${settingsColorToRgba(highlight.color, highlight.opacity[0])},${settingsColorToRgba(highlight.color, highlight.opacity[1])})`
+                ? 'background-image: linear-gradient(to right, '
+                  + `${settingsColorToRgba(highlight.color, highlight.opacity[0])},`
+                  + `${settingsColorToRgba(highlight.color, highlight.opacity[1])})`
                 : `background-color:${settingsColorToRgba(highlight.color, highlight.opacity)}`
             return `top: 0; bottom: 0; left: ${startX}px; width: ${endX - startX}px; ${bg}`
         },
@@ -130,7 +132,9 @@ export default defineComponent({
             const bottom = `${100*channel.offset.bottom}%`
             // Color
             const bg = Array.isArray(highlight.opacity)
-                       ? `background-image: linear-gradient(to right, ${settingsColorToRgba(highlight.color, highlight.opacity[0])},${settingsColorToRgba(highlight.color, highlight.opacity[1])})`
+                       ? 'background-image: linear-gradient(to right, '
+                         + `${settingsColorToRgba(highlight.color, highlight.opacity[0])},`
+                         + `${settingsColorToRgba(highlight.color, highlight.opacity[1])})`
                        : `background-color:${settingsColorToRgba(highlight.color, highlight.opacity)}`
             return `top: ${top}; bottom: ${bottom}; left: ${startX}px; width: ${endX - startX}px; ${bg}`
         },

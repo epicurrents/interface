@@ -6,6 +6,9 @@
  * Single-channel recordings (NCS, EMG) are handled transparently: when the
  * resource has exactly one channel, that channel is used as the fallback for
  * selections that carry no channel reference.
+ * @package    epicurrents/interface
+ * @copyright  2026 Sampsa Lohi
+ * @license    Apache-2.0
  */
 
 import { reactive } from 'vue'

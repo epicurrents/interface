@@ -141,7 +141,10 @@ export type InterfaceSchema = SafeObject & {
             min?: number
             /** Dropdown options. */
             options?: DropdownItem[]
-            /** Settings presets; fields in this array will be set to the corresponding values if the preset is selected. */
+            /**
+             * Settings presets; fields in this array will be set to the corresponding values if
+             * the preset is selected.
+             */
             presets?: {
                 /** Setting field name. */
                 setting: string
@@ -170,9 +173,9 @@ export type InterfaceSchema = SafeObject & {
         }
     }
     /**
-     * Get the `input` value corresponding to a settings `field` value. Checks if field can be altered by the user and
-     * takes into account possible mapped values. Can be used to convert a value stored in settings to a value to use in an
-     * input field.
+     * Get the `input` value corresponding to a settings `field` value. Checks if field can be
+     * altered by the user and takes into account possible mapped values. Can be used to convert a
+     * value stored in settings to a value to use in an input field.
      * @param field - Name of the setting field.
      * @param setting - Value stored in settings.
      * @returns Input field value or undefined if not alterable/not found.

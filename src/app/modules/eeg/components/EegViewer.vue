@@ -578,7 +578,10 @@ export default defineComponent({
         })
 
         const keyboard = useBiosignalKeyboard(
-            ['annotation', 'examine', 'fft', 'inspect', 'montage1', 'montage2', 'montage3', 'montage4', 'notch', 'report', 'topogram'],
+            [
+                'annotation', 'examine', 'fft', 'inspect', 'montage1', 'montage2', 'montage3',
+                'montage4', 'notch', 'report', 'topogram',
+            ],
             eegCtx.SETTINGS,
             () => (store.state as any).INTERFACE.app.reservedKeys,
             () => (store.state as any).INTERFACE.app.hotkeyAltOrOpt,
@@ -586,7 +589,10 @@ export default defineComponent({
                 store.dispatch('eeg.set-cursor-tool', null)
                 analysis.closeAnalysisWindow()
                 const activeChans = eegCtx.RESOURCE.activeMontage?.channels.filter((c: any) => c?.isActive) || []
-                if (menuChannel.value && activeChans.length === 1 && (activeChans[0] as any)?.id === menuChannel.value.id) {
+                if (
+                    menuChannel.value && activeChans.length === 1
+                    && (activeChans[0] as any)?.id === menuChannel.value.id
+                ) {
                     (menuChannel.value as any).isActive = false
                 }
                 menuChannel.value = null
@@ -1360,7 +1366,10 @@ export default defineComponent({
                     // shape is keyed by setup name (mirroring extraMontages), so check
                     // Object.keys().length, not Array.length.
                     const cascadeEntries = this.SETTINGS.cascadeMontages
-                    if (cascadeEntries && Object.keys(cascadeEntries).length && this.RESOURCE.addCascadeMontagesFromEntries) {
+                    if (
+                        cascadeEntries && Object.keys(cascadeEntries).length
+                        && this.RESOURCE.addCascadeMontagesFromEntries
+                    ) {
                         this.RESOURCE.addCascadeMontagesFromEntries(cascadeEntries)
                     }
                 }
@@ -1526,25 +1535,25 @@ export default defineComponent({
                 // trend already exists for the active montage, so repeated toggles are cheap;
                 // it also handles the case of caching not yet complete by queueing the request
                 // for the `SIGNAL_CACHING_COMPLETE` event.
-                const resource = this.RESOURCE as unknown as {
-                    ensureTrendSetup?: (type?: string) => void
-                    removeAllTrends?: () => void
-                    clearTrendTypes?: () => void
-                    trends?: Record<string, { derivation: { type: string } }>
-                }
-                const selectedTrend = (this.$store.state.INTERFACE as { modules?: Map<string, { selectedTrend?: string }> })
-                    .modules?.get('eeg')?.selectedTrend ?? 'aeeg'
-                const trendType = TREND_REGISTRY[selectedTrend]?.derivationType ?? selectedTrend
+                const resource = this.RESOURCE
+                const selectedTrend = (
+                    this.$store.state.INTERFACE as { modules?: Map<string, { selectedTrend?: string }> }
+                ).modules?.get('eeg')?.selectedTrend ?? 'aeeg'
+                // A selection the registry does not know has no derivation type of its own, so it
+                // resolves to the default rather than being passed through as one. `selectedTrend`
+                // is a free-form runtime string and `ensureTrendSetup` takes the trend-type union,
+                // so forwarding it would hand the recording a type it cannot build.
+                const trendType = TREND_REGISTRY[selectedTrend]?.derivationType ?? 'amplitude'
                 // If the strip was hidden while the user switched trend types, existing
                 // trends are the wrong type. Remove them before building the new type.
                 const existingTypes = new Set(
-                    Object.values(resource.trends ?? {}).map(t => t.derivation.type)
+                    Object.values(resource.trends).map(t => t.derivation.type)
                 )
                 if (existingTypes.size > 0 && !existingTypes.has(trendType)) {
-                    resource.removeAllTrends?.()
-                    resource.clearTrendTypes?.()
+                    resource.removeAllTrends()
+                    resource.clearTrendTypes()
                 }
-                resource.ensureTrendSetup?.(trendType)
+                resource.ensureTrendSetup(trendType)
             } else {
                 this.navigatorHeight = NAVIGATOR_MIN_HEIGHT
             }

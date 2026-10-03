@@ -14,7 +14,12 @@
             </wa-tab>
             <wa-tab-panel name="general">
                 <wa-callout>
-                    <p>{{ $t(`Below are general use instructions. Feature-specific instructions can be found in their respective tabs.`)}}</p>
+                    <p>{{
+                        $t(
+                            `Below are general use instructions. ` +
+                            `Feature-specific instructions can be found in their respective tabs.`
+                        )
+                    }}</p>
                 </wa-callout>
                 <wa-divider></wa-divider>
                 <h3>{{ $t('Preferences') }}</h3>
@@ -22,13 +27,15 @@
                 <p>{{
                     $t(
                         `On he menu bar on top of the page, select Settings > User preferences. ` +
-                        `The settings are divided into general application settings and module-specific settings, each having their own tab.`
+                        `The settings are divided into general application settings and module-specific settings, ` +
+                        `each having their own tab.`
                     )
                 }}</p>
                 <p>
                     {{
                         $t(
-                            `Many of the settings can be changed on-the-fly, while others require a page reload to take effect. ` +
+                            `Many of the settings can be changed on-the-fly, while others require a page reload to ` +
+                            `take effect. ` +
                             `Settings that require a page reload are marked with an orange rotating arrow `
                         )
                     }}
@@ -36,7 +43,8 @@
                     {{
                         $t(
                             `You will be prompted to reload the page after changing any of these settings. ` +
-                            `Note that the reload will reset the application state, meaning that you may have to reopen any resources you were working with.`
+                            `Note that the reload will reset the application state, meaning that you may have to ` +
+                            `reopen any resources you were working with.`
                         )
                     }}
                 </p>
@@ -44,7 +52,8 @@
                 <p>{{
                     $t(
                         `Changed settings are saved into the browsers session storage, which survives page reloads. ` +
-                        `If you want settings to be saved across browser tabs and sessions, you can opt to save them into a cookie (browser local storage). ` +
+                        `If you want settings to be saved across browser tabs and sessions, you can opt to save them ` +
+                        `into a cookie (browser local storage). ` +
                         `The cookie can be cleared by switching this feature off.`
                     )
                 }}</p>
@@ -52,7 +61,8 @@
                 <p>{{
                     $t(
                         `The application and its modules support a variety of hotkey actions. ` +
-                        `If you don't want these actions to be triggered by accident, you can require the use of the Alt (Windows) / Opt (Mac) key to be pressed simultaneously.`
+                        `If you don't want these actions to be triggered by accident, you can require the use of the ` +
+                        `Alt (Windows) / Opt (Mac) key to be pressed simultaneously.`
                     )
                 }}</p>
                 <h4>{{ $t(`Interface language`) }}</h4>
@@ -63,15 +73,20 @@
                 <p>{{
                     $t(
                         `Many biological signals are expected to be viewed at standard calibrations. ` +
-                        `Since a JavaScript application cannot get accurate information about the screen that is used, this calibration must be done manually. ` +
-                        `To calibrate the screen, drag the right end of the ruler until the ruler is 10 cm / 4 inches long. ` +
-                        `The screen is expected to have a 1:1 pixel ratio and the same value is also used for vertical scaling.`
+                        `Since a JavaScript application cannot get accurate information about the screen that is ` +
+                        `used, this calibration must be done manually. ` +
+                        `To calibrate the screen, drag the right end of the ruler until the ruler is 10 cm / 4 ` +
+                        `inches long. ` +
+                        `The screen is expected to have a 1:1 pixel ratio and the same value is also used for ` +
+                        `vertical scaling.`
                     )
                 }}</p>
                 <p>{{
                     $t(
-                        `To calibrate the screen, drag the right end of the ruler until the ruler is 10 cm / 4 inches long. ` +
-                        `The screen is expected to have a 1:1 pixel aspect ratio and the same value is also used for vertical scaling.`
+                        `To calibrate the screen, drag the right end of the ruler until the ruler is 10 cm / 4 ` +
+                        `inches long. ` +
+                        `The screen is expected to have a 1:1 pixel aspect ratio and the same value is also used for ` +
+                        `vertical scaling.`
                     )
                 }}</p>
             </wa-tab-panel>

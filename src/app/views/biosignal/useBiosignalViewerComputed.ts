@@ -2,6 +2,9 @@
  * Composable for computed properties that are identical across all biosignal viewers.
  * Accepts the module settings object and returns computed refs that can be spread
  * into setup() so they are accessible as `this.<property>` in the Options API.
+ * @package    epicurrents/interface
+ * @copyright  2026 Sampsa Lohi
+ * @license    Apache-2.0
  */
 
 import { computed } from 'vue'

@@ -264,15 +264,25 @@ export default defineComponent({
             }
         })
         this.updateIntv = window.setInterval(() => {
-            if (typeof (performance as any).memory !== 'undefined') {
-                this.usedHeap = (performance as any).memory.usedJSHeapSize
-                this.totalHeap = (performance as any).memory.totalJSHeapSize
-                this.totalMem = (performance as any).memory.jsHeapSizeLimit
+            // `performance.memory` is a non-standard extension to the Performance interface and is
+            // absent from the DOM typings, so the shape it reports is named here. It is declared
+            // locally rather than globally because nothing else in the package reads it, and a
+            // browser that does not provide it stops the poll below.
+            const memory = (performance as Performance & {
+                memory?: { jsHeapSizeLimit: number, totalJSHeapSize: number, usedJSHeapSize: number }
+            }).memory
+            if (memory) {
+                this.usedHeap = memory.usedJSHeapSize
+                this.totalHeap = memory.totalJSHeapSize
+                this.totalMem = memory.jsHeapSizeLimit
                 const heapPercent = (this.totalHeap/this.totalMem)*100
                 // Only give possible warning every 10 % to avoid flooding the log.
                 const heapPerdec = Math.floor(heapPercent/10)
                 if (heapPercent >= 50 && this.lastHeapWarning < heapPerdec) {
-                    Log.warn(`JavaScript heap size is ${heapPercent.toFixed(1)} % of total available memory.`, 'SystemFooter')
+                    Log.warn(
+                        `JavaScript heap size is ${heapPercent.toFixed(1)} % of total available memory.`,
+                        'SystemFooter'
+                    )
                     this.lastHeapWarning = heapPerdec
                 }
             } else {

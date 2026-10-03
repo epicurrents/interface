@@ -10,12 +10,11 @@
     "build:dist": "vite build --config vite.config.dist.ts",
     "build:types": "node scripts/build-types.mjs",
     "dev": "vite --force",
-    "lint": "npm run lint:src",
-    "lint:src": "eslint src",
     "prepack": "npm run build",
     "preview": "vite preview",
     "start": "vite --force",
-    "test": "npm run test:unit",
+    "test": "npm run test:types && npm run test:unit",
+    "test:types": "vue-tsc --noEmit -p tsconfig.test.json",
     "test:unit": "vitest run --coverage",
     "typecheck": "node scripts/typecheck.mjs"
   },
@@ -83,7 +82,7 @@
     "yaml": "^2.8.2"
   },
   "devDependencies": {
-    "@epicurrents/core": "^0.3.0 || ^1.0.0",
+    "@epicurrents/core": "^2.0.0",
     "@types/lodash": "^4.17.23",
     "@vitejs/plugin-vue": "^6.0.2",
     "dotenv": "^17.3.1",
@@ -99,7 +98,7 @@
     "vue-tsc": "^2.2.0"
   },
   "peerDependencies": {
-    "@epicurrents/core": "^0.3.0 || ^1.0.0",
+    "@epicurrents/core": "^2.0.0",
     "scoped-event-log": "^3.2.0"
   }
 }

@@ -298,7 +298,9 @@ const guidelineSegments = computed(() => {
     const w = canvasWidth.value
     const pps = pxPerSecond.value
     const gaps = interruptions.value
-        .map(({ start, duration }) => [Math.floor(start * pps), Math.ceil((start + duration) * pps)] as [number, number])
+        .map(({ start, duration }) =>
+            [Math.floor(start * pps), Math.ceil((start + duration) * pps)] as [number, number]
+        )
         .sort((a, b) => a[0] - b[0])
     for (const m of scaleMarkers.value) {
         let cursor = 1
@@ -577,8 +579,7 @@ const handleDblClick = (event: MouseEvent) => {
 }
 
 const refreshInterruptions = () => {
-    interruptions.value = (RESOURCE as unknown as { getInterruptions?: () => { start: number, duration: number }[] })
-        .getInterruptions?.() ?? []
+    interruptions.value = RESOURCE.getInterruptions()
 }
 
 onMounted(() => {

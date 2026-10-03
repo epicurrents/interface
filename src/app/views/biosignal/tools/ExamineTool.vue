@@ -8,7 +8,11 @@
             @contextmenu.prevent=""
         >
             <g v-if="activeProps">
-                <line v-if="activeProps.baseline > 0" x1="0" :y1="activeProps.baseline" :x2="svgWidth" :y2="activeProps.baseline"
+                <line v-if="activeProps.baseline > 0"
+                    x1="0"
+                    :x2="svgWidth"
+                    :y1="activeProps.baseline"
+                    :y2="activeProps.baseline"
                     shape-rendering="crispEdges"
                     :stroke="settingsColorToRgba(SETTINGS.tools.signalBaseline.color)"
                     :stroke-dasharray="settingsDashArrayToSvgStrokeDasharray(
@@ -90,7 +94,9 @@
                     <!-- &Delta; does not work in I18n parameter replacement string for some reason -->
                     <span class="double">{{ $t('Voltage / Δ ({unit})', { unit: $t(activeSelection.channel.unit) }) }}</span>
                 </div>
-                <div v-for="(cursor, idx) of activeSelection.markers" :key="`examine-tool-cursor-info-${idx}`" class="row">
+                <div v-for="(cursor, idx) of activeSelection.markers" :key="`examine-tool-cursor-info-${idx}`"
+                    class="row"
+                >
                     <span class="order">{{ idx+1 }}</span>
                     <span class="value">{{
                         cursor.index >= 0 && cursor.index < activeSelection.signal.data.length
@@ -137,7 +143,9 @@
                     <span class="semi">{{ getDistanceBetween(activeSelection.markers[1], activeSelection.markers[2]).toFixed(1) }} mm</span>
                     <span class="semi">{{ getAngleBetween(activeSelection.markers[1], activeSelection.markers[2]).toFixed(1) }} &deg;</span>
                 </div>
-                <div v-if="activeSelection.markers.length >= 3" class="row" :key="`examine-tool-spike-duration-${version}`">
+                <div v-if="activeSelection.markers.length >= 3" :key="`examine-tool-spike-duration-${version}`"
+                    class="row"
+                >
                     <span class="double">{{ $t('Duration') }}</span>
                     <span class="double">{{ getTimeBetween(activeSelection.markers[0], activeSelection.markers[2]).toFixed() }} ms</span>
                 </div>
@@ -264,7 +272,8 @@ export default defineComponent({
             let minHz = 0
             let maxHz = 0
             for (let i=1; i<markerPositions.length; i++) {
-                const intrvlHz = (this.activeSelection?.channel.samplingRate || 0)/(markerPositions[i] - markerPositions[i - 1])
+                const intrvlHz = (this.activeSelection?.channel.samplingRate || 0)
+                                 / (markerPositions[i] - markerPositions[i - 1])
                 if (!minHz || intrvlHz < minHz) {
                     minHz = intrvlHz
                 }
@@ -276,7 +285,8 @@ export default defineComponent({
             const minPos = Math.min(...markerPositions)
             return {
                 min: minHz,
-                mean: (this.activeSelection?.channel.samplingRate || 0)/((maxPos - minPos)/(markerPositions.length - 1)),
+                mean: (this.activeSelection?.channel.samplingRate || 0)
+                      / ((maxPos - minPos)/(markerPositions.length - 1)),
                 max: maxHz
             }
         },

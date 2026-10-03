@@ -1,3 +1,10 @@
+/**
+ * Version 1.0.0 of the report schema: the sections, field kinds and match operations a report
+ * form may declare, and the validator shape assembled from them.
+ * @package    epicurrents/interface
+ * @copyright  2026 Sampsa Lohi
+ * @license    Apache-2.0
+ */
 /** Valid section names for field references. */
 export const REF_SECTIONS = ['description', 'evaluation', 'parsed'] as ReportSection[]
 /** Shorthand references to section/field pairs. */

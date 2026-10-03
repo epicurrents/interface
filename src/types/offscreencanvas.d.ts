@@ -37,7 +37,8 @@ declare var OffscreenCanvasRenderingContext2D: {
 };
 
 // https://html.spec.whatwg.org/multipage/canvas.html#the-offscreencanvas-interface
-// Possible contextId values are defined by the enum OffscreenRenderingContextId { "2d", "bitmaprenderer", "webgl", "webgl2" }
+// Possible contextId values are defined by the enum
+// OffscreenRenderingContextId { "2d", "bitmaprenderer", "webgl", "webgl2" }
 // See also description: https://developer.mozilla.org/en-US/docs/Web/API/OffscreenCanvas/getContext
 interface OffscreenCanvas extends EventTarget {
     width: number;

@@ -23,6 +23,7 @@ const messagesEN = {
     date: '{y}/{m}/{d}',
     datetime: '{y}/{m}/{d} {h}:{min}',
     'Dataset {n}': 'Dataset {n}',
+    'Date: {d}': 'Date: {d}',
     'Day {d}': 'Day {d}',
     'Dipole ({x}, {y}, {z}) mm — GOF {gof}%': 'Dipole ({x}, {y}, {z}) mm — GOF {gof}%',
     'Document has a total of {n} pages': 'Document has a total of {n} pages',
@@ -47,7 +48,8 @@ const messagesEN = {
         basic: 'Basic',
         instruction: 'Read the below information carefully before proceeding.',
         login: 'Log in',
-        medical: 'This software is designed solely for educational and scientific use. It is not a medical device and may not be used for medical diagnostics.',
+        medical: 'This software is designed solely for educational and scientific use. '
+                 + 'It is not a medical device and may not be used for medical diagnostics.',
         notice: {
             default: 'By continuing you accept the disclaimer.',
             disclaimer: 'You must accept the disclaimer to use the application.',
@@ -58,8 +60,11 @@ const messagesEN = {
         select: 'Select your name to log in',
         title: 'Welcome to Epicurrents!',
         username: 'Username',
-        version: 'Choose the version to use. The advanced version offers more signal processing tools but requires more resources from your device.',
-        warranty: 'This is free software and is provided "as is". It comes with no warranty of any kind. The authors of this software are not responsible for any damages or losses caused by the use of this software.',
+        version: 'Choose the version to use. The advanced version offers more signal processing '
+                 + 'tools but requires more resources from your device.',
+        warranty: 'This is free software and is provided "as is". It comes with no warranty of any '
+                  + 'kind. The authors of this software are not responsible for any damages or '
+                  + 'losses caused by the use of this software.',
     },
     '{n} channels': '{n} channel | {n} channels',
     '{n} errors': '{n} error | {n} errors',

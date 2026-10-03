@@ -496,8 +496,12 @@ export default defineComponent({
             () => {
                 store.dispatch('acc.set-cursor-tool', null)
                 analysis.closeAnalysisWindow()
-                const activeChans = accCtx.RESOURCE.activeMontage?.channels.filter((c: MontageChannel) => c?.isActive) || []
-                if (menuChannel.value && activeChans.length === 1 && (activeChans[0] as MontageChannel)?.id === (menuChannel.value as MontageChannel).id) {
+                const activeChans = accCtx.RESOURCE.activeMontage?.channels
+                                          .filter((c: MontageChannel) => c?.isActive) || []
+                if (
+                    menuChannel.value && activeChans.length === 1
+                    && (activeChans[0] as MontageChannel)?.id === (menuChannel.value as MontageChannel).id
+                ) {
                     (menuChannel.value as MontageChannel).isActive = false
                 }
                 menuChannel.value = null

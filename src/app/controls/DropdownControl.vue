@@ -222,7 +222,7 @@ export default defineComponent({
             this.$emit('selected', item)
         },
         selectOption (event: CustomEvent) {
-            const { disabled, value } = event.target as any
+            const { disabled, value } = event.target as HTMLElement & { disabled?: boolean, value: string }
             if (!disabled) {
                 this.$emit('selected', { id: value, onclick: this.optionActions.get(value) || ['', null] })
             }

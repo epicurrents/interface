@@ -132,6 +132,33 @@ export default defineComponent({
                         strParams.text = value.toString()
                         strParams.tooltip = this.$t('{n} signals', { n: value })
                         props.unshift(strParams) // Show signals count first.
+                    } else if (name === 'date' && value instanceof Date) {
+                        // A collection reports its date under this key, which makes it the one main
+                        // property whose key names a field rather than being the message itself.
+                        // Falling through to the branch below hands the key to the translator, which
+                        // resolves it to the locale's own `date` format and interpolates a `Date`
+                        // into placeholders it has no properties for, rendering `//`.
+                        //
+                        // That format is where a date belongs, so the parts are passed as the
+                        // parameters it asks for. Going through the locale rather than
+                        // `toLocaleDateString` is also what keeps the order the user reads matching
+                        // the language they chose in the application, which need not be the one the
+                        // browser is set to.
+                        const parts = {
+                            y: value.getFullYear(),
+                            m: value.getMonth() + 1,
+                            d: value.getDate(),
+                        }
+                        const time = {
+                            h: value.getHours(),
+                            min: String(value.getMinutes()).padStart(2, '0'),
+                        }
+                        strParams.icon = 'calendar'
+                        strParams.text = this.$t('date', parts)
+                        strParams.tooltip = this.$t('Date: {d}', {
+                            d: this.$t('datetime', { ...parts, ...time }),
+                        })
+                        props.push(strParams)
                     } else {
                         // State / dependency messages from `getMainProperties()` come back with the
                         // message text as the map key and a placeholder object as the value, e.g.

@@ -19,6 +19,9 @@
  * navigatorHeight is passed as a writable ref by viewers that have a
  * resizable navigator strip (EEG, EMG). NCS omits it; its yOffset defaults
  * to borderWidth.top + borderWidth.bottom.
+ * @package    epicurrents/interface
+ * @copyright  2026 Sampsa Lohi
+ * @license    Apache-2.0
  */
 
 import { computed, ref } from 'vue'

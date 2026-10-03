@@ -13,6 +13,9 @@ This package builds to the per-module **`dist/` package** — the form other bui
 | `npm run build:app` | a self-contained standalone web app in `build/app/` (`vite.config.app.ts`), for quick demos |
 | `npm run typecheck` | type-check only, honouring `INCLUDE_MODULES` (see [scripts/README.md](scripts/README.md)) |
 | `npm run build:types` | the declarations alone (`scripts/build-types.mjs`), useful while iterating on the public type surface |
+| `npm run test` | the suite: `test:types` first, then `test:unit` |
+| `npm run test:types` | type-check the suite against `tsconfig.test.json`, which the build config does not cover |
+| `npm run test:unit` | the vitest run with coverage |
 
 The `@epicurrents/*` packages are cloned, installed and built by the builder (`frontend/viewer/scripts/`) — the interface no longer manages them itself, and worker bundles are emitted by Vite rather than copied.
 

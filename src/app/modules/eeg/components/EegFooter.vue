@@ -46,7 +46,9 @@ export default defineComponent({
     },
     beforeMount () {
         // Add component styles to shadow root
-        //this.$store.dispatch('add-component-styles', { component: this.$options.name, styles: this.$options.__scopeId })
+        //this.$store.dispatch(
+        //    'add-component-styles', { component: this.$options.name, styles: this.$options.__scopeId }
+        //)
     },
     mounted () {
         this.RESOURCE.onPropertyChange('dependenciesReady', this.updateDependencies, this.$options.name!)

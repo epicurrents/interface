@@ -207,8 +207,7 @@ function drawTrend() {
 
     const col    = color.value
     const alpha  = col[3] ?? 1
-    const interruptions = (RESOURCE as unknown as { getInterruptions?: () => { start: number; duration: number }[] })
-        .getInterruptions?.() ?? []
+    const interruptions = RESOURCE.getInterruptions()
 
     // ── Fill ──────────────────────────────────────────────────────────────────
     // Fill represents the area between the threshold and the trace for contiguous

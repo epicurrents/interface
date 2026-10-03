@@ -74,7 +74,9 @@
                 </div>
             </template>
             <template v-else-if="activeSelection">
-                <div class="row" v-for="(band, idx) in activeSelection.frequencyBandProperties" :key="`fft-power-density-row-${idx}`">
+                <div v-for="(band, idx) in activeSelection.frequencyBandProperties" :key="`fft-psd-row-${idx}`"
+                    class="row"
+                >
                     <span class="label">{{ $t(band.name, {}, true) }}</span>
                     <span :class="[
                         'value',
@@ -402,7 +404,10 @@ export default defineComponent({
                 points.push(`${this.svgWidth + 1},${this.svgHeight + 1}`)
                 points.push(`-1,${this.svgHeight + 1}`)
                 points.push(`-1,${this.svgHeight*(1 - fft.psds[0]/fftMax)}`)
-                points.push(`${(fft.frequencyBins[0]/this.maxHz)*this.svgWidth},${this.svgHeight*(1 - fft.psds[0]/fftMax)}`)
+                points.push(
+                    `${(fft.frequencyBins[0]/this.maxHz)*this.svgWidth},`
+                    + `${this.svgHeight*(1 - fft.psds[0]/fftMax)}`
+                )
                 sig.points = points.join(', ')
                 // Top-N spectral peaks — for modalities without a band taxonomy
                 // (e.g. accelerometry) the right panel lists these by magnitude

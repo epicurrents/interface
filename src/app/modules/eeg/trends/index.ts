@@ -7,6 +7,9 @@
  *   1. Implement the renderer + settings components under a new folder (e.g. `./bsi/`).
  *   2. Add an entry below with the new key and the matching `BiosignalTrend.derivation.type`.
  *   3. Append a radio-style item to the `trends` submenu in `AppMenubar.vue`.
+ * @package    epicurrents/interface
+ * @copyright  2026 Sampsa Lohi
+ * @license    Apache-2.0
  */
 import type { Component } from 'vue'
 import { loadAsyncComponent } from '#util'

@@ -64,7 +64,11 @@
                         class="color"
                         :style="
                             `border-color: ${settingsColorToRgba(SETTINGS.tools.signals[idx].color)};` +
-                            `background-color: ${idx !== activeIdx ? 'none' : settingsColorToRgba(SETTINGS.tools.signals[idx].color, 0.1)};`
+                            `background-color: ${
+                                idx !== activeIdx
+                                ? 'none'
+                                : settingsColorToRgba(SETTINGS.tools.signals[idx].color, 0.1)
+                            };`
                         "
                     ></span>
                     {{ selection.channel.label }}
@@ -208,7 +212,8 @@ export default defineComponent({
                 return
             }
             this.panelWidth = this.wrapper.offsetWidth
-            const tabRow = this.wrapper.querySelector('wa-tab-group')?.shadowRoot?.querySelector('div[part=tabs]') as HTMLElement
+            const tabRow = this.wrapper.querySelector('wa-tab-group')
+                               ?.shadowRoot?.querySelector('div[part=tabs]') as HTMLElement
             const panels = this.wrapper.querySelectorAll('wa-tab-panel') as NodeListOf<HTMLElement>
             this.panelHeight = this.wrapper.offsetHeight - (tabRow?.offsetHeight || 0)
             for (const panel of panels) {

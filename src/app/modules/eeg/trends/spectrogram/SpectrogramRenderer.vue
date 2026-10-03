@@ -451,8 +451,7 @@ watch(labelMode,       () => { invalidate(); drawTrends() })
 watch(() => props.visibleRange, () => drawViewbox())
 
 const refreshInterruptions = () => {
-    interruptions.value = (RESOURCE as unknown as { getInterruptions?: () => { start: number, duration: number }[] })
-        .getInterruptions?.() ?? []
+    interruptions.value = RESOURCE.getInterruptions()
 }
 
 onMounted(() => {

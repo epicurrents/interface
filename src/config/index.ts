@@ -111,17 +111,18 @@ export const getSettingForInput = (
     fields: InterfaceSettingsField[],
     settings: InterfaceModuleConfig['settings']
 ): SettingsValue => {
-    // Check that the setting can be modified.
-    if (Object.keys(settings!._userDefinable as Object).includes(fieldName)) {
+    // Only a field the module lists as user-definable may be converted; anything else is not the
+    // user's to set, so there is no input value to answer with. The comparison drops the leading
+    // module segment, because a settings menu names a field by its qualified path
+    // (`emg.trace.color`) while `_userDefinable` keys it by the path within the module
+    // (`trace.color`), and comparing the two spaces directly can never match.
+    const moduleField = fieldName.slice(fieldName.indexOf('.') + 1)
+    if (!Object.keys((settings?._userDefinable ?? {}) as object).includes(moduleField)) {
         return undefined
     }
-    const settingField = fields.filter(f => {
-        if (typeof (f as InterfaceSettingsInput).setting === undefined) {
-            return false
-        } else {
-            return (f as InterfaceSettingsInput).setting === fieldName
-        }
-    })[0] as InterfaceSettingsInput
+    const settingField = fields.find(
+        f => (f as InterfaceSettingsInput).setting === fieldName
+    ) as InterfaceSettingsInput | undefined
     if (settingField) {
         const settingForValue = settingField.valueMap?.filter(v => v[1] === value)[0]
         if (settingForValue) {
@@ -152,17 +153,18 @@ export const getInputForSetting = (
     fields: InterfaceSettingsField[],
     settings: InterfaceModuleConfig['settings']
 ): SettingsValue => {
-    // Check that the setting can be modified.
-    if (Object.keys(settings!._userDefinable as Object).includes(fieldName)) {
+    // Only a field the module lists as user-definable may be converted; anything else is not the
+    // user's to set, so there is no input value to answer with. The comparison drops the leading
+    // module segment, because a settings menu names a field by its qualified path
+    // (`emg.trace.color`) while `_userDefinable` keys it by the path within the module
+    // (`trace.color`), and comparing the two spaces directly can never match.
+    const moduleField = fieldName.slice(fieldName.indexOf('.') + 1)
+    if (!Object.keys((settings?._userDefinable ?? {}) as object).includes(moduleField)) {
         return undefined
     }
-    const settingField = fields.filter(f => {
-        if (typeof (f as InterfaceSettingsInput).setting === undefined) {
-            return false
-        } else {
-            return (f as InterfaceSettingsInput).setting === fieldName
-        }
-    })[0] as InterfaceSettingsInput
+    const settingField = fields.find(
+        f => (f as InterfaceSettingsInput).setting === fieldName
+    ) as InterfaceSettingsInput | undefined
     if (settingField) {
         const settingForValue = settingField.valueMap?.filter(v => v[0] === value)[0]
         if (settingForValue) {
@@ -478,7 +480,8 @@ export const useContext = (store: Pick<EpiCStore, "state">, context: string, com
     // Include reference to possible Pyodide service and information about SharedArrayBuffer support.
     const pyodide = {
         /** Pyodide service or null if not available. */
-        service: window.__EPICURRENTS__?.RUNTIME?.SERVICES?.get('pyodide') as unknown as PythonInterpreterService || null,
+        service: window.__EPICURRENTS__?.RUNTIME?.SERVICES
+                 ?.get('pyodide') as unknown as PythonInterpreterService || null,
         /** Is memory manager and SharedArrayBuffer support available. */
         usesMemoryManager: window.__EPICURRENTS__?.RUNTIME?.SETTINGS?.app?.useMemoryManager || false as boolean,
     }

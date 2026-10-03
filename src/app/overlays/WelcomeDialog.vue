@@ -197,7 +197,8 @@ export default defineComponent({
             this.displayLoginNotice = false
             // Display a hint that the dialog cannot be dismissed.
             const acceptBasic = event.detail?.source === this.dialog.querySelector('#accept-disclaimer-basic-button')
-            const acceptAdvanced = event.detail?.source === this.dialog.querySelector('#accept-disclaimer-advanced-button')
+            const acceptAdvanced = event.detail?.source
+                                   === this.dialog.querySelector('#accept-disclaimer-advanced-button')
             if (!acceptBasic && !acceptAdvanced && !this.$store.state.INTERFACE.app.disclaimerAccepted) {
                 if (this.$config.user && !this.isLoggedIn) {
                     this.displayLoginNotice = true
@@ -215,9 +216,16 @@ export default defineComponent({
                 event.stopPropagation()
             }
             // Adjust applications version based on the button clicked.
-            if (acceptBasic && (window.location.href.includes('?advanced') || window.location.href.includes('&advanced'))) {
+            if (
+                acceptBasic
+                && (window.location.href.includes('?advanced') || window.location.href.includes('&advanced'))
+            ) {
                 window.location.href = window.location.href.replace('?advanced', '').replace('&advanced', '')
-            } else if (acceptAdvanced && !window.location.href.includes('?advanced') && !window.location.href.includes('&advanced')) {
+            } else if (
+                acceptAdvanced
+                && !window.location.href.includes('?advanced')
+                && !window.location.href.includes('&advanced')
+            ) {
                 if (window.location.href.includes('?')) {
                     window.location.href = window.location.href + '&advanced'
                 } else {

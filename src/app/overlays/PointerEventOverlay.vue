@@ -276,7 +276,8 @@ const OverlayComponent = defineComponent({
                 this.component.style.pointerEvents = 'none'
                 this.component.style.cursor = ''
                 if (handlers.up && ev) {
-                    // Execute the up handler if defined and the event is valid (mouseleave handler will not pass an event).
+                    // Execute the up handler if defined and the event is valid (the mouseleave
+                    // handler will not pass an event).
                     const upLeft = ev.clientX - left
                     const upTop = ev.clientY - top
                     const [relX, relY] = [upLeft/this.getOffsetWidth(), upTop/this.getOffsetHeight()]

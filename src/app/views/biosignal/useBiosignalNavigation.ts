@@ -9,6 +9,9 @@
  *
  * Pass the viewer's `video` ref to enable `isVideoPlaying` and automatic
  * video pause on navigation. Viewers without video simply omit it.
+ * @package    epicurrents/interface
+ * @copyright  2026 Sampsa Lohi
+ * @license    Apache-2.0
  */
 
 import { ref } from 'vue'

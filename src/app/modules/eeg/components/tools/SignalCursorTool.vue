@@ -390,7 +390,11 @@ export default defineComponent({
                 const props = this.signalProps[i]
                 if (!props) {
                     // In the future, allow dynamically expanding or pruning the selections array?
-                    Log.error(`Length of signal properties array (${this.signalProps.length}) does not match signal selection array length (${this.data.length}).`, this.$options.name as string)
+                    Log.error(
+                        `Length of signal properties array (${this.signalProps.length}) does not match `
+                        + `signal selection array length (${this.data.length}).`,
+                        this.$options.name as string
+                    )
                 }
                 // Length of the line that can be drawn between signal data points is
                 // the length of the signal - 1

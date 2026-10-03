@@ -43,7 +43,9 @@
                                         </template>
                                     </tr>
                                     <template v-for="(section, idy) in table.sections" :key="`tab-${idx}-section-${idy}`">
-                                        <tr v-if="table.sections.length > 1 || section.title?.length" class="section-header">
+                                        <tr v-if="table.sections.length > 1 || section.title?.length"
+                                            class="section-header"
+                                        >
                                             <td class="section-head" colspan="100">
                                                 <span class="section-title">{{ section.title }}</span>
                                                 <wa-button v-if="section.subcontext"

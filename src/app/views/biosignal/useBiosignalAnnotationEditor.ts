@@ -5,6 +5,9 @@
  *
  * All property-change dispatches are tagged `{ source: 'user' }` so that
  * auto-save hooks correctly identify them as user-initiated changes.
+ * @package    epicurrents/interface
+ * @copyright  2026 Sampsa Lohi
+ * @license    Apache-2.0
  */
 
 import type { Ref } from 'vue'

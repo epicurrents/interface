@@ -1,3 +1,9 @@
+/**
+ * Epicurrents interface configuration types.
+ * @package    epicurrents/interface
+ * @copyright  2026 Sampsa Lohi
+ * @license    Apache-2.0
+ */
 import type {
     Annotation,
     Modify,
@@ -507,8 +513,13 @@ export type InterfaceSettingsInput = {
     step?: number
     /** Treat the value zero as the setting being turned off (a visual cue). */
     zeroMeansOff?: boolean
-    /**  Optional list of form field values and corresponding setting values. */
-    valueMap?: [string | number | boolean, SettingsValue][]
+    /**
+     * Optional list of `[setting value, input value]` pairs, for a control whose input cannot hold
+     * the stored value directly. A checkbox over a numeric setting is the canonical case:
+     * `[[1, false], [-1, true]]` presents a polarity of `1` as unchecked and `-1` as checked.
+     * `getSettingForInput` and `getInputForSetting` read the pair in this order.
+     */
+    valueMap?: [SettingsValue, string | number | boolean][]
 }
 /** A preset button that applies a number of settings at once. */
 export type InterfaceSettingsPreset = {

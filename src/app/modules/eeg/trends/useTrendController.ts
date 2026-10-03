@@ -10,6 +10,9 @@
  * The caller passes a `redraw` callback; the composable invokes it whenever the trends list
  * or signal data changes, removing the need for every renderer to duplicate the subscription
  * scaffolding.
+ * @package    epicurrents/interface
+ * @copyright  2026 Sampsa Lohi
+ * @license    Apache-2.0
  */
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useStore } from 'vuex'
@@ -54,12 +57,9 @@ export function useTrendController (
     const recompute = () => {
         // Clear existing trends first so the guard in _buildAmplitudeTrends does not
         // short-circuit the rebuild when trends already exist.
-        const resource = context.RESOURCE as unknown as {
-            ensureTrendSetup?: () => void
-            removeAllTrends?: () => void
-        }
-        resource.removeAllTrends?.()
-        resource.ensureTrendSetup?.()
+        const resource = context.RESOURCE
+        resource.removeAllTrends()
+        resource.ensureTrendSetup()
     }
 
     onMounted(() => {

@@ -284,7 +284,9 @@ export default defineComponent({
                     setPosition: (position: number) =>  {
                         cursor.position = position
                         newCursor.position = position
-                        newCursor.style = `left:${newCursor.position * this.pxPerSecond - CURSOR_MARGIN}px;${this.cursorStyles}`
+                        newCursor.style = `left:${
+                            newCursor.position * this.pxPerSecond - CURSOR_MARGIN
+                        }px;${this.cursorStyles}`
                         this.$emit('cursors-updated')
                     },
                     setValue: (value: number) => {
