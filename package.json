@@ -82,7 +82,7 @@
     "yaml": "^2.8.2"
   },
   "devDependencies": {
-    "@epicurrents/core": "^2.0.0",
+    "@epicurrents/core": "^2.1.0",
     "@types/lodash": "^4.17.23",
     "@vitejs/plugin-vue": "^6.0.2",
     "dotenv": "^17.3.1",
@@ -98,7 +98,7 @@
     "vue-tsc": "^2.2.0"
   },
   "peerDependencies": {
-    "@epicurrents/core": "^2.0.0",
+    "@epicurrents/core": "^2.1.0",
     "scoped-event-log": "^3.2.0"
   }
 }
