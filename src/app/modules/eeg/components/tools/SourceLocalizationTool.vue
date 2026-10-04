@@ -36,11 +36,9 @@
                         :value="method"
                         @change="onMethodChange"
                     >
-                        <wa-option value="sloreta">sLORETA</wa-option>
-                        <wa-option value="eloreta">eLORETA</wa-option>
-                        <wa-option value="dspm">dSPM</wa-option>
-                        <wa-option value="mne">MNE</wa-option>
-                        <wa-option value="dipole">{{ $t('Dipole') }}</wa-option>
+                        <wa-option v-for="m in activeMethods" :key="m.value" :value="m.value">
+                            {{ $t(m.label) }}
+                        </wa-option>
                     </wa-select>
                     <label class="control-label">SNR</label>
                     <wa-input
@@ -160,6 +158,52 @@ const SETUP_TO_MNE: Record<string, string> = {
     '10-5':   'standard_1005',
 }
 
+/**
+ * Inverse methods the analysis script implements, and which of them this tool offers.
+ *
+ * Only the single-dipole fit is active. The four distributed inverses spread one source estimate
+ * over the whole grid, and on a single unaveraged epoch most of what they spread is the noise of
+ * every other channel: the map comes out smooth, plausible and unrelated to where the activity is,
+ * which is worse than declining to answer. They need averaging across repeated events to carry
+ * meaning, so they stay declared and inactive rather than deleted — `source_localize.py` still
+ * implements all five, and offering one again is its `active` flag.
+ */
+const SOURCE_LOC_METHODS: { active: boolean, label: string, value: SourceLocMethod }[] = [
+    { active: false, label: 'sLORETA', value: 'sloreta' },
+    { active: false, label: 'eLORETA', value: 'eloreta' },
+    { active: false, label: 'dSPM',    value: 'dspm' },
+    { active: false, label: 'MNE',     value: 'mne' },
+    { active: true,  label: 'Dipole',  value: 'dipole' },
+]
+
+/**
+ * Method a freshly opened tool starts on: the dipole fit while it is active, otherwise whichever
+ * method is.
+ *
+ * Derived from {@link SOURCE_LOC_METHODS} rather than named outright, so the answer is always a
+ * method the table marks active. A method named here directly would outlive the gate it was chosen
+ * under, and the first analysis would run one the gate no longer admits.
+ */
+const defaultSourceLocMethod = (): SourceLocMethod => {
+    const active = SOURCE_LOC_METHODS.filter(m => m.active)
+    return (active.find(m => m.value === 'dipole') ?? active[0])?.value ?? 'dipole'
+}
+
+/**
+ * Orientation count the tool requests its lead field with.
+ *
+ * Three, so that a source's orientation is derived from the measurement. A fixed-orientation lead
+ * field constrains every dipole to point radially outward from the sphere centre, which no anatomy
+ * motivates, and the scan can then only answer with the best radial source: a genuinely tangential
+ * one is absorbed as a displaced position, reported in the same shape as a located one. The
+ * distributed inverses read the same three-component field, so one request serves every method in
+ * {@link SOURCE_LOC_METHODS}.
+ *
+ * Not derived from the selected method, because the lead field is fetched when the tool opens and
+ * the selection can change after that without a refetch.
+ */
+const SOURCE_LOC_N_ORIENT = 3
+
 type SourceLocState =
     | 'loading'      // fetching lead field + setting up Pyodide
     | 'ready'        // setup complete, awaiting first Analyze click
@@ -201,9 +245,10 @@ export default defineComponent({
     },
     data () {
         return {
+            activeMethods: SOURCE_LOC_METHODS.filter(m => m.active),
             canvasesTransferred: false,
             dipolePolarity: 'negative' as SourceLocPolarity,
-            method:        'dipole' as SourceLocMethod,
+            method:        defaultSourceLocMethod(),
             plotMode:      '2d' as SourceLocPlotMode,
             resultSummary: null as string | null,
             snr:           3.0,
@@ -279,6 +324,7 @@ export default defineComponent({
             const setup = await this.sourceLoc.fetchAndMatchLeadField(
                 montageName,
                 channelLabels,
+                { nOrient: SOURCE_LOC_N_ORIENT },
             )
             if (!setup) {
                 const err = this.sourceLoc.lastError.value ?? ''
