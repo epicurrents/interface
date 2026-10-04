@@ -145,7 +145,7 @@ export default class SchemaManager {
         const schemaText = await schemas.text()
         const setup = parseDocument(schemaText).contents?.toJSON()
         if (!setup.rootUrl) {
-            Log.error('Schema setup is missing root URL.', SCOPE)
+            Log.debug('Schema setup is missing root URL, report disabled.', SCOPE)
             return false
         }
         const rootUrl = setup.rootUrl.startsWith('/') ? setup.rootUrl : assetPath + '/' + setup.rootUrl
