@@ -7,16 +7,18 @@
 
 import { watch, type Directive } from 'vue'
 
-const decimalSep = 1.1.toLocaleString().substring(1, 2)
-
 type ElEntry = { handler: EventListener; eventName: string; stop: () => void }
 const elMap = new WeakMap<HTMLInputElement, ElEntry>()
+
+// A number input's value is always the plain, '.'-decimal form whatever the user's locale, and the browser renders it
+// localised itself, so both directions convert without a locale. A cleared or incomplete field reads as NaN.
+const readNumber = (value: string) => value.trim() === '' ? NaN : Number(value)
 
 const setValue = (el: HTMLInputElement, value: unknown) => {
     if (el.tagName === 'WA-SWITCH' || el.tagName === 'WA-CHECKBOX') {
         el.checked = Boolean(value ?? false)
     } else if (el.tagName === 'WA-INPUT' && typeof value === 'number') {
-        el.value = value.toLocaleString()
+        el.value = Number.isFinite(value) ? String(value) : ''
     } else {
         el.value = (value ?? '') as string
     }
@@ -46,9 +48,7 @@ const waDirective: Directive = {
             const target = event.target as HTMLInputElement
             if (target) {
                 if (el.tagName === 'WA-INPUT' && el.type === 'number') {
-                    instance[property as keyof typeof instance] = target.value.includes(decimalSep)
-                                                                ? parseFloat(target.value)
-                                                                : parseInt(target.value)
+                    instance[property as keyof typeof instance] = readNumber(target.value)
                 } else if (el.tagName === 'WA-SWITCH' || el.tagName === 'WA-CHECKBOX') {
                     instance[property as keyof typeof instance] = target.checked
                 } else {
