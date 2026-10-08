@@ -15,7 +15,8 @@ import {
 import { Log } from "scoped-event-log"
 import type { BiosignalMontageTemplate, ConfigBiosignalSetup, Modify } from "@epicurrents/core/types"
 import type { EegResource, EegModuleSettings } from "@epicurrents/eeg-module/types"
-import { schemas, settings } from "./config"
+import { initialTrend, isTrendOffered, offeredTrends, schemas, settings } from "./config"
+import { TREND_REGISTRY } from "./trends"
 import { applyModuleSettings, useContext } from "#config"
 import { createPropertySetter, type ModulePropertyRegistry } from "#config/properties"
 import type { EegInterfaceSettings, EegModuleConfiguration, LeadFieldProvider } from "./types"
@@ -38,11 +39,6 @@ enum EegActionTypes {
     TOGGLE_SIGNAL_POLARITY = 'eeg.toggle-signal-polarity',
     TOGGLE_TREND_VISIBLE = 'eeg.toggle-trend-visible',
 }
-
-/** Default trend type used when a new recording is opened. The set of available trend types is
- *  hard-coded for now (aEEG is the only implementation); each new type adds an entry here and an
- *  item to the Display → Trends submenu. */
-const DEFAULT_TREND = 'aeeg'
 
 /**
  * Interface-owned properties of the EEG module. Resource properties (sensitivity, timebase, the
@@ -80,6 +76,10 @@ export const actions = {
         runtime.setPropertyValue('report-open', payload)
     },
     [EegActionTypes.SET_SELECTED_TREND] (_injectee: ActionContext<State, State>, payload: string) {
+        if (!isTrendOffered(payload)) {
+            Log.warn(`Trend '${payload}' is not offered by this deployment.`, SCOPE)
+            return
+        }
         runtime.setPropertyValue('selected-trend', payload)
     },
     [EegActionTypes.SET_SENSITIVITY] (_injectee: ActionContext<State, State>, payload: number) {
@@ -90,7 +90,9 @@ export const actions = {
         runtime.setPropertyValue('timebase', payload[1])
     },
     [EegActionTypes.SET_TREND_VISIBLE] (_injectee: ActionContext<State, State>, payload: boolean) {
-        runtime.setPropertyValue('trend-visible', payload)
+        // With nothing offered the strip would open empty; a deployment that wants no trends gets
+        // none, whichever path asks for the strip.
+        runtime.setPropertyValue('trend-visible', payload && offeredTrends().length > 0)
     },
     [EegActionTypes.TOGGLE_ANNOTATION_SIDEBAR] (
         _injectee: ActionContext<State, State>,
@@ -115,7 +117,7 @@ export const actions = {
         await resource.setSignalPolarityInverted(!resource.invertedSignals.size)
     },
     [EegActionTypes.TOGGLE_TREND_VISIBLE] (_injectee: ActionContext<State, State>, _payload: boolean | undefined ) {
-        runtime.setPropertyValue('trend-visible', !runtime.trendVisible)
+        runtime.setPropertyValue('trend-visible', !runtime.trendVisible && offeredTrends().length > 0)
     },
 }
 
@@ -132,7 +134,7 @@ export const runtime = {
     isReportOpen: false,
     leadFieldProvider: null as LeadFieldProvider | null,
     openSidebar: null as string | null,
-    selectedTrend: (settings.trends.defaultType || DEFAULT_TREND) as string,
+    selectedTrend: settings.trends.defaultType,
     trendVisible: false,
     async applyConfiguration (config: EegModuleConfiguration) {
         // Epoch mode.
@@ -220,14 +222,31 @@ export const runtime = {
         // maths knob the trend processor reads, and goes to the module settings. Splitting here
         // rather than in the config surface means a deployment configures trends in one place.
         if (config.trends) {
-            const { defaultType, showStrip, ...moduleTrends } = config.trends
+            const { defaultType, enabled, showStrip, ...moduleTrends } = config.trends
+            if (enabled === null) {
+                settings.trends.enabled = null
+            } else if (Array.isArray(enabled)) {
+                settings.trends.enabled = enabled.filter(key => {
+                    if (!TREND_REGISTRY[key]) {
+                        Log.warn(`Ignoring unknown trend type '${key}' in trends.enabled.`, SCOPE)
+                        return false
+                    }
+                    return true
+                })
+            } else if (enabled !== undefined) {
+                Log.warn(`Ignoring trends.enabled: expected a list of trend types or null.`, SCOPE)
+            }
             if (defaultType) {
                 settings.trends.defaultType = defaultType
-                // Also aligned on the live runtime, not only stored as the setting. `runtime` was
-                // built at module-import time, before any configuration existed, so it still holds
-                // the built-in default; and the `created` resource hook that would otherwise sync
-                // the two is never invoked by anything (see resourceLifecycleHooks below).
-                runtime.setPropertyValue('selected-trend', defaultType)
+            }
+            // Aligned on the live runtime, not only stored as settings. `runtime` was built at
+            // module-import time, before any configuration existed, so it still holds the built-in
+            // default; and the `created` resource hook that would otherwise sync the two is never
+            // invoked by anything (see resourceLifecycleHooks below). A default the deployment does
+            // not offer gives way to the first type it does.
+            const initial = initialTrend()
+            if (initial) {
+                runtime.setPropertyValue('selected-trend', initial)
             }
             if (showStrip !== undefined) {
                 settings.trends.showStrip = showStrip
@@ -303,7 +322,7 @@ export const runtime = {
         // module's viewer component, which is where extra setups and montages are actually added.
         created (resource: EegResource) {
             runtime.setPropertyValue('trend-visible', false)
-            runtime.setPropertyValue('selected-trend', settings.trends.defaultType || DEFAULT_TREND)
+            runtime.setPropertyValue('selected-trend', initialTrend() ?? settings.trends.defaultType)
             // Add extra setups to the resource.
             for (const setup of settings.extraSetups) {
                 resource.addSetup(setup)
@@ -336,8 +355,7 @@ export const runtime = {
     /** Name of the sidebar that is currently open, null if no sidebar is open. */
     openSidebar: string | null
     /** Identifier of the currently selected trend type (e.g. `'aeeg'`). Single-selection — the
-     *  Display → Trends submenu enforces one-and-only-one. Reset to `DEFAULT_TREND` on new
-     *  recording. Currently only `'aeeg'` is implemented. */
+     *  Display → Trends submenu enforces one-and-only-one, among the types the deployment offers. */
     selectedTrend: string
     /** Whether the trend strip is currently shown. Toggled via `eeg.set-trend-visible` or
      *  `eeg.toggle-trend-visible`. EegViewer also expands its split-panel bottom slot when this

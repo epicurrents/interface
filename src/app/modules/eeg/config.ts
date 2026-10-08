@@ -95,12 +95,36 @@ const montageOptions = (): InterfaceSettingsDropdownOption[] => {
 }
 
 /**
- * Build the option list for the default-trend dropdown from the trend registry, so the choice on
- * offer is exactly the set of trends that can be rendered. Labels come from the registry rather
+ * Trend types the deployment offers, as trend registry keys in registry order: every registered
+ * type unless `trends.enabled` names a subset.
+ */
+export const offeredTrends = (): string[] => {
+    const enabled = settings.trends.enabled
+    return Object.keys(TREND_REGISTRY).filter(key => !enabled || enabled.includes(key))
+}
+
+/**
+ * Whether the deployment offers the trend type `key`.
+ * @param key - Trend registry key, e.g. `spectrogram`.
+ */
+export const isTrendOffered = (key: string) => offeredTrends().includes(key)
+
+/**
+ * The trend to select when a recording opens: the configured default when it is offered, otherwise
+ * the first offered type, or `null` when the deployment offers none.
+ */
+export const initialTrend = (): string | null => {
+    const offered = offeredTrends()
+    return offered.includes(settings.trends.defaultType) ? settings.trends.defaultType : offered[0] ?? null
+}
+
+/**
+ * Build the option list for the default-trend dropdown from the offered trends, so the choice on
+ * offer is exactly the set of trends that can be selected. Labels come from the registry rather
  * than being restated here — see the note on {@link TREND_REGISTRY}.
  */
 const trendOptions = (): InterfaceSettingsDropdownOption[] =>
-    Object.entries(TREND_REGISTRY).map(([value, entry]) => ({ label: entry.label, value }))
+    offeredTrends().map(value => ({ label: TREND_REGISTRY[value].label, value }))
 
 /**
  * Helper type for the input/setting converters.
@@ -554,6 +578,7 @@ export const settings: EegInterfaceSettings = safeObjectFrom({
         'trends.aeeg.derivationColors': Object,
         'trends.aeeg.displayMode': String,
         'trends.amplitude.epochLength': Number,
+        'trends.amplitude.epochStep': Number,
         'trends.defaultType': String,
         'trends.pdbsi.markCrossing': Boolean,
         'trends.pdbsi.showFill': Boolean,
@@ -568,6 +593,7 @@ export const settings: EegInterfaceSettings = safeObjectFrom({
         'trends.showStrip': Boolean,
         'trends.spectrogram.averageReference': Boolean,
         'trends.spectrogram.epochLength': Number,
+        'trends.spectrogram.epochStep': Number,
         'trends.spectrogram.mode': String,
         'filters.highpass.default': Number,
         'filters.lowpass.default': Number,
@@ -963,6 +989,8 @@ export const settings: EegInterfaceSettings = safeObjectFrom({
          * what it shows first.
          */
         defaultType: 'aeeg',
+        /** Trend types the deployment offers; `null` offers every registered type. */
+        enabled: null as string[] | null,
         /**
          * Open the trend strip with the recording rather than waiting to be asked. Opening the
          * strip is also what triggers the selected trend's computation.

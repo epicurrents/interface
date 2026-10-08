@@ -6,7 +6,8 @@
  * Adding a new trend type:
  *   1. Implement the renderer + settings components under a new folder (e.g. `./bsi/`).
  *   2. Add an entry below with the new key and the matching `BiosignalTrend.derivation.type`.
- *   3. Append a radio-style item to the `trends` submenu in `AppMenubar.vue`.
+ *   3. Append a radio-style item to the `trends` submenu in `AppMenubar.vue`, enabled by
+ *      `isTrendOffered('<key>')` so a deployment's `trends.enabled` list can withhold it.
  * @package    epicurrents/interface
  * @copyright  2026 Sampsa Lohi
  * @license    Apache-2.0

@@ -7,7 +7,6 @@
                 class="trend-label"
                 :style="labelStyles[i]"
             >
-                <span class="dot" :style="{ background: entry.colorCss }"></span>
                 {{ entry.label }}
             </div>
         </div>
@@ -62,8 +61,9 @@
 
 <script setup lang="ts">
 /**
- * SpectrogramRenderer — draws per-hemisphere power spectrograms as time-frequency
- * heatmaps using the hot colormap (black → red → yellow → white = increasing power).
+ * SpectrogramRenderer — draws per-hemisphere power spectrograms as time-frequency plots, in one of two modes:
+ * proportion, where each bin is a band whose height is its share of the epoch's power and whose hue its frequency,
+ * and power, a heatmap where each bin's hue is its share of the epoch's power (blue least, red most).
  *
  * Signal layout (from BiosignalTrend.signal):
  *   flat [p₀_t0, p₁_t0, …, p(N-1)_t0, p₀_t1, …] where N = trend.frequencyBins.
@@ -73,7 +73,8 @@
  * stacked vertically, matching the aEEG / ratio strip layout.
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { settingsColorToRgba } from '@epicurrents/core/util'
+import { settingsColorToRgba, trendEpochCount } from '@epicurrents/core/util'
+import { T } from '#i18n'
 import { useTrendController } from '../useTrendController'
 import { useTrendCanvas } from '../useTrendCanvas'
 import type { SettingsColor } from '@epicurrents/core/types'
@@ -106,7 +107,7 @@ const spectrogramCfg = () =>
     (SETTINGS as Record<string, unknown> & { trends?: { spectrogram?: SpectrogramCfg } })
         .trends?.spectrogram ?? {}
 
-/** `'power'` (brightness encodes power) or `'proportion'` (column height encodes relative share). */
+/** `'power'` (hue encodes relative share) or `'proportion'` (column height encodes relative share). */
 const spectrogramMode = ref<'power' | 'proportion'>(
     (spectrogramCfg().mode as 'power' | 'proportion') ?? 'proportion'
 )
@@ -190,8 +191,10 @@ const rightColor = computed((): SettingsColor =>
         .trace?.color?.dex ?? [0.10, 0.30, 0.80, 1.0]
 )
 
-const labelEntries = computed(() =>
-    trends.value.map((tr, i) => ({
+// Superimposed trends share one slot, so they share one label rather than stacking theirs on top of each other.
+const labelEntries = computed(() => labelMode.value === 'superimposed' && trends.value.length > 1
+    ? [{ name: 'combined', label: T('L+R', SCOPE), colorCss: '' }]
+    : trends.value.map((tr, i) => ({
         name:     tr.name,
         label:    tr.label,
         colorCss: settingsColorToRgba(i === 0 ? leftColor.value : rightColor.value),
@@ -211,19 +214,18 @@ const labelStyles = computed(() => {
     return trends.value.map(() => ({ position: 'absolute' as const, bottom: '2px' }))
 })
 
-// ── Frequency-colour mapping ──────────────────────────────────────────────────
-// Hue encodes frequency position (bin 0 = DC = red, bin N = maxFreq = blue),
-// brightness encodes normalised power (0 = black, 1 = full colour).
-// This matches the conventional EEG spectrogram palette: low-freq activity
-// appears as red, high-freq activity as blue, silence as black.
+// ── Colour mapping ────────────────────────────────────────────────────────────
+// One hue scale from red (0) to blue (1). Proportion mode places frequency on it (DC red, maxFreq blue); power mode
+// places the bin's share of the epoch's power, reversed so the largest share is red and the smallest blue.
 
 /**
- * @param binFrac  - Frequency fraction 0…1 (0 = DC, 1 = maxFreq).
- * @param brightness - Normalised power 0…1 (HSV value channel).
+ * Colour at `position` on the red-to-blue hue scale.
+ * @param position - Position on the scale 0…1 (0 = red, 1 = blue).
+ * @param brightness - HSV value channel 0…1.
  */
-function freqRgba (binFrac: number, brightness: number): [number, number, number] {
-    // Hue: 0° (red) at low freq → 240° (blue) at high freq.
-    const h = binFrac * 240
+function scaleRgba (position: number, brightness: number): [number, number, number] {
+    // Hue: 0° (red) → 240° (blue).
+    const h = position * 240
     const v = brightness
     const x = v * (1 - Math.abs((h / 60) % 2 - 1))
     let r = 0, g = 0, b = 0
@@ -252,14 +254,12 @@ function slotFor (index: number, count: number): { top: number; bottom: number }
 // drawnEpochCounts tracks how many epochs per trend have been rendered so far.
 // Only new epochs are drawn on each `trend-epoch` event; no historical re-scan.
 const _drawnEpochCounts = new Map<string, number>()
-let   _cachedMaxPow     = 1e-10  // grows monotonically; used by power mode
 let   _needsFullRedraw  = true   // cleared after the first full-canvas setup
 
 /** Force a full canvas clear + border redraw on the next drawTrends call. */
 function invalidate () {
     trendBacking.cancelScheduledRedraw()
     _drawnEpochCounts.clear()
-    _cachedMaxPow    = 1e-10
     _needsFullRedraw = true
 }
 
@@ -305,48 +305,55 @@ function drawTrends () {
         const epochCount = Math.floor(signal.length / bins)
         if (!epochCount) continue
 
-        const pxPerEpoch = trend.epochLength * pps
-        const colPixels  = Math.max(1, Math.ceil(pxPerEpoch))
+        // Each epoch is a column one step wide, centred on its window. With no overlap the step is the epoch
+        // length and the columns sit back to back from zero. Centring leaves (length - step) / 2 uncovered at
+        // either end, so the first column reaches back to the left edge and the recording's final epoch out to the
+        // right one. Column edges are rounded rather than widths, so neighbouring columns tile without seams.
+        const pxPerEpoch = trend.epochStep * pps
+        const pxOffset   = (trend.epochLength - trend.epochStep) / 2 * pps
+        const finalEi    = trendEpochCount(totalDuration, trend.epochLength, trend.epochStep) - 1
+        const columnEdge = (i: number) => Math.round(i * pxPerEpoch + pxOffset)
 
         // ── Incremental start: only process epochs we haven't drawn yet ───────
         const startEi = _drawnEpochCounts.get(trend.name) ?? 0
 
-        // Power mode: update the cached max from new epochs only (O(new × bins)).
-        if (mode === 'power') {
-            for (let ei = startEi; ei < epochCount; ei++) {
-                for (let k = 0; k < bins; k++) {
-                    const v = signal[ei * bins + k]
-                    if (v && v > _cachedMaxPow) _cachedMaxPow = v
-                }
-            }
-        }
-        const logMax = Math.log10(_cachedMaxPow + 1)
-
         for (let ei = startEi; ei < epochCount; ei++) {
-            const xLeft = Math.round(ei * pxPerEpoch)
+            const xLeft = ei === 0 ? 0 : columnEdge(ei)
             if (xLeft >= w) break
+            const colPixels = Math.max(1, (ei >= finalEi ? w : columnEdge(ei + 1)) - xLeft)
 
             if (mode === 'power') {
-                // Skip gap epochs — their signal slots are all undefined/zero.
-                // Drawing them produces solid black which the interruption overlay
-                // would then have to overwrite on every pass.
-                let hasData = false
+                // Each bin's share of the epoch's power, weighted by frequency as in proportion mode so that the 1/f
+                // slope of the EEG spectrum does not put the largest share in the lowest bins of every epoch. The
+                // shares are scaled to the epoch's largest, which is drawn red. Gap epochs hold no power and are
+                // skipped, leaving them to the interruption overlay.
                 const base = ei * bins
+                let maxShare = 0
                 for (let k = 0; k < bins; k++) {
-                    if (signal[base + k]) { hasData = true; break }
+                    const v = signal[base + k]
+                    if (v && isFinite(v) && v * (k + 1) > maxShare) {
+                        maxShare = v * (k + 1)
+                    }
                 }
-                if (!hasData) continue
+                if (!(maxShare > 0)) {
+                    continue
+                }
 
-                const rowPixels = Math.max(1, Math.ceil(slotH / bins))
-                const imgH      = rowPixels * bins
-                const imgData   = ctx.createImageData(colPixels, imgH)
-                const data      = imgData.data
+                if (slotH <= 0) {
+                    continue
+                }
+                // Rows sit on rounded boundaries so that together they fill exactly the slot height: rows of a
+                // whole number of pixels each would overflow the slot whenever its height is not a multiple of bins.
+                const rowEdge = (row: number) => Math.round(row * slotH / bins)
+                const imgData = ctx.createImageData(colPixels, slotH)
+                const data    = imgData.data
                 for (let k = 0; k < bins; k++) {
-                    const power      = signal[base + k] || 0
-                    const brightness = logMax > 0 ? Math.log10(power + 1) / logMax : 0
-                    const binFrac    = bins > 1 ? k / (bins - 1) : 0
-                    const [r, g, b]  = freqRgba(binFrac, brightness)
-                    const yPx = (bins - 1 - k) * rowPixels
+                    const v         = signal[base + k]
+                    const share     = v && isFinite(v) ? v * (k + 1) / maxShare : 0
+                    const [r, g, b] = scaleRgba(1 - share, 1.0)
+                    const row       = bins - 1 - k
+                    const yPx       = rowEdge(row)
+                    const rowPixels = rowEdge(row + 1) - yPx
                     for (let dy = 0; dy < rowPixels; dy++) {
                         for (let dx = 0; dx < colPixels; dx++) {
                             const idx = ((yPx + dy) * colPixels + dx) * 4
@@ -375,7 +382,7 @@ function drawTrends () {
                     const drawT = Math.max(slot.top, yBottom - rawH)
                     const segH  = yBottom - drawT
                     if (segH > 0) {
-                        const [r, g, b] = freqRgba(bins > 1 ? k / (bins - 1) : 0, 1.0)
+                        const [r, g, b] = scaleRgba(bins > 1 ? k / (bins - 1) : 0, 1.0)
                         ctx.fillStyle = `rgb(${r},${g},${b})`
                         ctx.fillRect(xLeft, drawT, colPixels, segH)
                     }
@@ -498,16 +505,10 @@ onBeforeUnmount(() => {
         align-items: center;
         display: flex;
         font-size: 0.75rem;
+        font-weight: bold;
         gap: 0.25rem;
         position: absolute;
         right: 0.5rem;
-    }
-    .dot {
-        border-radius: 50%;
-        display: inline-block;
-        flex: 0 0 0.5rem;
-        height: 0.5rem;
-        width: 0.5rem;
     }
 .plot {
     flex: 1 1 auto;

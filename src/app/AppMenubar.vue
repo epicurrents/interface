@@ -117,6 +117,7 @@ import { defineComponent, reactive } from "vue"
 import { useStore } from "vuex"
 import { useAppContext } from "#config"
 import { getModuleProperty, isModuleProperty } from "#config/properties"
+import { isTrendOffered, offeredTrends } from "#app/modules/eeg/config"
 import { T } from "#i18n"
 // Import this synchronously
 import { MenuItem, MenubarItem } from "#types/interface"
@@ -435,14 +436,15 @@ export default defineComponent({
                     },
                     {
                         // Trends submenu. Top child toggles the strip's visibility; the rest is a
-                        // radio-style picker for the trend TYPE displayed inside it. Only `aeeg`
-                        // is implemented today; new types are added by appending entries below
-                        // and dispatching `eeg.set-selected-trend` with their id. The submenu
+                        // radio-style picker for the trend TYPE displayed inside it. New types are
+                        // added by appending entries below and dispatching `eeg.set-selected-trend`
+                        // with their id. A type the deployment does not offer (`trends.enabled`) is
+                        // disabled, and with none offered so is the whole submenu. The submenu
                         // itself follows the standard reloadOn pattern to hide outside the
                         // biosignal view.
                         id: 'trends',
                         type: 'menu',
-                        enabled: true,
+                        enabled: offeredTrends().length > 0,
                         label: T('Trends', 'AppMenubar'),
                         visible: APP.view.name === 'biosignal',
                         reloadOn: [
@@ -455,7 +457,7 @@ export default defineComponent({
                             {
                                 icon: ['', 'check'],
                                 id: 'trend-strip',
-                                enabled: true,
+                                enabled: offeredTrends().length > 0,
                                 keepOpen: true,
                                 label: T('Display trend', 'AppMenubar'),
                                 onclick: () => store.dispatch('eeg.toggle-trend-visible'),
@@ -474,7 +476,7 @@ export default defineComponent({
                             {
                                 icon: ['', 'check'],
                                 id: 'trend-aeeg',
-                                enabled: true,
+                                enabled: isTrendOffered('aeeg'),
                                 keepOpen: true,
                                 label: T('aEEG', 'AppMenubar'),
                                 onclick: () => store.dispatch('eeg.set-selected-trend', 'aeeg'),
@@ -489,7 +491,7 @@ export default defineComponent({
                             {
                                 icon: ['', 'check'],
                                 id: 'trend-ratio',
-                                enabled: true,
+                                enabled: isTrendOffered('ratio'),
                                 keepOpen: true,
                                 label: T('TAR / DAR / DTABR', 'AppMenubar'),
                                 onclick: () => store.dispatch('eeg.set-selected-trend', 'ratio'),
@@ -504,7 +506,7 @@ export default defineComponent({
                             {
                                 icon: ['', 'check'],
                                 id: 'trend-pdbsi',
-                                enabled: true,
+                                enabled: isTrendOffered('pdbsi'),
                                 keepOpen: true,
                                 label: T('pdBSI', 'AppMenubar'),
                                 onclick: () => store.dispatch('eeg.set-selected-trend', 'pdbsi'),
@@ -519,7 +521,7 @@ export default defineComponent({
                             {
                                 icon: ['', 'check'],
                                 id: 'trend-spectrogram',
-                                enabled: true,
+                                enabled: isTrendOffered('spectrogram'),
                                 keepOpen: true,
                                 label: T('Spectrogram', 'AppMenubar'),
                                 onclick: () => store.dispatch('eeg.set-selected-trend', 'spectrogram'),

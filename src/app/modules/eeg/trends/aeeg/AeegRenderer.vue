@@ -364,8 +364,11 @@ const drawAmplitudeBand = (
         return
     }
     const epochLength = trend.epochLength
+    const epochStep = trend.epochStep
     const pxPerSecond = width/totalDuration
-    const pxPerEpoch = epochLength*pxPerSecond
+    // Epochs start a step apart and each is drawn one step wide, centred on its window; with no overlap the step
+    // is the epoch length and this is the plain back-to-back layout.
+    const pxPerEpoch = epochStep*pxPerSecond
     const epochCount = Math.floor(signal.length/2)
     if (!epochCount) {
         return
@@ -375,7 +378,7 @@ const drawAmplitudeBand = (
         const clamped = Math.min(Math.max(value, 0), AEEG_DISPLAY_MAX)
         return slot.bottom - (clamped/AEEG_DISPLAY_MAX)*slotHeight
     }
-    const epochX = (i: number) => i*pxPerEpoch + pxPerEpoch/2
+    const epochX = (i: number) => (i*epochStep + epochLength/2)*pxPerSecond
     const isGapEpoch = (i: number) => {
         const v = signal[i*2 + 1]
         return v === undefined || isNaN(v)
@@ -396,7 +399,7 @@ const drawAmplitudeBand = (
         // gap epoch. Used to extend fill polygon edges flush to the exact gap boundary
         // so there is no empty sliver between the fill and the gray overlay.
         const gapForEpoch = (epochIdx: number) => {
-            const t = epochIdx * epochLength
+            const t = epochIdx * epochStep
             return bandGaps.find(
                 ({ start, duration }) => start <= t + epochLength && start + duration > t
             ) ?? null

@@ -71,6 +71,12 @@ export type EegInterfaceSettings = CommonBiosignalInterfaceSettings & {
          */
         defaultType: string
         /**
+         * Trend types this deployment offers, as keys of the trend registry, or `null` for every
+         * registered type. A type left out is shown disabled in the Trends menu, is missing from the
+         * default-trend choice, and cannot be selected; with none offered the strip cannot be opened.
+         */
+        enabled: string[] | null
+        /**
          * Open the trend strip with the recording rather than waiting to be asked. Opening the
          * strip is also what triggers the selected trend's computation.
          */
@@ -382,17 +388,16 @@ export type EegModuleConfiguration = ModuleConfiguration & {
     navigator?: Partial<EegInterfaceSettings['navigator']>
     tools?: Partial<EegInterfaceSettings['tools']>
     trace?: RecursivePartial<EegInterfaceSettings['trace']>
-    /** Per-trend math knobs (epoch length, frequency bands, referencing). Merged per trend type
-     *  over the module defaults, so naming one knob leaves the rest of that trend's defaults. */
     /**
      * Trend configuration. Carries both halves: the maths knobs (`amplitude`, `spectrogram`,
      * `ratio`, `pdbsi` epoch lengths, bands, referencing) belong to the module settings, while
-     * `defaultType` and `showStrip` are interface state. `applyConfiguration` routes each to its
+     * `defaultType`, `enabled` and `showStrip` are interface state. `applyConfiguration` routes each to its
      * own object — they share a key here because a deployment configuring trends should not have
      * to know which layer owns which knob.
      */
     trends?: RecursivePartial<NonNullable<CommonBiosignalSettings['trends']>>
         & RecursivePartial<Pick<EegInterfaceSettings['trends'], 'defaultType' | 'showStrip'>>
+        & { enabled?: EegInterfaceSettings['trends']['enabled'] }
 }
 
 export type EegNavigationKey = 'ArrowLeft' | 'ArrowRight' | 'PageDown' | 'PageUp'

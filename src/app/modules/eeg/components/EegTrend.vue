@@ -42,6 +42,7 @@
             </div>
             <div v-if="controlsOpen" class="panel">
                 <component v-if="settingsComponent"
+                    class="settings"
                     :is="settingsComponent"
                 />
             </div>
@@ -198,7 +199,7 @@ export default defineComponent({
     flex: 0 0 20px;
     height: 100%;
     max-width: 200px;
-    padding: 0 1rem;
+    padding: 0 0 0 1rem;
     position: absolute;
     right: 0;
 }
@@ -230,5 +231,32 @@ export default defineComponent({
         height: 100%;
         padding-top: 0.25rem;
         width: 100%;
+    }
+    .controls > .panel > .settings {
+        flex: 1 1 auto;
+        flex-direction: column;
+        justify-content: flex-start;
+        overflow: hidden;
+        padding-right: 1rem;
+    }
+    .controls > .panel:deep(.label) {
+        flex: 1 1 auto;
+    }
+    .controls > .panel:deep(wa-input) {
+        flex: 0 0 3rem;
+        height: 2rem;
+        max-width: 3rem;
+    }
+    .controls > .panel:deep(wa-input::part(base)) {
+        border: none;
+        padding: 0 0.25rem;
+    }
+    .controls > .panel:deep(.field > wa-input.threshold) {
+        flex: 0 0 4.5rem;
+        max-width: 4.5rem;
+    }
+    .controls > .panel:deep(.label.with-info) {
+        text-decoration: underline dashed;
+        text-underline-offset: 0.25em;
     }
 </style>

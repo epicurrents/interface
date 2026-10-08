@@ -1,7 +1,14 @@
 <template>
     <div data-component="aeeg-settings">
         <label class="field">
-            <span class="label">{{ $t('Epoch length') }}</span>
+            <span class="label">{{ $t('Epoch') }}</span>
+            <span class="label with-info" id="epicv-aeeg-epoch-label">
+                {{ $t('Epoch') }}
+            </span>
+            <wa-tooltip for="epicv-aeeg-epoch-label">
+                {{ $t('The trend is computed in epochs.') }}<br />
+                {{ $t('The epoch length is the duration of each epoch and controls the minimum frequency the trend can display.') }}
+            </wa-tooltip>
             <wa-input
                 class="epoch-length"
                 :id="`epicv-aeeg-epoch-length`"
@@ -26,7 +33,7 @@
                 {{ $t('Superimpose') }}
             </wa-switch>
         </label>
-        <p class="hint">{{ $t('Empty scales the epoch with the recording. Recompute after changes.') }}</p>
+        <p class="hint">{{ $t('Recompute after changes.') }}</p>
     </div>
 </template>
 
@@ -124,13 +131,9 @@ export default defineComponent({
         min-height: 2rem;
         width: 100%;
     }
-        .field > .label {
-            flex: 1 1 auto;
-        }
         .field > wa-input {
-            flex: 0 0 5rem;
-            height: 2rem;
-            max-width: 5rem;
+            flex: 0 0 5rem !important;
+            max-width: 5rem !important;
         }
         [data-component="aeeg-settings"] wa-switch {
             flex-shrink: 0;

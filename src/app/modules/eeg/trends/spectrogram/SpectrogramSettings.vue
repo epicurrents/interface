@@ -1,7 +1,14 @@
 <template>
     <div data-component="spectrogram-settings">
         <label class="field">
-            <span class="label">{{ $t('Epoch length') }}</span>
+            <span class="label with-info" id="epicv-spectrogram-epoch-label">
+                {{ $t('Epoch') }}
+            </span>
+            <wa-tooltip for="epicv-spectrogram-epoch-label">
+                {{ $t('The trend is computed in epochs.') }}<br />
+                {{ $t('The epoch length is the duration of each epoch and controls the minimum frequency the trend can display.') }}<br />
+                {{ $t('The epoch step is the time between the start of consecutive epochs and controls the temporal resolution of the trend.') }}
+            </wa-tooltip>
             <wa-input
                 class="epoch-length"
                 id="epicv-spectrogram-epoch-length"
@@ -12,45 +19,51 @@
                 type="number"
                 :value="localEpochLength ? String(localEpochLength) : ''"
                 @change="onEpochLengthChanged($event)"
+                @keydown.stop=""
+                @keyup.stop=""
             >
-                <span slot="end">s</span>
             </wa-input>
+            /
+            <epoch-step-field :epoch-length="effectiveEpochLength" trend="spectrogram"></epoch-step-field>
+            <wa-tooltip for="epicv-spectrogram-epoch-length">{{ $t('Epoch length (s)') }}</wa-tooltip>
         </label>
         <label class="field">
             <span class="label">{{ $t('Mode') }}</span>
             <div class="options">
-                <button
+                <a
                     :class="{ active: localMode === 'proportion' }"
                     @click="setMode('proportion')"
                 >
                     {{ $t('Proportion') }}
-                </button>
-                <button
+                </a>
+                /
+                <a
                     :class="{ active: localMode === 'power' }"
                     @click="setMode('power')"
                 >
                     {{ $t('Power') }}
-                </button>
+                </a>
             </div>
         </label>
         <label class="field">
-            <span class="label">{{ $t('Reference') }}</span>
+            <span class="label">{{ $t('Ref') }}</span>
             <div class="options">
-                <button
+                <a
                     :class="{ active: !localAverageReference }"
                     @click="setAverageReference(false)"
                 >
                     {{ $t('Derivation') }}
-                </button>
-                <button
+                </a>
+                /
+                <a
                     :class="{ active: localAverageReference }"
                     @click="setAverageReference(true)"
                 >
                     {{ $t('Average') }}
-                </button>
+                </a>
             </div>
         </label>
-        <p class="hint">{{ $t('Empty scales the epoch with the recording. Recompute after changes.') }}</p>
+        <p class="hint">{{ $t('Recompute after changes.') }}</p>
     </div>
 </template>
 
@@ -60,26 +73,35 @@
  * Epoch length changes require a manual recompute to take effect.
  */
 import { resolveTrendEpochLength } from '@epicurrents/core/util'
-import { defineComponent } from 'vue'
+import { defineComponent, ref } from 'vue'
 import { T } from '#i18n'
 import { useStore } from 'vuex'
 import { useEegContext } from '../..'
+import EpochStepField from '../EpochStepField.vue'
 
 const SCOPE = 'SpectrogramSettings'
 
 export default defineComponent({
     name: 'SpectrogramSettings',
-    setup () {
-        return { ...useEegContext(useStore(), SCOPE) }
+    components: {
+        EpochStepField,
     },
-    data () {
+    setup () {
+        const localAverageReference = ref(false)
+        const localEpochLength = ref(0)
+        const localMode = ref<'power' | 'proportion'>('proportion')
         return {
-            localAverageReference: false as boolean,
-            localEpochLength: 0 as number,
-            localMode: 'proportion' as 'power' | 'proportion',
+            localAverageReference,
+            localEpochLength,
+            localMode,
+            ...useEegContext(useStore(), SCOPE),
         }
     },
     computed: {
+        /** The epoch length the step applies to: the pinned one, or the derived one while unpinned. */
+        effectiveEpochLength (): number {
+            return this.localEpochLength || this.derivedEpochLength
+        },
         /** The length the trend actually computes at, shown as the placeholder while unpinned. */
         derivedEpochLength (): number {
             return resolveTrendEpochLength(this.RESOURCE?.totalDuration ?? 0, this.SETTINGS.trends?.spectrogram)
@@ -138,13 +160,9 @@ export default defineComponent({
 <style scoped>
 [data-component="spectrogram-settings"] {
     box-sizing: border-box;
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
     font-size: 0.75rem;
     gap: 0;
     min-height: 0;
-    overflow: hidden;
     padding: 0.25rem 0.5rem;
     width: 100%;
 }
@@ -154,35 +172,26 @@ export default defineComponent({
         flex: 1;
         gap: 0.5rem;
         justify-content: space-between;
-        max-height: 2.5rem;
-        min-height: 2rem;
+        padding: 0.25rem 0;
         width: 100%;
     }
         .field > .label {
             flex: 1 1 auto;
         }
         .field > wa-input {
-            flex: 0 0 5rem;
+            flex: 0 0 3.75rem;
             height: 2rem;
-            max-width: 5rem;
+            max-width: 3.75rem;
         }
     .options {
         display: flex;
         gap: 0.25rem;
     }
-        .options button {
-            background: none;
-            border: 1px solid var(--wa-color-surface-border);
-            border-radius: 0.25rem;
-            color: var(--wa-color-text-quiet);
+        .options a {
             cursor: pointer;
-            font-size: 0.7rem;
-            padding: 0.1rem 0.4rem;
         }
-        .options button.active {
-            background: var(--wa-color-brand-fill-loud);
-            border-color: transparent;
-            color: #fff;
+        .options a.active {
+            font-weight: bold;
         }
     .hint {
         flex-shrink: 0;

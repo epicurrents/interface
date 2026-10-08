@@ -199,8 +199,9 @@ function drawTrend() {
 
     const signal     = trend.signal
     const pxPerSecond = w / totalDuration
-    const pxPerEpoch  = trend.epochLength * pxPerSecond
-    const epochX      = (i: number) => i * pxPerEpoch + pxPerEpoch / 2
+    // One step per epoch, centred on its window; the plain back-to-back layout when epochs do not overlap.
+    const pxPerEpoch  = trend.epochStep * pxPerSecond
+    const epochX      = (i: number) => (i * trend.epochStep + trend.epochLength / 2) * pxPerSecond
     const getVal      = (i: number) => signal[i]
     const isGap       = (i: number) => { const v = getVal(i); return v === undefined || isNaN(v) }
     const clamp       = (y: number) => Math.min(Math.max(y, 1), h - 1)

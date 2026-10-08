@@ -5,9 +5,8 @@
                 v-for="(entry, i) in labelEntries"
                 :key="entry.side"
                 class="side-label"
-                :style="labelStyles[i]"
+                :style="{ ...labelStyles[i], color: entry.colorCss }"
             >
-                <span class="dot" :style="{ background: entry.colorCss }"></span>
                 {{ entry.label }}
             </div>
         </div>
@@ -182,8 +181,8 @@ const labelStyles = computed(() => {
         ]
     }
     return [
+        { position: 'absolute' as const, bottom: '20px' },
         { position: 'absolute' as const, bottom: '2px' },
-        { display: 'none' },
     ]
 })
 
@@ -267,8 +266,9 @@ function drawHemiTrace(
         return
     }
     const pxPerSecond = w / totalDuration
-    const pxPerEpoch = trend.epochLength * pxPerSecond
-    const epochX = (i: number) => i * pxPerEpoch + pxPerEpoch / 2
+    // One step per epoch, centred on its window; the plain back-to-back layout when epochs do not overlap.
+    const pxPerEpoch = trend.epochStep * pxPerSecond
+    const epochX = (i: number) => (i * trend.epochStep + trend.epochLength / 2) * pxPerSecond
     const getVal = (i: number) => signal[i]
     const isGap  = (i: number) => { const v = getVal(i); return v === undefined || isNaN(v) }
     const clamp  = (y: number) => Math.min(Math.max(y, slot.top), slot.bottom)
@@ -539,16 +539,10 @@ onBeforeUnmount(() => {
         align-items: center;
         display: flex;
         font-size: 0.75rem;
+        font-weight: bold;
         gap: 0.25rem;
         position: absolute;
         right: 0.5rem;
-    }
-    .dot {
-        border-radius: 50%;
-        display: inline-block;
-        flex: 0 0 0.5rem;
-        height: 0.5rem;
-        width: 0.5rem;
     }
 .plot {
     flex: 1 1 auto;

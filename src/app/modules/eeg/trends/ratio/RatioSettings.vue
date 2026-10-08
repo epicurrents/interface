@@ -1,7 +1,14 @@
 <template>
     <div data-component="ratio-settings">
         <label class="field">
-            <span class="label">{{ $t('Epoch length') }}</span>
+            <span class="label with-info" id="epicv-ratio-epoch-label">
+                {{ $t('Epoch') }}
+            </span>
+            <wa-tooltip for="epicv-ratio-epoch-label">
+                {{ $t('The trend is computed in epochs.') }}<br />
+                {{ $t('The epoch length is the duration of each epoch and controls the minimum frequency the trend can display.') }}<br />
+                {{ $t('The epoch step is the time between the start of consecutive epochs and controls the temporal resolution of the trend.') }}
+            </wa-tooltip>
             <wa-input
                 class="epoch-length"
                 id="epicv-ratio-epoch-length"
@@ -13,11 +20,19 @@
                 :value="localEpochLength ? String(localEpochLength) : ''"
                 @change="onEpochLengthChanged($event)"
             >
-                <span slot="end">s</span>
             </wa-input>
+            <wa-tooltip for="epicv-ratio-epoch-length">{{ $t('Epoch length (s)') }}</wa-tooltip>
+            /
+            <epoch-step-field :epoch-length="effectiveEpochLength" trend="ratio"></epoch-step-field>
         </label>
         <label class="field">
-            <span class="label">{{ $t('Threshold') }}</span>
+            <span class="label">{{ $t('Limit') }}</span>
+            <wa-checkbox
+                :checked="localShowThreshold || undefined"
+                id="epicv-ratio-show-threshold"
+                size="s"
+                @input="setShowThreshold($event.target.checked)"
+            ></wa-checkbox>
             <wa-input
                 class="threshold"
                 id="epicv-ratio-threshold"
@@ -31,54 +46,39 @@
             ></wa-input>
         </label>
         <label class="field">
-            <span class="label">{{ $t('Show threshold') }}</span>
+            <span class="label">{{ $t('Fill') }}</span>
             <div class="options">
-                <button
-                    :class="{ active: !localShowThreshold }"
-                    @click="setShowThreshold(false)"
-                >
-                    {{ $t('Off') }}
-                </button>
-                <button
-                    :class="{ active: localShowThreshold }"
-                    @click="setShowThreshold(true)"
-                >
-                    {{ $t('On') }}
-                </button>
-            </div>
-        </label>
-        <label class="field">
-            <span class="label">{{ $t('Show fill') }}</span>
-            <div class="options">
-                <button
+                <a
                     :class="{ active: !localShowFill }"
                     @click="setShowFill(false)"
                 >
                     {{ $t('Off') }}
-                </button>
-                <button
+                </a>
+                /
+                <a
                     :class="{ active: localShowFill }"
                     @click="setShowFill(true)"
                 >
                     {{ $t('On') }}
-                </button>
+                </a>
             </div>
         </label>
         <label class="field">
-            <span class="label">{{ $t('Mirror right') }}</span>
+            <span class="label">{{ $t('Mirror') }}</span>
             <div class="options">
-                <button
+                <a
                     :class="{ active: !localMirrorMode }"
                     @click="setMirrorMode(false)"
                 >
                     {{ $t('Off') }}
-                </button>
-                <button
+                </a>
+                /
+                <a
                     :class="{ active: localMirrorMode }"
                     @click="setMirrorMode(true)"
                 >
                     {{ $t('On') }}
-                </button>
+                </a>
             </div>
         </label>
         <p class="hint">{{ $t('Empty scales the epoch with the recording. Recompute after changes.') }}</p>
@@ -92,28 +92,39 @@
  * length changes require a manual recompute since they alter the trend signal.
  */
 import { resolveTrendEpochLength } from '@epicurrents/core/util'
-import { defineComponent } from 'vue'
+import { defineComponent, ref } from 'vue'
 import { T } from '#i18n'
 import { useStore } from 'vuex'
 import { useEegContext } from '../..'
+import EpochStepField from '../EpochStepField.vue'
 
 const SCOPE = 'RatioSettings'
 
 export default defineComponent({
     name: 'RatioSettings',
-    setup () {
-        return { ...useEegContext(useStore(), SCOPE) }
+    components: {
+        EpochStepField,
     },
-    data () {
+    setup () {
+        const localEpochLength = ref(0)
+        const localMirrorMode = ref(false)
+        const localShowFill = ref(true)
+        const localShowThreshold = ref(true)
+        const localThreshold = ref(0.26)
         return {
-            localEpochLength:   0 as number,
-            localThreshold:     0.26 as number,
-            localShowThreshold: true as boolean,
-            localShowFill:      true as boolean,
-            localMirrorMode:    false as boolean,
+            localEpochLength,
+            localMirrorMode,
+            localShowFill,
+            localShowThreshold,
+            localThreshold,
+            ...useEegContext(useStore(), SCOPE),
         }
     },
     computed: {
+        /** The epoch length the step applies to: the pinned one, or the derived one while unpinned. */
+        effectiveEpochLength (): number {
+            return this.localEpochLength || this.derivedEpochLength
+        },
         /** The length the trend actually computes at, shown as the placeholder while unpinned. */
         derivedEpochLength (): number {
             return resolveTrendEpochLength(this.RESOURCE?.totalDuration ?? 0, this.SETTINGS.trends?.ratio)
@@ -211,35 +222,30 @@ export default defineComponent({
         flex: 1;
         gap: 0.5rem;
         justify-content: space-between;
-        max-height: 2.5rem;
-        min-height: 2rem;
+        padding: 0.25rem 0;
         width: 100%;
     }
         .field > .label {
             flex: 1 1 auto;
         }
         .field > wa-input {
-            flex: 0 0 5rem;
+            flex: 0 0 3.75rem;
             height: 2rem;
-            max-width: 5rem;
+            max-width: 3.75rem;
+        }
+        .field > wa-input.threshold {
+            flex: 0 0 4.25rem;
+            max-width: 4.25rem;
         }
     .options {
         display: flex;
         gap: 0.25rem;
     }
-        .options button {
-            background: none;
-            border: 1px solid var(--wa-color-surface-border);
-            border-radius: 0.25rem;
-            color: var(--wa-color-text-quiet);
+        .options a {
             cursor: pointer;
-            font-size: 0.7rem;
-            padding: 0.1rem 0.4rem;
         }
-        .options button.active {
-            background: var(--wa-color-brand-fill-loud);
-            border-color: transparent;
-            color: #fff;
+        .options a.active {
+            font-weight: bold;
         }
     .hint {
         flex-shrink: 0;
