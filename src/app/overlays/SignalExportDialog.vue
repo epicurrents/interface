@@ -177,7 +177,7 @@
  * `SignalExportTarget`, the target's constraints pre-fill and lock the choices they fix and the selection is checked
  * against them before anything is encoded.
  */
-import { defineComponent, PropType } from "vue"
+import { defineComponent, PropType, ref } from "vue"
 import { T } from "#i18n"
 import { checkExportSelection, suggestExportSource } from "@epicurrents/core/util"
 import type {
@@ -230,19 +230,24 @@ export default defineComponent({
         },
     },
     emits: ['close', 'exported-file', 'sent'],
-    data () {
+    setup () {
+        const busy = ref(false)
+        const length = ref(0)
+        const rate = ref<number | null>(null)
+        const rows = ref<ChannelRow[]>([])
+        const start = ref(0)
+        /**
+         * The recording whose start the person set by hand. Until they do, the start follows the view; once they
+         * have, it stays where they put it, across reopening the dialog, for as long as the same recording is active.
+         */
+        const startSetFor = ref<string | null>(null)
         return {
-            busy: false,
-            length: 0,
-            rate: null as number | null,
-            rows: [] as ChannelRow[],
-            start: 0,
-            /**
-             * The recording whose start the person set by hand. Until they do, the start follows the view; once they
-             * have, it stays where they put it, across reopening the dialog, for as long as the same recording is
-             * active.
-             */
-            startSetFor: null as string | null,
+            busy,
+            length,
+            rate,
+            rows,
+            start,
+            startSetFor,
         }
     },
     computed: {

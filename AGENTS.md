@@ -407,6 +407,12 @@ Handlers currently take no arguments and re-read through `getFieldValue` when th
 
 The `ID` field is consumed by `RESOURCE.onPropertyChange(field, handler, ID)` — when a component unmounts it passes `ID` to `removeAllEventListeners(ID)` to clean up all subscriptions at once without tracking individual handlers.
 
+### Component state is declared in `setup()`, never in `data()`
+
+Components are `defineComponent` objects whose `setup()` creates the local state as `ref`s and returns it together with the context: `return { busy, rows, ...useEegContext(store, SCOPE) }`. `computed`, `watch`, `methods` and the lifecycle hooks stay as component options and read or assign that state through `this`, which unwraps the refs. A component declares no `data()` option, including one with no context to return — such a component gets a `setup()` that returns only its refs.
+
+The rule keeps a component's state in one place, next to the context it is spread beside, rather than split between two declaration styles, and it types the state through `ref<T>()` rather than `as` casts on initial values. State that has to start from settings or props is created in `setup()` with its default and assigned in `beforeMount`, as [EpochStepField.vue](src/app/modules/eeg/trends/EpochStepField.vue) does. A `watch` entry named `data` is a watcher on a prop of that name, not this option, which is worth knowing before searching the tree for stray declarations.
+
 ### EEG module registration
 
 Source: [src/app/modules/eeg/index.ts](src/app/modules/eeg/index.ts)

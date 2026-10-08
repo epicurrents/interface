@@ -234,27 +234,33 @@ export default defineComponent({
         const root            = ref<HTMLElement | null>(null)
         const sourceLoc       = useSourceLocalization()
         const lfSetup         = ref<LeadFieldSetup | null>(null)
+        const activeMethods       = ref(SOURCE_LOC_METHODS.filter(m => m.active))
+        const canvasesTransferred = ref(false)
+        const dipolePolarity      = ref<SourceLocPolarity>('negative')
+        const method              = ref(defaultSourceLocMethod())
+        const plotMode            = ref<SourceLocPlotMode>('2d')
+        const resultSummary       = ref<string | null>(null)
+        const snr                 = ref(3.0)
+        const state               = ref<SourceLocState>('loading')
+        const statusMessage       = ref('')
+        const windowSec           = ref(2.0)
 
         return {
+            activeMethods,
+            canvasesTransferred,
+            dipolePolarity,
+            lfSetup,
+            method,
+            plotMode,
+            resultSummary,
             root,
+            snr,
             sourceCanvas: sourceCanvasRef,
             sourceLoc,
-            lfSetup,
+            state,
+            statusMessage,
+            windowSec,
             ...useEegContext(store, SCOPE),
-        }
-    },
-    data () {
-        return {
-            activeMethods: SOURCE_LOC_METHODS.filter(m => m.active),
-            canvasesTransferred: false,
-            dipolePolarity: 'negative' as SourceLocPolarity,
-            method:        defaultSourceLocMethod(),
-            plotMode:      '2d' as SourceLocPlotMode,
-            resultSummary: null as string | null,
-            snr:           3.0,
-            state:         'loading' as SourceLocState,
-            statusMessage: '',
-            windowSec:     2.0,
         }
     },
     methods: {

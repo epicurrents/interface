@@ -51,7 +51,7 @@
  * @license    Apache-2.0
  */
 
-import { defineComponent, PropType } from "vue"
+import { defineComponent, PropType, ref } from "vue"
 import { T } from "#i18n"
 import type { SignalExportReceipt } from "@epicurrents/core/types"
 import Log from "scoped-event-log"
@@ -71,9 +71,10 @@ export default defineComponent({
         },
     },
     emits: ['close', 'download'],
-    data () {
+    setup () {
+        const copied = ref(false)
         return {
-            copied: false,
+            copied,
         }
     },
     watch: {
