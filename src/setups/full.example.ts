@@ -40,6 +40,8 @@ import * as interfaceAccModule from '#app/modules/acc'
 import * as interfaceDocModule from '#app/modules/doc'
 import * as interfaceEegModule from '#app/modules/eeg'
 import * as interfacePdfModule from '#app/modules/pdf'
+import type { EegModuleConfiguration } from '#app/modules/eeg/types'
+import { leadFieldProvider } from './leadFields.example'
 
 /*
  * Worker bundles are pre-built files copied into `dist/workers/` by
@@ -186,6 +188,13 @@ export const registerAllModules = ({ app, useSAB, setup, registerInterfaceModule
         app.registerStudyImporter('eeg/dcm-file', 'Open DICOM file', 'file', eegDcmLoader)
         app.registerStudyImporter('eeg/dcm-folder', 'Open DICOM files from folder', 'folder', eegDcmLoader)
         app.registerStudyImporter('eeg/dcm-url', 'Open DICOM from URL', 'url', eegDcmLoader)
+        // The provider is a function, so it is attached here rather than given in the configuration. A
+        // configuration given as a string names a JSON document fetched as the whole of the module's
+        // configuration, and replacing it with an object would discard that document.
+        const eegConfig = setup.modules.eeg
+        if (typeof eegConfig !== 'string') {
+            setup.modules.eeg = { ...eegConfig, leadFieldProvider } as EegModuleConfiguration
+        }
         registerInterfaceModule('eeg', interfaceEegModule)
     }
 

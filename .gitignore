@@ -13,6 +13,8 @@ dist
 dist-ssr
 local
 public/*/*
+# Lead-field bundles served by the dev server: copied in per machine, often several models to compare.
+/public/leadfields/
 vendor
 *.local
 package-lock.json
