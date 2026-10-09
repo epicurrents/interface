@@ -108,19 +108,19 @@ export const registerAllModules = ({ app, useSAB, setup, registerInterfaceModule
         app.setWorkerOverride('montage', montWorker)
         app.setWorkerOverride('trend', trendWorker)
     }
+    // The signal path stays in the JS montage workers unless the setup opts in with
+    // `usePyodideBiosignal`, which also makes the interpreter and the biosignal script blocking
+    // dependencies of every biosignal resource (see the flag in types/globals.d.ts). Without it the
+    // service serves the analysis tools alone, and they await it themselves. The Python montage
+    // reads the shared signal cache, so it needs shared memory. Every montage override below keys
+    // on this one value: a montage sent to the interpreter without the biosignal script loaded
+    // fails to set up.
+    const pythonSignalPath = setup.usePyodide && useSAB && setup.usePyodideBiosignal
     // Pyodide service setup.
     if (setup.usePyodide) {
         app.setWorkerOverride('pyodide', pyoWorker)
-        if (useSAB) {
-            // If we use Pyodide for computing montages, we must convey signal
-            // data cache updates to the service, among others.
+        if (pythonSignalPath) {
             app.setWorkerOverride('montage', pyoWorker)
-            // Declares that the signal path runs in Python, which makes the interpreter and the
-            // biosignal script blocking dependencies of every biosignal resource: nothing can be
-            // drawn before scipy can filter it. A consumer that leaves filtering in the JS montage
-            // worker must NOT set this — see the flag's documentation in types/globals.d.ts, and
-            // the builder's setup/services/pyodide.ts for the non-blocking registration.
-            setup.usePyodideBiosignal = true
         }
         const pyoService = new PyodideService()
         app.registerService('pyodide', pyoService)
@@ -129,7 +129,7 @@ export const registerAllModules = ({ app, useSAB, setup, registerInterfaceModule
             ...(setup.pyodideAssetPath ? { indexURL: setup.pyodideAssetPath } : {}),
             packages: ['matplotlib', 'mne'],
         })
-        if (useSAB) {
+        if (pythonSignalPath) {
             pyoService.loadDefaultScript('biosignal')
         }
     }
@@ -142,7 +142,7 @@ export const registerAllModules = ({ app, useSAB, setup, registerInterfaceModule
         // path (must be set after registerModule so 'eeg' resolves as a module field).
         app.configure({ 'eeg.useMemoryManager': useSAB })
         app.setWorkerOverride('eeg-montage', () => {
-            if (setup.usePyodide) {
+            if (pythonSignalPath) {
                 return pyoWorker()
             }
             return montWorker()
