@@ -99,10 +99,42 @@ export type SourceLocResult = {
     peakSourcePosMm?:  number[]
     /** Dipole method: fitted position (mm). */
     dipolePosMm?:      number[]
-    /** Dipole method: unit orientation vector. */
+    /** Dipole method: unit moment direction, negative pole to positive; the plotted arrow points the other way. */
     dipoleOri?:        number[]
     /** Dipole method: goodness-of-fit percentage. */
     dipoleGofPct?:     number
+    /** Dipole method: point on the model's cortical surface where the dipole's potential is most negative (mm). */
+    cortexNegativeMm?: number[]
+    /** Dipole method: the recording electrode closest in direction to that point, null without a montage. */
+    nearestElectrode?: string | null
+}
+
+/** The script's result keys, which are snake_case, mapped to {@link SourceLocResult}. */
+const RESULT_KEYS: Record<string, keyof SourceLocResult> = {
+    success:            'success',
+    error:              'error',
+    peak_time_s:        'peakTimeS',
+    peak_source_pos_mm: 'peakSourcePosMm',
+    dipole_pos_mm:      'dipolePosMm',
+    dipole_ori:         'dipoleOri',
+    dipole_gof_pct:     'dipoleGofPct',
+    cortex_negative_mm: 'cortexNegativeMm',
+    nearest_electrode:  'nearestElectrode',
+}
+
+/**
+ * Convert the script's result into a {@link SourceLocResult}. A key missing from {@link RESULT_KEYS} is
+ * dropped rather than passed through, so a field the script adds is invisible until it is mapped here.
+ */
+const toSourceLocResult = (raw: Record<string, unknown>): SourceLocResult => {
+    const result: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(raw)) {
+        const mapped = RESULT_KEYS[key]
+        if (mapped) {
+            result[mapped] = value
+        }
+    }
+    return result as SourceLocResult
 }
 
 // ── Module-level caches (persist across component remounts) ───────────────────
@@ -160,8 +192,7 @@ export function useSourceLocalization () {
      * `null` and sets `lastError` on any failure.
      *
      * @param montageName      - MNE standard montage, e.g. `'standard_1020'`.
-     * @param recordingChannels - EEG channel labels from the active montage, in
-     *                            signal-index order.
+     * @param recordingChannels - Electrode label of every montage channel at its signal index, `''` for a channel that takes no part (see `alignedChannelLabels`); a filtered list misassigns signals.
      * @param opts             - Optional `nOrient` (default 1) and `gridResMm`
      *                           (default 7.5) to select a specific cached matrix.
      */
@@ -412,7 +443,7 @@ export function useSourceLocalization () {
                 return null
             }
 
-            return pyResult(r3) as unknown as SourceLocResult
+            return toSourceLocResult(pyResult(r3) as unknown as Record<string, unknown>)
         } finally {
             computing.value = false
         }

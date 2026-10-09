@@ -49,3 +49,6 @@ tsconfig.*.json
 .DS_Store
 ._*
 tests/coverage
+
+# Bytecode left by running the Python tests in tests/python.
+__pycache__/

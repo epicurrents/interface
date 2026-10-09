@@ -35,6 +35,7 @@ const messagesEN = {
     'Loading module dependencies, please wait ({ready}/{total} done)...':
         'Loading module dependencies, please wait ({ready}/{total} done)...',
     'Memory use: {p} % ({u} / {t} MiB)': 'Memory use: {p} % ({u} / {t} MiB)',
+    'Negative maximum near {electrode} — GOF {gof}%': 'Negative maximum near {electrode} — GOF {gof}%',
     'Number {n}': 'Number {n}',
     'Peak at {t} ms': 'Peak at {t} ms',
     'Samples are clipped to {min} … {max} {unit}.': 'Samples are clipped to {min} … {max} {unit}.',

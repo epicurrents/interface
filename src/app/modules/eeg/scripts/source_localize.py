@@ -7,7 +7,7 @@ Supported methods
 'eloreta'  — exact LORETA (eLORETA)
 'dspm'     — dynamic statistical parametric mapping
 'mne'      — minimum-norm estimate (no noise normalisation)
-'dipole'   — single equivalent dipole via MUSIC scan
+'dipole'   — single equivalent dipole, scanned over the source grid
 
 Architecture note
 -----------------
@@ -59,8 +59,7 @@ from scipy import linalg
 
 _src_loc = {
     'method': 'dipole',    # str — 'sloreta' | 'eloreta' | 'dspm' | 'mne' | 'dipole'
-    'dipole_polarity': 'negative',  # str — 'negative' (clinical: source near negative peak)
-                                    #        'positive' (source near positive peak)
+    'dipole_polarity': 'negative',  # str — 'negative' | 'positive'; constrains fixed-orientation fits only
     'info': None,          # mne.Info
     'montage': None,       # mne.channels.DigMontage
     'lead_field': None,    # ndarray (n_channels, n_sources * n_orient)
@@ -72,6 +71,9 @@ _src_loc = {
     'dipole_pos': None,    # ndarray (3,) — fitted dipole position (metres)
     'dipole_ori': None,    # ndarray (3,) — fitted dipole orientation (unit vector)
     'dipole_gof': None,    # float — goodness of fit [0, 1]
+    'cortex_negative': None,   # ndarray (3,) — cortical point of the dipole's negative maximum (metres)
+    'nearest_electrode': None, # str — recording electrode closest in direction to that point
+    'dipole_peak_idx': None,   # int — sample of the window the dipole was fitted at
     'sfreq': 256.0,        # float — sampling frequency
     'tmin': -0.1,          # float — epoch start time in seconds
     'snr': 3.0,            # float — assumed SNR (used to compute λ²)
@@ -81,6 +83,18 @@ _src_loc = {
     'source_canvas': None, # JS canvas element for the main source plot
     'topomap_canvas': None, # JS canvas element for the scalp topomap
 }
+
+# The spherical head model the lead fields are computed with (the server's forward model defaults),
+# and its brain surface: MNE's default four-shell sphere puts the brain at 0.90 of the head radius.
+_SPHERE_CENTER = np.array([0.0, 0.0, 0.04])     # metres, head coordinates
+_HEAD_RADIUS = 0.09                             # metres
+_CORTEX_RADIUS = 0.90 * _HEAD_RADIUS            # metres
+
+# A dipole is fitted to the discharge at the cursor, not to the whole analysis window: the field-power
+# peak is searched for this far either side of the window centre, and the fit spans this far either
+# side of that peak.
+_SPIKE_SEARCH_S = 0.05                          # seconds
+_FIT_HALF_WIDTH_S = 0.01                        # seconds
 
 # ---------------------------------------------------------------------------
 # Setup functions
@@ -146,19 +160,21 @@ def src_set_method():
 
 def src_set_dipole_polarity():
     """
-    Choose which pole the MUSIC dipole scan targets.
+    Choose the surface polarity a fixed-orientation dipole fit is constrained to.
 
     JS params
     ---------
     polarity : str
-        ``'negative'`` — places the dipole at the source whose lead field is
-        most anti-correlated with the dominant signal pattern (i.e. near the
-        negative-peak electrode).  This is the **clinical convention**: the
-        scalp-negative pole is directly over the depolarising cortex.
+        ``'negative'`` (default) — only sources whose radial moment points
+        inward at the peak are candidates, so the scalp directly over the
+        fitted source is negative.  This is the clinical convention for
+        epileptiform discharges.
 
-        ``'positive'`` — places the dipole near the positive-peak electrode.
+        ``'positive'`` — only sources whose radial moment points outward.
 
-        Default is ``'negative'``.
+    The setting has no effect on a free-orientation lead field: there the
+    moment's direction, and with it which pole faces the surface, is fitted
+    from the data.
     """
     from js import polarity
     if str(polarity) not in ('negative', 'positive'):
@@ -348,7 +364,12 @@ def src_compute_source():
     if evoked is None:
         return {'success': False, 'error': 'Evoked not computed. Call src_compute_evoked() first.'}
 
-    M = evoked.data                                # (n_channels, n_times)
+    # Average reference, applied to both over the same channels. The lead field gives potentials
+    # against infinity and the data whatever reference the recording used; any common reference is
+    # a per-sample offset across channels, which re-referencing both removes. Left in, it is a
+    # pattern no source produces, and every fit is skewed towards explaining it.
+    M = _average_reference(evoked.data)            # (n_channels, n_times)
+    L = _average_reference(L)
     n_ch, n_src_ori = L.shape
     n_src = n_src_ori // n_orient
     lam2 = 1.0 / (snr ** 2)
@@ -356,15 +377,26 @@ def src_compute_source():
     if method == 'dipole':
         if src_pos is None:
             return {'success': False, 'error': 'src_pos required for dipole fitting.'}
-        pos, ori, gof = _fit_single_dipole(M, L, n_src, n_orient, src_pos)
+        peak = _spike_peak_index(M)
+        reach = max(1, int(round(_FIT_HALF_WIDTH_S * _src_loc['sfreq'])))
+        pos, ori, gof = _fit_single_dipole(M[:, max(0, peak - reach):peak + reach + 1], L, n_src, n_orient, src_pos)
+        _src_loc['dipole_peak_idx'] = peak
+        electrodes = _electrode_positions()
+        cortex_neg = _cortical_negative_maximum(pos, ori, electrodes)
+        nearest = _nearest_electrode(cortex_neg, electrodes)
         _src_loc['dipole_pos'] = pos
         _src_loc['dipole_ori'] = ori
         _src_loc['dipole_gof'] = float(gof)
+        _src_loc['cortex_negative'] = cortex_neg
+        _src_loc['nearest_electrode'] = nearest
         return {
             'success': True,
             'dipole_pos_mm': (pos * 1000.0).tolist(),
             'dipole_ori': ori.tolist(),
+            'cortex_negative_mm': (cortex_neg * 1000.0).tolist(),
+            'nearest_electrode': nearest,
             'dipole_gof_pct': round(float(gof) * 100.0, 1),
+            'peak_time_s': round(float(_src_loc['tmin'] + peak / _src_loc['sfreq']), 4),
         }
     else:
         stc = _compute_distributed_inverse(M, L, lam2, method, n_src, n_orient)
@@ -383,6 +415,31 @@ def src_compute_source():
             'peak_time_s': round(peak_time_s, 4),
             'peak_source_pos_mm': peak_source_pos,
         }
+
+
+def _spike_peak_index(M):
+    """
+    The sample of the field-power peak nearest the window centre, where the cursor is.
+
+    Searched only ``_SPIKE_SEARCH_S`` either side of the centre.  A window
+    long enough to show a discharge in context carries far more background
+    than discharge, and its strongest pattern or its largest sample is as
+    likely to be ongoing rhythm or artefact anywhere in it: fitting that
+    locates the same background around every spike.  The centre comes from
+    ``tmin``, the window's start relative to the cursor.
+    """
+    sfreq = _src_loc['sfreq']
+    n = M.shape[1]
+    centre = min(max(int(round(-_src_loc['tmin'] * sfreq)), 0), n - 1)
+    reach = max(1, int(round(_SPIKE_SEARCH_S * sfreq)))
+    lo, hi = max(0, centre - reach), min(n, centre + reach + 1)
+    power = np.sqrt((M[:, lo:hi] ** 2).mean(axis=0))
+    return lo + int(np.argmax(power))
+
+
+def _average_reference(X):
+    """Subtract the across-channel mean (axis 0) from every column of ``X``."""
+    return X - X.mean(axis=0, keepdims=True)
 
 
 def _compute_distributed_inverse(M, L, lam2, method, n_src, n_orient):
@@ -449,84 +506,142 @@ def _compute_distributed_inverse(M, L, lam2, method, n_src, n_orient):
 
 def _fit_single_dipole(M, L, n_src, n_orient, src_pos):
     """
-    Fit a single equivalent dipole via MUSIC scan.
+    Fit a single equivalent dipole by scanning the source grid.
 
-    Scans all source positions in the pre-computed grid, projects the signal
-    subspace onto each candidate lead field, and picks the location with the
-    highest projection power.  Dipole orientation is taken as the leading
-    right singular vector of the projected gain.
+    The scan fits the dominant spatial pattern of the window — the first left
+    singular vector of ``M`` — at every grid position and keeps the position
+    whose lead field explains the largest share of it.  The share is a
+    correlation, so it depends on the shape of a lead field and not on its
+    size: ranking by raw projection instead favours whichever positions sit
+    closest to the electrodes, regardless of fit.  For a free-orientation lead
+    field the share is the cosine between the pattern and its projection onto
+    the source's three-column span; for a fixed one it is the cosine with the
+    single column.
+
+    The pattern's sign is arbitrary, so the dipole's direction comes from the
+    data instead: the moment is fitted at the window's peak (largest root-mean-
+    square across channels), and ``ori`` points along it, from the negative to
+    the positive pole.
+
+    A fixed-orientation scan honours ``dipole_polarity``: ``'negative'`` keeps
+    only the sources whose fitted radial moment points inward at the peak, so
+    the surface over the source is negative, and ``'positive'`` the reverse.
+    A free-orientation fit takes the direction from the data alone.
 
     Parameters
     ----------
-    M : ndarray (n_ch, n_times)
-    L : ndarray (n_ch, n_src * n_orient)
+    M : ndarray (n_ch, n_times)       — average-referenced data
+    L : ndarray (n_ch, n_src * n_orient) — average-referenced lead field
     n_src : int
     n_orient : int
     src_pos : ndarray (n_src, 3)
 
     Returns
     -------
-    pos : ndarray (3,)      — best dipole position (metres)
-    ori : ndarray (3,)      — unit orientation vector
-    gof : float             — goodness of fit [0, 1]
+    pos : ndarray (3,)      — dipole position (metres)
+    ori : ndarray (3,)      — unit moment direction, negative pole to positive pole
+    gof : float             — goodness of fit of the dipole's time course [0, 1]
     """
-    # Signal subspace: dominant left singular vectors of the evoked
     U, _, _ = linalg.svd(M, full_matrices=False)
-    n_components = min(3, U.shape[1])
-    signal_ss = U[:, :n_components]               # (n_ch, n_components)
+    pattern = U[:, 0]                                    # (n_ch,), unit norm
+    peak = int(np.argmax(np.sqrt((M ** 2).mean(axis=0))))
+    m_peak = M[:, peak]
 
-    # Step 1: power-based MUSIC scan — finds the position with the best
-    # signal-subspace fit regardless of polarity.  Using power (squared norm)
-    # here makes the position estimate robust to noise.
     if n_orient == 3:
-        powers = np.array([
-            float(linalg.norm(signal_ss.T @ L[:, k * 3:(k + 1) * 3]) ** 2)
-            for k in range(n_src)
-        ])
-        best = int(np.argmax(powers))
-        Lbest = L[:, best * 3:(best + 1) * 3]    # (n_ch, 3)
-        _, _, Vt_d = linalg.svd(signal_ss.T @ Lbest, full_matrices=False)
-        ori = Vt_d[0] / (linalg.norm(Vt_d[0]) + 1e-30)
-        L_dip = Lbest @ ori
+        gains = L.reshape(L.shape[0], n_src, 3).transpose(1, 0, 2)   # (n_src, n_ch, 3)
+        Q, _ = np.linalg.qr(gains)                       # orthonormal basis of each span
+        share = np.linalg.norm(np.einsum('kci,c->ki', Q, pattern), axis=1)
+        best = int(np.argmax(share))
+        Lk = gains[best]                                 # (n_ch, 3)
+        moment, *_ = linalg.lstsq(Lk, m_peak)            # (3,), moment at the peak
+        ori = moment / (linalg.norm(moment) + 1e-30)
+        L_dip = Lk @ ori
     else:
-        powers = np.array([float((signal_ss[:, 0] @ L[:, k]) ** 2) for k in range(n_src)])
-        best = int(np.argmax(powers))
-        L_dip = L[:, best]
-        # Radial orientation for the fixed-orientation sphere model: points
-        # from the sphere centre outward through the source position.
-        _sphere_ctr = np.array([0.0, 0.0, 0.04])   # metres — matches forward.py default
-        radial = src_pos[best] - _sphere_ctr
-        ori = radial / (linalg.norm(radial) + 1e-30)
+        norms = linalg.norm(L, axis=0) + 1e-30
+        share = np.abs(L.T @ pattern) / norms
+        # The radial moment each source would need at the peak; its sign is the polarity.
+        radial_moment = (L.T @ m_peak) / norms ** 2
+        want_negative = _src_loc.get('dipole_polarity', 'negative') == 'negative'
+        allowed = radial_moment < 0 if want_negative else radial_moment > 0
+        if not allowed.any():
+            allowed = np.ones(n_src, dtype=bool)
+        best = int(np.argmax(np.where(allowed, share, -np.inf)))
+        radial = src_pos[best] - _SPHERE_CENTER
+        radial = radial / (linalg.norm(radial) + 1e-30)
+        sign = 1.0 if radial_moment[best] >= 0 else -1.0
+        ori = sign * radial
+        L_dip = sign * L[:, best]
 
     pos = src_pos[best].copy()
 
-    # Step 2: determine polarity.  The signed projection of the dominant
-    # signal pattern onto the dipole lead field tells us whether the dipole
-    # moment points in the +ori or −ori direction relative to the data.
-    #   proj > 0  →  ori already points toward the positive-peak side
-    #   proj < 0  →  ori points toward the negative-peak side
-    proj_sign = float(signal_ss[:, 0] @ L_dip)
-    want_negative = _src_loc.get('dipole_polarity', 'negative') == 'negative'
-    # Ensure ori points from negative pole toward positive pole (convention).
-    # If we want the negative pole at `pos`, then ori should point away from pos
-    # (outward), meaning proj_sign should be negative (L_dip anti-aligns with data).
-    # If proj_sign is positive, flip ori so the positive end is in the ori direction.
-    if want_negative and proj_sign > 0:
-        ori = -ori
-        L_dip = -L_dip
-    elif not want_negative and proj_sign < 0:
-        ori = -ori
-        L_dip = -L_dip
-
-    # Goodness of fit: 1 − ‖M − L_dip a^T‖² / ‖M‖²
+    # Goodness of fit: 1 − ‖M − L_dip a^T‖² / ‖M‖², with a the least-squares time course.
     LtL = float(L_dip @ L_dip) + 1e-30
-    amplitudes = (L_dip @ M) / LtL               # (n_times,)
+    amplitudes = (L_dip @ M) / LtL                       # (n_times,)
     M_fit = np.outer(L_dip, amplitudes)
     residual_power = float(linalg.norm(M - M_fit) ** 2)
     total_power = float(linalg.norm(M) ** 2) + 1e-30
     gof = max(0.0, 1.0 - residual_power / total_power)
 
     return pos, ori, gof
+
+
+def _electrode_positions():
+    """Head-coordinate positions (metres) of the recording's channels, by name; empty without a montage."""
+    info = _src_loc['info']
+    montage = info.get_montage() if info is not None else None
+    if montage is None:
+        return {}
+    return {name: np.asarray(p) for name, p in montage.get_positions()['ch_pos'].items()
+            if name in info.ch_names and p is not None and np.all(np.isfinite(p))}
+
+
+def _fibonacci_sphere(n):
+    """``n`` near-uniformly spaced unit vectors."""
+    i = np.arange(n) + 0.5
+    polar = np.arccos(1.0 - 2.0 * i / n)
+    azimuth = np.pi * (1.0 + 5.0 ** 0.5) * i
+    return np.column_stack([np.cos(azimuth) * np.sin(polar), np.sin(azimuth) * np.sin(polar), np.cos(polar)])
+
+
+def _cortical_negative_maximum(pos, ori, electrodes=None, n_points=6000):
+    """
+    The point on the head model's cortical surface where the fitted dipole's potential is most negative.
+
+    This is where a clinical reading places the source: the cortex under the
+    negative peak.  A single equivalent dipole fitted to an extended discharge
+    often lands deeper than the cortex that produced it, and from a deep
+    position the direction of a short arrow says little about where on the
+    surface it points; the potential the dipole produces on the cortical
+    shell says it exactly.  The potential is the dipole's primary term,
+    ``ori·(r − pos) / |r − pos|³``, which dominates near the source and
+    needs no conductivity model.  For a superficial dipole pointing inward
+    the point lies directly above it; for a deep or tangential one, where its
+    negative side meets the cortex.
+
+    The surface is searched only as low as the electrodes reach, less a
+    centimetre, because nothing below them is measured.
+    """
+    points = _SPHERE_CENTER + _CORTEX_RADIUS * _fibonacci_sphere(n_points)
+    if electrodes:
+        floor = min(p[2] for p in electrodes.values()) - 0.01
+        points = points[points[:, 2] >= floor]
+    offset = points - pos
+    dist = np.linalg.norm(offset, axis=1)
+    usable = dist > 1e-3
+    potential = np.full(len(points), np.inf)
+    potential[usable] = (offset[usable] @ ori) / dist[usable] ** 3
+    return points[int(np.argmin(potential))].copy()
+
+
+def _nearest_electrode(point, electrodes):
+    """The electrode whose direction from the sphere centre is closest to ``point``'s, or None."""
+    if not electrodes:
+        return None
+    target = (point - _SPHERE_CENTER) / linalg.norm(point - _SPHERE_CENTER)
+    names = list(electrodes)
+    dirs = np.array([electrodes[n] - _SPHERE_CENTER for n in names])
+    dirs /= np.linalg.norm(dirs, axis=1, keepdims=True)
+    return names[int(np.argmax(dirs @ target))]
 
 
 # ---------------------------------------------------------------------------
@@ -687,8 +802,7 @@ def _plot_dipole():
     fh = _src_loc['fig_height']
 
     # Peak latency of the evoked
-    peak_idx = int(np.argmax(np.abs(evoked.data).max(axis=0)))
-    _draw_scalp_topomap(evoked, peak_idx)
+    _draw_scalp_topomap(evoked, _src_loc['dipole_peak_idx'])
 
     source_canvas = _src_loc['source_canvas']
     if source_canvas is None:
@@ -696,20 +810,25 @@ def _plot_dipole():
 
     sp_mm = src_pos * 1000.0 if src_pos is not None else None
     pos_mm = pos * 1000.0
-    head_r_mm = 90.0                               # nominal sphere radius
+    neg_mm = _src_loc['cortex_negative'] * 1000.0
+    ctr_mm = _SPHERE_CENTER * 1000.0
+    head_r_mm = _HEAD_RADIUS * 1000.0
+    cortex_r_mm = _CORTEX_RADIUS * 1000.0
 
     dim_pairs = [(0, 1), (0, 2), (1, 2)]
     axis_labels = [(_AXIS_LABEL[0], _AXIS_LABEL[1]),
                    (_AXIS_LABEL[0], _AXIS_LABEL[2]),
                    (_AXIS_LABEL[1], _AXIS_LABEL[2])]
     view_titles = ['Axial', 'Coronal', 'Sagittal']
-    half_mm = 20.0   # half-length of the dipole axis segment
+    arrow_mm = 15.0   # length of the arrow towards the dipole's negative pole
 
     fig, axes = plt.subplots(2, 2, figsize=(fw, fw), constrained_layout=True)
     for ax, title, (d0, d1), (xl, yl) in zip(axes.flat, view_titles, dim_pairs, axis_labels):
-        # Head outline
-        circle = Circle((0, 0), head_r_mm, fill=False, color='black', linewidth=1.5, zorder=1)
-        ax.add_patch(circle)
+        # Head and cortical surface of the model, centred on its sphere.
+        centre = (ctr_mm[d0], ctr_mm[d1])
+        ax.add_patch(Circle(centre, head_r_mm, fill=False, color='black', linewidth=1.5, zorder=1))
+        ax.add_patch(Circle(centre, cortex_r_mm, fill=False, color='gray', linewidth=0.8,
+                            linestyle='--', zorder=1))
 
         # Background source grid
         if sp_mm is not None:
@@ -718,31 +837,26 @@ def _plot_dipole():
                 s=2, color='#cccccc', alpha=0.5, zorder=2, linewidths=0,
             )
 
-        # Dipole axis: a line from the negative pole (−) through pos to the positive pole (+).
-        # `ori` points from − to + (negative-pole convention: pos is the − end).
-        neg_d0 = pos_mm[d0]
-        neg_d1 = pos_mm[d1]
-        pos_d0 = pos_mm[d0] + ori[d0] * half_mm * 2
-        pos_d1 = pos_mm[d1] + ori[d1] * half_mm * 2
-
+        # The dipole, with a short arrow towards its negative pole: `ori` is the physical moment
+        # direction, − to +, so the arrow runs along −ori.
         ax.annotate(
             '',
-            xy=(pos_d0, pos_d1),
-            xytext=(neg_d0, neg_d1),
-            arrowprops=dict(arrowstyle='->', color='darkred', lw=2.0),
+            xy=(pos_mm[d0] - ori[d0] * arrow_mm, pos_mm[d1] - ori[d1] * arrow_mm),
+            xytext=(pos_mm[d0], pos_mm[d1]),
+            arrowprops=dict(arrowstyle='->', color='darkred', lw=1.5),
             zorder=6,
         )
-
-        # Negative-pole marker (filled circle, blue)
-        ax.scatter([neg_d0], [neg_d1], s=80, color='steelblue',
-                   marker='o', zorder=7, label='−  (neg)')
-        # Positive-pole marker (filled triangle, red)
-        ax.scatter([pos_d0], [pos_d1], s=80, color='crimson',
-                   marker='^', zorder=7, label='+  (pos)')
+        ax.scatter([pos_mm[d0]], [pos_mm[d1]], s=30, color='black',
+                   marker='o', zorder=7, label='dipole')
+        # The cortical point of its negative maximum, the result a reading is after.
+        ax.plot([pos_mm[d0], neg_mm[d0]], [pos_mm[d1], neg_mm[d1]],
+                color='steelblue', linewidth=1.0, linestyle=':', zorder=5)
+        ax.scatter([neg_mm[d0]], [neg_mm[d1]], s=160, color='steelblue', edgecolors='black',
+                   linewidths=1.0, marker='o', zorder=8, label='negative maximum')
 
         lim = head_r_mm * 1.15
-        ax.set_xlim(-lim, lim)
-        ax.set_ylim(-lim, lim)
+        ax.set_xlim(ctr_mm[d0] - lim, ctr_mm[d0] + lim)
+        ax.set_ylim(ctr_mm[d1] - lim, ctr_mm[d1] + lim)
         ax.set_aspect('equal')
         ax.set_xlabel(xl)
         ax.set_ylabel(yl)
@@ -752,7 +866,7 @@ def _plot_dipole():
     gof_pct = round(float(gof) * 100.0, 1) if gof is not None else 0.0
     ax4 = axes[1, 1]
     ax4.axis('off')
-    ax4.text(0.5, 0.6, f'GOF\n{gof_pct} %', ha='center', va='center',
+    ax4.text(0.5, 0.6, _dipole_caption(gof_pct), ha='center', va='center',
              fontsize=14, transform=ax4.transAxes)
     handles, labels = axes.flat[0].get_legend_handles_labels()
     if handles:
@@ -766,13 +880,21 @@ def _plot_dipole():
 # 3-D plotting helpers
 # ---------------------------------------------------------------------------
 
-def _head_sphere_wireframe(ax, radius_mm=90.0):
-    """Add a faint wireframe sphere to a 3-D axes as a spatial reference."""
+def _dipole_caption(gof_pct):
+    """The dipole result's text cell: goodness of fit, and the electrode over the negative maximum."""
+    nearest = _src_loc.get('nearest_electrode')
+    caption = f'GOF\n{gof_pct} %'
+    return f'{caption}\n\nNeg. max.\nnear {nearest}' if nearest else caption
+
+
+def _head_sphere_wireframe(ax, radius_mm=_HEAD_RADIUS * 1000.0):
+    """Add a faint wireframe of the head model's sphere to a 3-D axes as a spatial reference."""
+    cx, cy, cz = _SPHERE_CENTER * 1000.0
     u = np.linspace(0, 2 * np.pi, 18)
     v = np.linspace(0, np.pi, 10)
-    xs = radius_mm * np.outer(np.cos(u), np.sin(v))
-    ys = radius_mm * np.outer(np.sin(u), np.sin(v))
-    zs = radius_mm * np.outer(np.ones_like(u), np.cos(v))
+    xs = cx + radius_mm * np.outer(np.cos(u), np.sin(v))
+    ys = cy + radius_mm * np.outer(np.sin(u), np.sin(v))
+    zs = cz + radius_mm * np.outer(np.ones_like(u), np.cos(v))
     ax.plot_wireframe(xs, ys, zs, alpha=0.06, color='gray',
                       linewidth=0.4, rstride=2, cstride=2)
 
@@ -863,20 +985,16 @@ def _plot_dipole_3d():
         return {'success': False, 'error': 'Dipole not fitted. Call src_compute_source() first.'}
 
     fw, fh    = _src_loc['fig_width'], _src_loc['fig_height']
-    peak_idx  = int(np.argmax(np.abs(evoked.data).max(axis=0)))
-    _draw_scalp_topomap(evoked, peak_idx)
+    _draw_scalp_topomap(evoked, _src_loc['dipole_peak_idx'])
 
     source_canvas = _src_loc['source_canvas']
     if source_canvas is None:
         return {'success': True}
 
-    neg_mm   = pos * 1000.0                 # negative pole = found source position
-    half_mm  = 20.0                         # half-length of axis segment
-    pos_mm_e = neg_mm + ori * 1000.0 * half_mm / 1000.0 * 2   # positive pole endpoint (mm)
-    # Reuse variable names cleanly
-    neg_mm_pt = neg_mm
-    pos_mm_pt = neg_mm + ori * half_mm * 2
-    sp_mm     = src_pos * 1000.0 if src_pos is not None else None
+    dip_mm   = pos * 1000.0
+    neg_mm   = _src_loc['cortex_negative'] * 1000.0
+    arrow_mm = 15.0                         # length of the arrow towards the negative pole
+    sp_mm    = src_pos * 1000.0 if src_pos is not None else None
 
     fig = plt.figure(figsize=(fw, fw), layout='constrained')
     positions = [1, 2, 3]
@@ -888,17 +1006,17 @@ def _plot_dipole_3d():
             ax.scatter(sp_mm[:, 0], sp_mm[:, 1], sp_mm[:, 2],
                        s=2, color='#cccccc', alpha=0.4, linewidths=0)
 
-        # Full dipole axis: arrow from − to +
-        ax.quiver(neg_mm_pt[0], neg_mm_pt[1], neg_mm_pt[2],
-                  ori[0] * half_mm * 2, ori[1] * half_mm * 2, ori[2] * half_mm * 2,
-                  color='darkred', linewidth=1.5, arrow_length_ratio=0.25)
-
-        # Negative pole (filled blue circle)
-        ax.scatter([neg_mm_pt[0]], [neg_mm_pt[1]], [neg_mm_pt[2]],
-                   s=80, color='steelblue', marker='o', zorder=6, label='− (neg)')
-        # Positive pole (red triangle)
-        ax.scatter([pos_mm_pt[0]], [pos_mm_pt[1]], [pos_mm_pt[2]],
-                   s=80, color='crimson', marker='^', zorder=6, label='+ (pos)')
+        # The dipole with a short arrow towards its negative pole (−ori; see _plot_dipole).
+        ax.quiver(dip_mm[0], dip_mm[1], dip_mm[2],
+                  -ori[0] * arrow_mm, -ori[1] * arrow_mm, -ori[2] * arrow_mm,
+                  color='darkred', linewidth=1.5, arrow_length_ratio=0.3)
+        ax.scatter([dip_mm[0]], [dip_mm[1]], [dip_mm[2]],
+                   s=30, color='black', marker='o', zorder=7, label='dipole')
+        # The cortical point of its negative maximum.
+        ax.plot([dip_mm[0], neg_mm[0]], [dip_mm[1], neg_mm[1]], [dip_mm[2], neg_mm[2]],
+                color='steelblue', linewidth=1.0, linestyle=':')
+        ax.scatter([neg_mm[0]], [neg_mm[1]], [neg_mm[2]], s=160, color='steelblue',
+                   edgecolors='black', linewidths=1.0, marker='o', zorder=8, label='negative maximum')
 
         _configure_3d_ax(ax, title, elev, azim)
 
@@ -906,7 +1024,7 @@ def _plot_dipole_3d():
     gof_pct = round(float(gof) * 100.0, 1) if gof is not None else 0.0
     ax4 = fig.add_subplot(2, 2, 4)
     ax4.axis('off')
-    ax4.text(0.5, 0.5, f'GOF\n{gof_pct} %', ha='center', va='center',
+    ax4.text(0.5, 0.5, _dipole_caption(gof_pct), ha='center', va='center',
              fontsize=14, transform=ax4.transAxes)
     _draw_fig_to_canvas(fig, source_canvas)
     plt.close(fig)

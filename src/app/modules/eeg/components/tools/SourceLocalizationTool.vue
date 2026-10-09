@@ -64,7 +64,7 @@
                     >
                         <span slot="suffix">s</span>
                     </wa-input>
-                    <template v-if="method === 'dipole'">
+                    <template v-if="method === 'dipole' && polarityApplies">
                     <label class="control-label">{{ $t('Pole') }}</label>
                     <div class="mode-buttons">
                         <button
@@ -130,6 +130,7 @@ import { T } from '#i18n'
 import { useStore } from 'vuex'
 import { useEegContext } from '#app/modules/eeg'
 import { shouldDisplayChannel } from '@epicurrents/core/util'
+import { alignedChannelLabels } from './sourceChannels'
 import { Log } from 'scoped-event-log'
 import {
     useSourceLocalization,
@@ -199,10 +200,14 @@ const defaultSourceLocMethod = (): SourceLocMethod => {
  * distributed inverses read the same three-component field, so one request serves every method in
  * {@link SOURCE_LOC_METHODS}.
  *
+ * It also decides whether the dipole's surface polarity is offered: a fixed-orientation fit can be
+ * constrained to a surface-negative or surface-positive source, while a free-orientation fit takes
+ * the moment's direction from the data and has nothing for the choice to act on.
+ *
  * Not derived from the selected method, because the lead field is fetched when the tool opens and
  * the selection can change after that without a refetch.
  */
-const SOURCE_LOC_N_ORIENT = 3
+const SOURCE_LOC_N_ORIENT = 3 as 1 | 3
 
 type SourceLocState =
     | 'loading'      // fetching lead field + setting up Pyodide
@@ -239,6 +244,7 @@ export default defineComponent({
         const dipolePolarity      = ref<SourceLocPolarity>('negative')
         const method              = ref(defaultSourceLocMethod())
         const plotMode            = ref<SourceLocPlotMode>('2d')
+        const polarityApplies     = SOURCE_LOC_N_ORIENT === 1
         const resultSummary       = ref<string | null>(null)
         const snr                 = ref(3.0)
         const state               = ref<SourceLocState>('loading')
@@ -252,6 +258,7 @@ export default defineComponent({
             lfSetup,
             method,
             plotMode,
+            polarityApplies,
             resultSummary,
             root,
             snr,
@@ -277,9 +284,9 @@ export default defineComponent({
             return SETUP_TO_MNE[setupName] ?? 'standard_1020'
         },
         /**
-         * Collect EEG channel labels from the active montage, in signal-index
-         * order. Used by the orchestrator to intersect with the lead-field
-         * channel list.
+         * The electrode label of every channel of the active montage, at its signal index, with an
+         * empty string for a channel that is hidden or not EEG (see `alignedChannelLabels`). Used by
+         * the orchestrator to intersect with the lead-field channel list.
          *
          * Source localisation requires a common-reference montage. With a
          * bipolar montage the signal T7−T8 would be matched to the T7 lead-field
@@ -295,9 +302,10 @@ export default defineComponent({
                     SCOPE,
                 )
             }
-            return (this.RESOURCE.activeMontage?.channels ?? [])
-                .filter(ch => shouldDisplayChannel(ch, false, this.SETTINGS) && ch.modality === 'eeg')
-                .map(ch => ch.label.split('-')[0])
+            return alignedChannelLabels(
+                this.RESOURCE.activeMontage?.channels ?? [],
+                ch => shouldDisplayChannel(ch, false, this.SETTINGS) && ch.modality === 'eeg',
+            )
         },
         /**
          * Full load sequence: script → lead field fetch + channel match →
@@ -423,7 +431,12 @@ export default defineComponent({
                 return
             }
             // Build a one-line summary from the result.
-            if (result.dipoleGofPct !== undefined && result.dipolePosMm) {
+            if (result.dipoleGofPct !== undefined && result.nearestElectrode) {
+                this.resultSummary = this.$t(
+                    'Negative maximum near {electrode} — GOF {gof}%',
+                    { electrode: result.nearestElectrode, gof: result.dipoleGofPct.toFixed(1) },
+                )
+            } else if (result.dipoleGofPct !== undefined && result.dipolePosMm) {
                 const [x, y, z] = result.dipolePosMm.map(v => v.toFixed(0))
                 this.resultSummary = this.$t(
                     'Dipole ({x}, {y}, {z}) mm — GOF {gof}%',
