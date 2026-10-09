@@ -7,7 +7,9 @@
  *
  * The disc is inset rather than filling the canvas because the nose, the ears and part of the outer electrode ring
  * project beyond the head circle. That is not an artefact of this projection: a 10-20 montage in head coordinates has
- * no circle radius that contains all of it, and MNE's own topomaps overflow further than these do.
+ * no circle radius that contains all of it, and MNE's own topomaps overflow further than these do. A topogram built
+ * with an `extent` above 1 draws its field past the head circle too, out to that many head radii, and the inset makes
+ * room for whichever reaches further, the field or the markers.
  *
  * @package    epicurrents/interface
  * @copyright  2026 Sampsa Lohi
@@ -48,7 +50,7 @@ export default class TopogramCanvas {
     protected _canvas: HTMLCanvasElement
     protected _electrodes: { radius: number, x: number, y: number }[]
     protected _image: ImageData | null = null
-    /** Fraction of the canvas the head disc fills, chosen to keep every marker on the canvas. */
+    /** Fraction of the canvas the head circle's diameter spans, chosen to keep the field and every marker on it. */
     protected _inset: number
     protected _options: typeof DEFAULT_OPTIONS
     protected _selected: boolean[] = []
@@ -64,11 +66,11 @@ export default class TopogramCanvas {
         this._topogram = topogram
         this._options = { ...DEFAULT_OPTIONS, ...(options ?? {}) }
         this._electrodes = topogram.electrodePixels()
-        // How far the outermost electrode reaches decides how large the disc can be. A 10-20 montage
-        // needs room for the frontopolar pair at 1.22 head radii; a 10-10 montage adds the inferior
-        // ring — F9/F10, T9/T10, P9/P10, Iz — which reaches past 1.5, and at a fixed inset those
+        // How far the outermost electrode reaches decides how large the disc can be. A 10-20 montage's
+        // outer ring lands on or just outside the head circle all round; a 10-10 montage adds the inferior
+        // ring — F9/F10, T9/T10, P9/P10, Iz — which reaches much further, and at a fixed inset those
         // markers fall off the canvas entirely, which reads as a montage missing eight electrodes.
-        const reach = this._electrodes.reduce((max, electrode) => Math.max(max, electrode.radius), 1)
+        const reach = this._electrodes.reduce((max, electrode) => Math.max(max, electrode.radius), topogram.extent)
         this._inset = Math.min(MAX_INSET, Math.max(MIN_INSET, MARKER_MARGIN/reach))
         this._buffer = document.createElement('canvas')
         this._buffer.width = topogram.resolution
@@ -95,7 +97,9 @@ export default class TopogramCanvas {
         this._topogram.toRgba(values, this._image.data, limit, ramp)
         bufferContext.putImageData(this._image, 0, 0)
         const size = this._canvas.width
-        const diameter = size*this._inset
+        const headDiameter = size*this._inset
+        // The grid spans the field's disc, which is the head circle scaled by the topogram's extent.
+        const diameter = headDiameter*this._topogram.extent
         const offset = (size - diameter)/2
         const scale = diameter/this._topogram.resolution
         context.clearRect(0, 0, size, this._canvas.height)
@@ -103,7 +107,7 @@ export default class TopogramCanvas {
         if (contours > 0) {
             this._drawContours(context, values, limit, contours, offset, scale)
         }
-        this._drawOutline(context, size, diameter/2)
+        this._drawOutline(context, size, headDiameter/2)
         this._drawElectrodes(context, size, offset, scale)
     }
 

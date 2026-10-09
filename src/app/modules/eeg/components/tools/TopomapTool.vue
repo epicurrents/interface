@@ -6,7 +6,19 @@
         </div>
         <template v-else>
             <div class="panel topo">
-                <div class="header">{{ $t('Voltage field map') }}</div>
+                <div class="header">
+                    {{ $t('Voltage field map') }}
+                    (
+                        <a
+                            :class="{ active: fieldExtent === 'confined' }"
+                            @click="setFieldExtent('confined')"
+                        >{{ $t('confined') }}</a> /
+                        <a
+                            :class="{ active: fieldExtent === 'full' }"
+                            @click="setFieldExtent('full')"
+                        >{{ $t('full') }}</a>
+                    )
+                </div>
                 <canvas ref="topo" class="map"></canvas>
                 <div v-if="showColorbar" class="colorbar">
                     <div class="scale" :style="`background: ${colorbarGradient};`"></div>
@@ -74,6 +86,19 @@ const PANEL_CHROME = 44
 const MIN_ELECTRODES = 4
 /** Signal values are normalised to volts on decode, so this converts only for display and for the scale setting. */
 const MICROVOLTS_PER_VOLT = 1_000_000
+/** Head radii the full field reaches past the outermost electrode, so its marker sits on colour rather than its rim. */
+const FULL_FIELD_MARGIN = 0.05
+
+/**
+ * How far the 2D field is drawn.
+ *
+ * - `confined`: within the head circle, the head model's equator. The outer 10-20 ring sits just past its edge, and
+ *   the inferior temporal chain of the IFCN array (F9/F10, T9/T10, P9/P10) a third of a radius further, so a
+ *   discharge peaking there shows only as a gradient running off the rim.
+ * - `full`: out to the outermost electrode of the montage, so every electrode's value is drawn under its marker. The
+ *   spline is fitted to those electrodes like any other, so the field out there is interpolated, not extrapolated.
+ */
+type FieldExtent = 'confined' | 'full'
 
 export default defineComponent({
     name: 'TopomapTool',
@@ -138,6 +163,8 @@ export default defineComponent({
             eegTraceIndices,
             /** Per-vertex colour buffer for the surface, reused every frame. */
             colorBuffer: null as Float32Array | null,
+            /** How far the 2D field is drawn; see `FieldExtent`. Changing it rebuilds the 2D view. */
+            fieldExtent: ref<FieldExtent>('confined'),
             fieldMatch: null as FieldMapChannelMatch | null,
             /** Indices of the selected channels among the field map's own channels. */
             fieldSelection: [] as number[],
@@ -157,6 +184,10 @@ export default defineComponent({
             settingsVersion: ref(0),
             topogramCanvas: null as TopogramCanvas | null,
             topogram: null as EegTopogram | null,
+            /** Sphere origin the 2D view is built around: the surface field map's, so the two views agree. */
+            topogramOrigin: undefined as { x: number, y: number, z: number } | undefined,
+            /** Electrode positions the 2D view is built from, in topogram order. */
+            topogramPositions: [] as { x: number, y: number, z: number }[],
             voltageLimit: ref(0),
             // DOM elements
             component: ref<HTMLDivElement>() as Ref<HTMLDivElement>,
@@ -169,6 +200,13 @@ export default defineComponent({
     watch: {
         cursorPos () {
             this.scheduleRedraw()
+        },
+        fieldExtent () {
+            if (this.preparing || !this.topogramPositions.length) {
+                return
+            }
+            this.buildTopogram()
+            this.setUpTopogramCanvas()
         },
         height () {
             this.resize()
@@ -268,6 +306,24 @@ export default defineComponent({
             }, [] as number[])
             this.renderer?.setSelectedElectrodes(this.fieldSelection)
         },
+        /**
+         * Build the 2D interpolation operator for the montage at the current `fieldExtent`.
+         *
+         * The full extent is derived from the confined topogram's own electrode projection, which is the same at any
+         * extent, so the field ends just past the outermost marker whatever the montage. Both are cached by
+         * `EegTopogram.forPositions`, so switching back and forth builds each operator once.
+         */
+        buildTopogram () {
+            const confined = EegTopogram.forPositions(this.topogramPositions, GRID_RESOLUTION, this.topogramOrigin)
+            if (this.fieldExtent !== 'full') {
+                this.topogram = markRaw(confined)
+                return
+            }
+            const reach = confined.electrodePixels().reduce((max, electrode) => Math.max(max, electrode.radius), 1)
+            this.topogram = markRaw(EegTopogram.forPositions(
+                this.topogramPositions, GRID_RESOLUTION, this.topogramOrigin, reach + FULL_FIELD_MARGIN
+            ))
+        },
         /** Draw both views from the signal values under the cursor. */
         draw () {
             const values = this.readValues()
@@ -277,8 +333,11 @@ export default defineComponent({
             const topogramValues = Float32Array.from(this.positionIndices, index => values[index])
             // One limit for both views, so a feature that saturates in the 2D map saturates in the 3D
             // one as well. Deriving it per view would let the same voltage read as two intensities.
+            // The automatic limit is the largest measured electrode value, the full field's scale, rather
+            // than the largest value of whatever the 2D view draws: how far that reaches (`fieldExtent`)
+            // must not rescale either view.
             const fixed = this.SETTINGS.topogram.scale/MICROVOLTS_PER_VOLT
-            const limit = fixed > 0 ? fixed : EegTopogram.limitOf(this.topogram.interpolate(topogramValues))
+            const limit = fixed > 0 ? fixed : EegTopogram.limitOf(topogramValues)
             this.voltageLimit = limit
             const contours = Math.round(this.SETTINGS.topogram.contours)
             this.topogramCanvas?.draw(topogramValues, limit, contours, this.ramp)
@@ -319,7 +378,9 @@ export default defineComponent({
             const match = EegSurfaceFieldMap.forLabels(this.eegLabels)
             this.fieldMatch = match ? markRaw(match) : null
             this.hasFieldMap = match !== null
-            this.topogram = markRaw(EegTopogram.forPositions(positions, GRID_RESOLUTION, match?.map.origin))
+            this.topogramPositions = markRaw(positions)
+            this.topogramOrigin = match?.map.origin
+            this.buildTopogram()
             if (match) {
                 this.colorBuffer = markRaw(new Float32Array(match.map.vertices.length))
             }
@@ -402,11 +463,22 @@ export default defineComponent({
                 this.draw()
             })
         },
+        /** Set how far the 2D field is drawn. */
+        setFieldExtent (extent: FieldExtent) {
+            this.fieldExtent = extent
+        },
+        /** Attach the 2D view to its canvas, replacing any previous one, and redraw it with the current selection. */
+        setUpTopogramCanvas () {
+            if (!this.topogram || !this.topo) {
+                return
+            }
+            this.topogramCanvas = markRaw(new TopogramCanvas(this.topo, this.topogram))
+            this.applySelection()
+            this.scheduleRedraw()
+        },
         /** Attach both views to their canvases, once the template has rendered them. */
         setUpViews () {
-            if (this.topogram && this.topo) {
-                this.topogramCanvas = markRaw(new TopogramCanvas(this.topo, this.topogram))
-            }
+            this.setUpTopogramCanvas()
             if (!this.fieldMatch || !this.surface) {
                 return
             }
@@ -418,6 +490,10 @@ export default defineComponent({
                 return
             }
             this.renderer = markRaw(renderer)
+        },
+        /** Switch the 2D field between the confined and the full extent. */
+        toggleFieldExtent () {
+            this.fieldExtent = this.fieldExtent === 'full' ? 'confined' : 'full'
         },
     },
     beforeMount () {
@@ -476,6 +552,12 @@ export default defineComponent({
         font-variant: small-caps;
         text-align: center;
     }
+    .panel > .header > a {
+        cursor: pointer;
+    }
+    .panel > .header > a.active {
+        text-decoration: underline;
+    }
     .panel > .map {
         display: block;
         width: v-bind(canvasCssSize);
@@ -493,8 +575,8 @@ export default defineComponent({
 }
 .colorbar {
     position: absolute;
-    top: 20%;
-    right: -2.5rem;
+    top: 22.5%;
+    right: -3.5rem;
     display: flex;
     height: 60%;
     gap: 0.25em;

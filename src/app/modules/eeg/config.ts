@@ -884,11 +884,13 @@ export const settings: EegInterfaceSettings = safeObjectFrom({
     topogram: {
         colorbar: true,
         // The poles stay separable under protanopia and deuteranopia (OKLab dE 25 between them), and there is no hue
-        // at the midpoint. Changing either of those undoes the reason these particular values were chosen.
+        // at the midpoint. Changing either of those undoes the reason these particular values were chosen. They are
+        // dark enough (OKLab L 0.44 and 0.48) that a maximum reads as intense on the full-field scale; lighter poles
+        // cap how strong any value can look, however the scale is set.
         colors: {
-            negative: [0.169, 0.373, 0.816, 1] as SettingsColor,
+            negative: [0.082, 0.278, 0.714, 1] as SettingsColor,
             neutral: [0.941, 0.937, 0.925, 1] as SettingsColor,
-            positive: [0.812, 0.184, 0.184, 1] as SettingsColor,
+            positive: [0.694, 0.0, 0.075, 1] as SettingsColor,
         },
         contours: 5,
         // 0 maps to a ramp gamma of 1, i.e. colour proportional to voltage. Anything higher exaggerates the mid range
