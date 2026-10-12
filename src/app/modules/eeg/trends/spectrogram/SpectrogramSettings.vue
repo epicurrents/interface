@@ -1,5 +1,5 @@
 <template>
-    <div data-component="spectrogram-settings">
+    <div data-component="spectrogram-settings" class="settings">
         <label class="field">
             <span class="label with-info" id="epicv-spectrogram-epoch-label">
                 {{ $t('Epoch') }}
@@ -27,7 +27,7 @@
             <epoch-step-field :epoch-length="effectiveEpochLength" trend="spectrogram"></epoch-step-field>
             <wa-tooltip for="epicv-spectrogram-epoch-length">{{ $t('Epoch length (s)') }}</wa-tooltip>
         </label>
-        <label class="field">
+        <label class="field toggle">
             <span class="label">{{ $t('Mode') }}</span>
             <div class="options">
                 <a
@@ -45,7 +45,7 @@
                 </a>
             </div>
         </label>
-        <label class="field">
+        <label class="field toggle">
             <span class="label">{{ $t('Ref') }}</span>
             <div class="options">
                 <a
@@ -63,7 +63,10 @@
                 </a>
             </div>
         </label>
-        <p class="hint">{{ $t('Recompute after changes.') }}</p>
+        <p class="hint">
+            <a @click="$emit('recompute')">{{ $t('Recompute') }}</a>
+            {{ $t('after changes.') }}
+        </p>
     </div>
 </template>
 
@@ -160,11 +163,7 @@ export default defineComponent({
 <style scoped>
 [data-component="spectrogram-settings"] {
     box-sizing: border-box;
-    font-size: 0.75rem;
-    gap: 0;
-    min-height: 0;
     padding: 0.25rem 0.5rem;
-    width: 100%;
 }
     .field {
         align-items: center;
@@ -172,7 +171,6 @@ export default defineComponent({
         flex: 1;
         gap: 0.5rem;
         justify-content: space-between;
-        padding: 0.25rem 0;
         width: 100%;
     }
         .field > .label {
@@ -182,6 +180,9 @@ export default defineComponent({
             flex: 0 0 3.75rem;
             height: 2rem;
             max-width: 3.75rem;
+        }
+        .field.toggle {
+            padding-top: 0.5rem;
         }
     .options {
         display: flex;
@@ -193,10 +194,4 @@ export default defineComponent({
         .options a.active {
             font-weight: bold;
         }
-    .hint {
-        flex-shrink: 0;
-        font-style: italic;
-        margin: 0;
-        opacity: 0.65;
-    }
 </style>

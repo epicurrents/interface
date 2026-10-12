@@ -28,6 +28,7 @@ const messagesEN = {
     'Dipole ({x}, {y}, {z}) mm — GOF {gof}%': 'Dipole ({x}, {y}, {z}) mm — GOF {gof}%',
     'Document has a total of {n} pages': 'Document has a total of {n} pages',
     'Duration: {t}': 'Duration: {t}',
+    'GOF {gof}%': 'GOF {gof}%',
     'Lead field model for {montage} is not available on this server. Contact an administrator to compute it.':
         'Lead field model for {montage} is not available on this server. Contact an administrator to compute it.',
     'Loading studies from {c}...': 'Loading studies from {c}...',
@@ -35,7 +36,7 @@ const messagesEN = {
     'Loading module dependencies, please wait ({ready}/{total} done)...':
         'Loading module dependencies, please wait ({ready}/{total} done)...',
     'Memory use: {p} % ({u} / {t} MiB)': 'Memory use: {p} % ({u} / {t} MiB)',
-    'Negative maximum near {electrode} — GOF {gof}%': 'Negative maximum near {electrode} — GOF {gof}%',
+    'Negative maximum near {electrode}': 'Negative maximum near {electrode}',
     'Number {n}': 'Number {n}',
     'Peak at {t} ms': 'Peak at {t} ms',
     'Samples are clipped to {min} … {max} {unit}.': 'Samples are clipped to {min} … {max} {unit}.',

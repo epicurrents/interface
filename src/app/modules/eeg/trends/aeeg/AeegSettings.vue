@@ -1,7 +1,6 @@
 <template>
-    <div data-component="aeeg-settings">
+    <div data-component="aeeg-settings" class="settings">
         <label class="field">
-            <span class="label">{{ $t('Epoch') }}</span>
             <span class="label with-info" id="epicv-aeeg-epoch-label">
                 {{ $t('Epoch') }}
             </span>
@@ -11,7 +10,7 @@
             </wa-tooltip>
             <wa-input
                 class="epoch-length"
-                :id="`epicv-aeeg-epoch-length`"
+                id="epicv-aeeg-epoch-length"
                 :min="0"
                 :placeholder="String(derivedEpochLength)"
                 :step="1"
@@ -22,18 +21,22 @@
             >
                 <span slot="end">s</span>
             </wa-input>
+            <wa-tooltip for="epicv-aeeg-epoch-length">{{ $t('Epoch length (s)') }}</wa-tooltip>
         </label>
         <label class="field">
-            <wa-switch
+            <wa-checkbox
                 :checked="isSuperimposed || undefined"
                 id="epicv-aeeg-superimpose"
                 size="s"
                 @input="onSuperimposeChanged($event)"
             >
                 {{ $t('Superimpose') }}
-            </wa-switch>
+            </wa-checkbox>
         </label>
-        <p class="hint">{{ $t('Recompute after changes.') }}</p>
+        <p class="hint">
+            <a @click="$emit('recompute')">{{ $t('Recompute') }}</a>
+            {{ $t('after changes.') }}
+        </p>
     </div>
 </template>
 
@@ -111,15 +114,7 @@ export default defineComponent({
 <style scoped>
 [data-component="aeeg-settings"] {
     box-sizing: border-box;
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-    font-size: 0.75rem;
-    gap: 0;
-    min-height: 0;
-    overflow: hidden;
     padding: 0.25rem 0.5rem;
-    width: 100%;
 }
     .field {
         align-items: center;
@@ -132,17 +127,12 @@ export default defineComponent({
         width: 100%;
     }
         .field > wa-input {
-            flex: 0 0 5rem !important;
-            max-width: 5rem !important;
+            flex: 0 0 4rem !important;
+            max-width: 4rem !important;
         }
-        [data-component="aeeg-settings"] wa-switch {
+        [data-component="aeeg-settings"] wa-checkbox {
             flex-shrink: 0;
+            font-size: 0.75rem;
             padding-top: 0;
         }
-    .hint {
-        flex-shrink: 0;
-        font-style: italic;
-        margin: 0;
-        opacity: 0.65;
-    }
 </style>

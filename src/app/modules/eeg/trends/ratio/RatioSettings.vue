@@ -1,5 +1,5 @@
 <template>
-    <div data-component="ratio-settings">
+    <div data-component="ratio-settings" class="settings">
         <label class="field">
             <span class="label with-info" id="epicv-ratio-epoch-label">
                 {{ $t('Epoch') }}
@@ -63,7 +63,7 @@
                 </a>
             </div>
         </label>
-        <label class="field">
+        <label class="field toggle">
             <span class="label">{{ $t('Mirror') }}</span>
             <div class="options">
                 <a
@@ -81,7 +81,10 @@
                 </a>
             </div>
         </label>
-        <p class="hint">{{ $t('Empty scales the epoch with the recording. Recompute after changes.') }}</p>
+        <p class="hint">
+            <a @click="$emit('recompute')">{{ $t('Recompute') }}</a>
+            {{ $t('after changes.') }}
+        </p>
     </div>
 </template>
 
@@ -205,14 +208,6 @@ export default defineComponent({
 
 <style scoped>
 [data-component="ratio-settings"] {
-    box-sizing: border-box;
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-    font-size: 0.75rem;
-    gap: 0;
-    min-height: 0;
-    overflow: hidden;
     padding: 0.25rem 0.5rem;
     width: 100%;
 }
@@ -222,7 +217,6 @@ export default defineComponent({
         flex: 1;
         gap: 0.5rem;
         justify-content: space-between;
-        padding: 0.25rem 0;
         width: 100%;
     }
         .field > .label {
@@ -237,6 +231,9 @@ export default defineComponent({
             flex: 0 0 4.25rem;
             max-width: 4.25rem;
         }
+        .field.toggle {
+            padding-top: 0.5rem;
+        }
     .options {
         display: flex;
         gap: 0.25rem;
@@ -247,10 +244,4 @@ export default defineComponent({
         .options a.active {
             font-weight: bold;
         }
-    .hint {
-        flex-shrink: 0;
-        font-style: italic;
-        margin: 0;
-        opacity: 0.65;
-    }
 </style>

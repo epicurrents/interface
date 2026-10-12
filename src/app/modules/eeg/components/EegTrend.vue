@@ -44,6 +44,7 @@
                 <component v-if="settingsComponent"
                     class="settings"
                     :is="settingsComponent"
+                    v-on:recompute="recomputeTrends"
                 />
             </div>
         </div>
@@ -235,6 +236,7 @@ export default defineComponent({
     .controls > .panel > .settings {
         flex: 1 1 auto;
         flex-direction: column;
+        font-size: 0.75rem;
         justify-content: flex-start;
         overflow: hidden;
         padding-right: 1rem;
@@ -254,6 +256,16 @@ export default defineComponent({
     .controls > .panel:deep(.field > wa-input.threshold) {
         flex: 0 0 4.5rem;
         max-width: 4.5rem;
+    }
+    .controls > .panel:deep(.hint) {
+        flex-shrink: 0;
+        font-style: italic;
+        margin: 0;
+        opacity: 0.65;
+        padding-top: 0.5rem;
+    }
+    .controls > .panel:deep(.hint a) {
+        cursor: pointer;
     }
     .controls > .panel:deep(.label.with-info) {
         text-decoration: underline dashed;
