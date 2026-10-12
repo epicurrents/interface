@@ -96,6 +96,7 @@
                             3D
                         </button>
                     </div>
+                    <span class="result-summary">{{ resultSummary.join('\n') }}</span>
                     <wa-button
                         appearance="plain"
                         class="analyze-btn"
@@ -105,7 +106,6 @@
                     >
                         {{ $t('Analyze') }}
                     </wa-button>
-                    <span v-if="resultSummary" class="result-summary">{{ resultSummary }}</span>
                 </div>
             </div>
         </template>
@@ -245,7 +245,7 @@ export default defineComponent({
         const method              = ref(defaultSourceLocMethod())
         const plotMode            = ref<SourceLocPlotMode>('2d')
         const polarityApplies     = SOURCE_LOC_N_ORIENT === 1
-        const resultSummary       = ref<string | null>(null)
+        const resultSummary       = ref<string[]>([])
         const snr                 = ref(3.0)
         const state               = ref<SourceLocState>('loading')
         const statusMessage       = ref('')
@@ -313,7 +313,7 @@ export default defineComponent({
          */
         async load () {
             this.state = 'loading'
-            this.resultSummary = null
+            this.resultSummary = []
             const service = this.PYODIDE?.service
             if (!service) {
                 this.statusMessage = this.$t('Pyodide service unavailable.')
@@ -400,7 +400,7 @@ export default defineComponent({
                 return
             }
             this.state = 'computing'
-            this.resultSummary = null
+            this.resultSummary = []
             // Re-push method + SNR in case the user changed them since load.
             const sfreq = this.RESOURCE.samplingRate ?? 256
             await this.sourceLoc.setup(
@@ -432,10 +432,10 @@ export default defineComponent({
             }
             // Build a one-line summary from the result.
             if (result.dipoleGofPct !== undefined && result.nearestElectrode) {
-                this.resultSummary = this.$t(
-                    'Negative maximum near {electrode} — GOF {gof}%',
-                    { electrode: result.nearestElectrode, gof: result.dipoleGofPct.toFixed(1) },
-                )
+                this.resultSummary = [
+                    this.$t('Negative maximum near {electrode}', { electrode: result.nearestElectrode }),
+                    this.$t('GOF {gof}%', { gof: result.dipoleGofPct.toFixed(1) }),
+                ]
             } else if (result.dipoleGofPct !== undefined && result.dipolePosMm) {
                 const [x, y, z] = result.dipolePosMm.map(v => v.toFixed(0))
                 this.resultSummary = this.$t(
@@ -593,13 +593,15 @@ export default defineComponent({
             border-color: transparent;
             color: #fff;
         }
-    .analyze-btn {
-        margin-top: auto;
-        width: 100%;
-    }
     .result-summary {
-        font-size: 0.72rem;
+        font-size: 0.75rem;
+        margin-top: auto;
         opacity: 0.75;
+        text-align: center;
+        white-space: pre-line;
         word-break: break-word;
+    }
+    .analyze-btn {
+        width: 100%;
     }
 </style>
