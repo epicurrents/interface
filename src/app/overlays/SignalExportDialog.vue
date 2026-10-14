@@ -12,6 +12,14 @@
     >
         <p v-if="!resource" class="epicv-text-faint">{{ $t('There is no recording to export.') }}</p>
         <template v-else>
+            <!-- The target's switch, set first: it decides which constraints the rest of the dialog is held to. -->
+            <wa-switch v-if="target?.toggle"
+                class="toggle"
+                :checked="toggleOn"
+                :disabled="busy"
+                size="s"
+                @input="setToggle($event.target.checked)"
+            >{{ target.toggle.label }}</wa-switch>
             <!-- Range -->
             <h3>{{ $t('Range') }}</h3>
             <div class="row">
@@ -179,7 +187,7 @@
  */
 import { defineComponent, PropType, ref } from "vue"
 import { T } from "#i18n"
-import { checkExportSelection, suggestExportSource } from "@epicurrents/core/util"
+import { checkExportSelection, exportTargetMode, suggestExportSource } from "@epicurrents/core/util"
 import type {
     BiosignalResource,
     EpicurrentsApp,
@@ -187,6 +195,7 @@ import type {
     SignalExportSelection,
     SignalExportSourceChannel,
     SignalExportTarget,
+    SignalExportTargetMode,
 } from "@epicurrents/core/types"
 import AppIcon from '#app/AppIcon.vue'
 
@@ -241,6 +250,8 @@ export default defineComponent({
          * have, it stays where they put it, across reopening the dialog, for as long as the same recording is active.
          */
         const startSetFor = ref<string | null>(null)
+        /** The state of the target's toggle, where it has one; reset to the toggle's initial state on opening. */
+        const toggleOn = ref(true)
         return {
             busy,
             length,
@@ -248,6 +259,7 @@ export default defineComponent({
             rows,
             start,
             startSetFor,
+            toggleOn,
         }
     },
     computed: {
@@ -258,7 +270,7 @@ export default defineComponent({
             return !this.busy && !!this.resource && !!this.exporter?.exportActiveResource && !this.problems.length
         },
         constraints (): SignalExportConstraints | undefined {
-            return this.target?.constraints
+            return this.mode?.constraints
         },
         deidentified (): boolean {
             return this.exportOptions.deidentify !== false
@@ -289,7 +301,7 @@ export default defineComponent({
          */
         exportOptions (): Record<string, unknown> {
             const defaults = this.target ? { deidentify: true, deidentifySidecar: true } : { deidentify: true }
-            const options = { ...defaults, ...(this.target?.options || {}), selection: this.selection } as
+            const options = { ...defaults, ...(this.mode?.options || {}), selection: this.selection } as
                 Record<string, unknown>
             const forbidden = this.constraints?.forbiddenMetadataKeys || []
             if (forbidden.length) {
@@ -305,6 +317,10 @@ export default defineComponent({
             return (this.resource?.interruptions || []).map(
                 ({ start, duration }): [number, number] => [start, duration]
             )
+        },
+        /** How the target exports in its toggle's current state; null when exporting to a file. */
+        mode (): SignalExportTargetMode | null {
+            return this.target ? exportTargetMode(this.target, this.toggleOn) : null
         },
         /** The latest start from which the shortest permitted length still fits in the recording. */
         maxStart (): number {
@@ -361,7 +377,7 @@ export default defineComponent({
             return selection
         },
         sidecarIdentified (): boolean {
-            return !!this.target?.sidecar && this.exportOptions.deidentifySidecar === false
+            return !!this.mode?.sidecar && this.exportOptions.deidentifySidecar === false
         },
         signalSources (): { index: number, label: string }[] {
             return this.sources
@@ -474,10 +490,27 @@ export default defineComponent({
          */
         initialise () {
             this.busy = false
-            this.rate = null
+            this.toggleOn = this.target?.toggle?.initial ?? true
             if (this.resource && this.startSetFor !== this.resource.id) {
                 this.startSetFor = null
             }
+            this.resetChoices()
+        },
+        moveRow (index: number, step: number) {
+            const other = index + step
+            if (other < 0 || other >= this.rows.length) {
+                return
+            }
+            const rows = [...this.rows]
+            ;[rows[index], rows[other]] = [rows[other], rows[index]]
+            this.rows = rows
+        },
+        /**
+         * Reset the length, the rate and the channel rows to what the constraints in effect allow, keeping the start
+         * where it can stay.
+         */
+        resetChoices () {
+            this.rate = null
             this.length = this.durations.length ? this.durations[0] : 0
             if (this.startSetFor) {
                 this.start = Math.min(this.start, this.maxStart)
@@ -499,15 +532,6 @@ export default defineComponent({
                 }))
             }
         },
-        moveRow (index: number, step: number) {
-            const other = index + step
-            if (other < 0 || other >= this.rows.length) {
-                return
-            }
-            const rows = [...this.rows]
-            ;[rows[index], rows[other]] = [rows[other], rows[index]]
-            this.rows = rows
-        },
         /**
          * Encode the recording under the selection and hand it to the exporter's caller or the target.
          */
@@ -517,18 +541,20 @@ export default defineComponent({
             }
             this.busy = true
             try {
+                // Taken before encoding, so the file goes where the switch said when it was made.
+                const mode = this.mode
                 const result = await this.exporter.exportActiveResource(this.exportOptions)
                 if (!result) {
                     this.$emit('sent', { message: this.$t('Exporting the recording failed.'), success: false })
                     return
                 }
-                if (!this.target) {
+                if (!mode) {
                     this.$emit('exported-file', result)
                     return
                 }
-                const outcome = await this.target.submit({
+                const outcome = await mode.submit({
                     data: result.edf,
-                    sidecar: this.target.sidecar ? result.sidecar : null,
+                    sidecar: mode.sidecar ? result.sidecar : null,
                 })
                 this.$emit('sent', outcome)
             } catch (error) {
@@ -551,6 +577,17 @@ export default defineComponent({
         setRate (value: string) {
             const rate = Number(value)
             this.rate = value.trim() && Number.isFinite(rate) ? rate : null
+        },
+        /**
+         * Turn the target's toggle on or off. The constraints change with it, so the choices they fix are reset.
+         * @param value - Is the toggle on.
+         */
+        setToggle (value: boolean) {
+            if (value === this.toggleOn) {
+                return
+            }
+            this.toggleOn = value
+            this.resetChoices()
         },
         setSource (index: number, value: string) {
             this.rows[index].source = value === '' ? -1 : Number(value)
@@ -582,6 +619,10 @@ export default defineComponent({
 [data-component="signal-export-dialog"] h3 {
     font-size: 1rem;
     margin: 1rem 0 0.5rem;
+}
+.toggle {
+    display: block;
+    margin-top: 0.5rem;
 }
 .row {
     display: flex;
