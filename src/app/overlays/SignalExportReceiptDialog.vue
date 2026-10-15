@@ -4,10 +4,6 @@
         data-component="signal-export-receipt-dialog"
         :label="$t('Receipt')"
         :open="open"
-        :style="`--width:40rem;`"
-        @click.stop=""
-        @keydown.stop=""
-        @keyup.stop=""
         @wa-close="closeDialog"
     >
         <p>

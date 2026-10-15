@@ -2,8 +2,6 @@
     <wa-dropdown data-component="context-menu"
         :open="true"
         ref="component"
-        @keydown.stop=""
-        @keyup.stop=""
     >
         <wa-button slot="trigger"></wa-button>
         <h6 v-if="context.channel">{{ context.channel.label }}</h6>

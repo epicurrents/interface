@@ -3,8 +3,6 @@
         class="epicv-dialog"
         data-component="dataset-dialog"
         :label="title"
-        :style="`--width:40rem;`"
-        @click.stop=""
     >
         <wa-input
             v-property="'name'"

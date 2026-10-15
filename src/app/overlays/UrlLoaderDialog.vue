@@ -3,8 +3,6 @@
         class="epicv-dialog"
         data-component="url-loader-dialog"
         :label="$t(title)"
-        :style="`--width:40rem;`"
-        @click.stop=""
         @wa-after-show="focusInput"
         @wa-close="closeDialog"
     >

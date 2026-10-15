@@ -3,8 +3,6 @@
         class="epicv-dialog"
         data-component="connector-dialog"
         :label="$t(title)"
-        :style="`--width:40rem;`"
-        @click.stop=""
     >
         <div class="url-row">
             <wa-input
@@ -152,7 +150,7 @@
                             size="s"
                             @focusout="createFolderInput = false"
                             @keydown.esc.stop.prevent="null"
-                            @keyup.stop="handleFolderNameKeyup"
+                            @keyup="handleFolderNameKeyup"
                         ></wa-input>
                     </wa-breadcrumb-item>
                 </template>

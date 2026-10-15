@@ -39,9 +39,10 @@ const messagesEN = {
     'Negative maximum near {electrode}': 'Negative maximum near {electrode}',
     'Number {n}': 'Number {n}',
     'Peak at {t} ms': 'Peak at {t} ms',
-    'Samples are clipped to {min} … {max} {unit}.': 'Samples are clipped to {min} … {max} {unit}.',
+    'Samples are clipped to {min} … {max} {unit} with {resolution} {unit} resolution.': 'Samples are clipped to {min} … {max} {unit} with {resolution} {unit} resolution.',
     'Send to {label}': 'Send to {label}',
     'Setting up montage {current} of {total}': 'Setting up montage {current} of {total}',
+    'Signals are resampled to {rate} Hz, as the destination requires.': 'Signals are resampled to {rate} Hz, as the destination requires.',
     'The recording is {duration} s long.': 'The recording is {duration} s long.',
     'Voltage / Δ ({unit})': 'Voltage / Δ ({unit})',
     'uV': 'µV', // Display ASCII-compatible unit uV in the interface as µV.
@@ -76,7 +77,6 @@ const messagesEN = {
     '{n} tables': '{n} table | {n} tables',
     '{n} warnings': '{n} warning | {n} warnings',
     '{rate} Hz': '{rate} Hz',
-    '{rate} Hz, as the destination requires.': '{rate} Hz, as the destination requires.',
     '{value} {unit}': '{value} {unit}',
 }
 

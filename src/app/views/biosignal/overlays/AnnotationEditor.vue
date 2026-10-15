@@ -1,6 +1,8 @@
 <template>
     <div data-component="annotation-editor">
+        <!-- Owns its keys, the save button's included, so typing and tabbing here never reach the hotkeys. -->
         <div class="editor"
+            data-owns-keys
             @focusout="lostFocus"
             @focusin="gotFocus"
         >
@@ -32,7 +34,6 @@
                 variant="brand"
                 @click="save"
                 @keydown="handleButtonKeydown"
-                @keyup.stop=""
             >
                 <app-icon name="floppy-disk" variant="light"></app-icon>
             </wa-button>
@@ -103,32 +104,22 @@ export default defineComponent({
             }
         },
         handleButtonKeydown (event: KeyboardEvent) {
-            // Stop all other keydown events from propagating except for Escape (to close the editor).
-            if (event.key !== 'Escape') {
-                event.stopPropagation()
-                if (event.key === 'Tab' && !event.shiftKey) {
-                    // Default navigation would jump to the next element, which resides outside of the editor
-                    // panel and would thus close it. We'll prevent that and instead make it jump back to the
-                    // fist element on the panel.
-                    event.preventDefault()
-                    this.input.focus()
-                }
+            if (event.key === 'Tab' && !event.shiftKey) {
+                // Default navigation would jump to the next element, which resides outside of the editor
+                // panel and would thus close it. We'll prevent that and instead make it jump back to the
+                // fist element on the panel.
+                event.preventDefault()
+                this.input.focus()
             }
         },
         handleLabelKeydown (event: KeyboardEvent) {
-            // Stop all other keydown events from propagating except for Escape (to close the editor).
-            if (event.key !== 'Escape') {
-                event.stopPropagation()
-                if (event.key === 'Tab' && event.shiftKey) {
-                    // Same as with the button, but now we jump to the last element.
-                    event.preventDefault()
-                    this.savebtn.focus()
-                }
+            if (event.key === 'Tab' && event.shiftKey) {
+                // Same as with the button, but now we jump to the last element.
+                event.preventDefault()
+                this.savebtn.focus()
             }
         },
         handleLabelKeyup (event: KeyboardEvent) {
-            // Stop all keyup events from propagating to parent elements.
-            event.stopPropagation()
             if (event.key === 'Enter') {
                 // Save the annotation on enter.
                 this.save()

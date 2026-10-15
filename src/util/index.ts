@@ -15,6 +15,7 @@ import EmptyComponent from './components/EmptyComponent.vue'
 import ErrorComponent from './components/ErrorComponent.vue'
 import LoadingComponent from './components/LoadingComponent.vue'
 import waDirective from './wa-directive'
+export { installKeyGuard, keyEventOwnedByControl, OWNS_KEYS_ATTRIBUTE } from './key-guard'
 import type { SignalPolarity } from '@epicurrents/core/types'
 import type { LoadingComponentProps } from '../types/interface'
 

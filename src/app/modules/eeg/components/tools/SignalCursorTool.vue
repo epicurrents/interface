@@ -69,7 +69,7 @@ import type { PlotTraceSelection } from "#types/plot"
 import { useStore } from "vuex"
 import { useEegContext } from "#app/modules/eeg"
 import { NUMERIC_ERROR_VALUE } from "@epicurrents/core/util"
-import { NO_POINTER_BUTTON_DOWN } from "#util"
+import { keyEventOwnedByControl, NO_POINTER_BUTTON_DOWN } from "#util"
 import { PointerInteraction } from "#types/interface"
 import { Log } from "scoped-event-log"
 
@@ -291,6 +291,10 @@ export default defineComponent({
             this.overlay.style.cursor = 'pointer'
         },
         handleKeydown (event: KeyboardEvent) {
+            // Listening in the capture phase, so ahead of the key guard: a key typed into a field is the field's.
+            if (keyEventOwnedByControl(event)) {
+                return
+            }
             // We want to allow single data point precision navigation from the cursor tool.
             if (event.code === 'ArrowRight') {
                 // We don't want this to also trigger forward navigation.

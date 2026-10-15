@@ -3,7 +3,6 @@
         class="epicv-dialog"
         :label="$t('Log events')"
         :style="`--width:60rem;`"
-        @click.stop=""
     >
         <wa-tab-group>
             <wa-tab panel="browse" slot="nav">{{ $t('Browse')}}</wa-tab>

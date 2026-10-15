@@ -262,7 +262,7 @@ import SplitPanelView from '#app/views/SplitPanelView.vue'
 import ToastStack from '#app/ToastStack.vue'
 import UrlLoaderDialog from '#app/overlays/UrlLoaderDialog.vue'
 import WelcomeDialog from "#app/overlays/WelcomeDialog.vue"
-import { loadAsyncComponent } from '#util'
+import { installKeyGuard, loadAsyncComponent } from '#util'
 import { showToast, type ToastVariant } from '#lib/toast'
 import DefaultInterface from './views/default/DefaultInterface.vue'
 
@@ -345,6 +345,8 @@ export default defineComponent({
         const app = ref<HTMLDivElement>() as Ref<HTMLDivElement>
         const error = ref<HTMLDivElement>() as Ref<HTMLDivElement>
         const placeholder = ref<HTMLDivElement>() as Ref<HTMLDivElement>
+        /** Removes the key guard installed on mount. */
+        const removeKeyGuard = ref<(() => void) | null>(null)
         return {
             browserValid,
             dialogs,
@@ -358,6 +360,7 @@ export default defineComponent({
             app,
             error,
             placeholder,
+            removeKeyGuard,
             // Allow testing views.
             VIEWS,
             // Context properties.
@@ -854,6 +857,9 @@ export default defineComponent({
         }
     },
     mounted () {
+        // Keys typed into a field, or pressed in an open dialog or menu, stop at the document before the hotkey
+        // listeners below and in the modules see them (util/key-guard.ts).
+        this.removeKeyGuard = installKeyGuard()
         // Add event listeners
         window.addEventListener('keydown', this.handleKeydown, false)
         window.addEventListener('keyup', this.handleKeyup, false)
@@ -892,6 +898,9 @@ export default defineComponent({
                 this.loading = false
             }
         })
+    },
+    beforeUnmount () {
+        this.removeKeyGuard?.()
     },
 })
 </script>
@@ -952,6 +961,31 @@ General styles
 .epicv-app sl-spinner.inline, .epicv-app wa-icon.inline {
     position: relative;
     top: 0.125em;
+}
+/* One width for the application's dialogs. A dialog that needs another sets --width itself. */
+.epicv-dialog {
+    --width: 48rem;
+}
+/*
+ * A dialog that scrolls its content holds it in a vertical wa-scroller, which takes the height the dialog leaves under
+ * its header and above its footer. That needs every layer between the dialog body and the scroller to be a flex item
+ * allowed to shrink: the body is made one here, and a dialog that places the scroller deeper, inside tabs say, makes
+ * the layers in between flex items itself. A dialog without a vertical scroller keeps the body's own scrolling.
+ */
+.epicv-dialog:has(wa-scroller[orientation="vertical"])::part(body) {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+.epicv-dialog wa-scroller[orientation="vertical"] {
+    flex: 1 1 auto;
+    /* Replaces the vertical scroller's own height: 100%, which resolves against no definite height in a dialog. */
+    height: auto;
+    min-height: 0;
+}
+.epicv-dialog wa-scroller[orientation="vertical"]::part(content) {
+    padding-right: 0.5rem;
 }
 /* Transition on theme change */
 .epicv-theme-change {

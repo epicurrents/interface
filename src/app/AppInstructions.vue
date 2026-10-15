@@ -3,7 +3,6 @@
         class="epicv-dialog"
         :label="$t('Instructions')"
         :style="`--width:90vw;`"
-        @click.stop=""
     >
         <wa-tab-group>
             <wa-tab panel="general">{{ $t('General')}}</wa-tab>

@@ -49,7 +49,6 @@
                         type="number"
                         :value="String(snr)"
                         @change="onSnrChange"
-                        @keydown.stop=""
                     ></wa-input>
                     <label class="control-label">{{ $t('Window') }}</label>
                     <wa-input
@@ -60,7 +59,6 @@
                         type="number"
                         :value="String(windowSec)"
                         @change="onWindowChange"
-                        @keydown.stop=""
                     >
                         <span slot="suffix">s</span>
                     </wa-input>

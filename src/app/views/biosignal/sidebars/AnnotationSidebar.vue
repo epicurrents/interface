@@ -23,9 +23,9 @@
                 {{ $t('Save annotations to database') }}
             </template>
         </div>
+        <!-- Owns its keys, so the tabs' arrow-key navigation and the lists inside never reach the hotkeys. -->
         <wa-tab-group ref="tabs"
-            @keydown="stopPropagation"
-            @keyup="stopPropagation"
+            data-owns-keys
         >
             <wa-tab v-if="availableTabs.includes('events')" panel="events">
                 {{ $t('Events') }}

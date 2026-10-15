@@ -3,7 +3,6 @@
         class="epicv-dialog"
         :label="$t(title)"
         :style="`--width:40rem;`"
-        @click.stop=""
     >
         <div class="content" v-if="content">{{ content }}</div>
         <wa-button class="confirm" slot="footer" @click="reload">{{ $t('Reload') }}</wa-button>

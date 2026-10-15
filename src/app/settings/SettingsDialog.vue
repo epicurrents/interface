@@ -2,8 +2,6 @@
     <wa-dialog ref="dialog"
         class="epicv-dialog"
         :label="$t('Settings')"
-        :style="`--width:40rem;`"
-        @click.stop=""
     >
             <wa-tab-group @wa-after-hide.stop="">
                 <wa-tab panel="general" slot="nav">{{ $t('General')}}</wa-tab>
@@ -410,14 +408,47 @@ export default defineComponent({
 </script>
 
 <style scoped>
+/* Held to the top rather than centred, so the dialog does not move when a tab of another height is chosen. */
+.epicv-dialog::part(dialog) {
+    margin-block: 5vh auto;
+    max-height: 90vh;
+}
+/*
+ * The open tab's scroller is sized by the application's dialog rules (App.vue), which need every layer between the
+ * dialog body and the scroller to be a flex item allowed to shrink: here the tab group and the active panel. A fixed cap
+ * on the scroller instead holds only for one header and one dialog height.
+ */
 .epicv-dialog::part(body) {
-    max-height: 100%;
     padding-right: 0.5rem;
+}
+.epicv-dialog wa-tab-group {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+}
+.epicv-dialog wa-tab-group::part(base),
+.epicv-dialog wa-tab-group::part(body) {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+}
+/* Only the active panel: an inactive one stays hidden by its own styles. */
+.epicv-dialog wa-tab-panel[active] {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
 }
 .epicv-dialog h5 {
     margin-bottom: 1rem;
 }
 .epicv-dialog wa-tab-panel::part(base) {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
     padding: 1rem 0 0.5rem 0;
 }
 .epicv-dialog wa-callout {
@@ -425,10 +456,6 @@ export default defineComponent({
 }
 .epicv-dialog wa-divider {
     margin: 1rem 0;
-}
-.epicv-dialog wa-scroller::part(content) {
-    padding-right: 0.5rem;
-    max-height: 85vh;
 }
 .title {
     height: 40px;

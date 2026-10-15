@@ -19,8 +19,6 @@
                 type="number"
                 :value="localEpochLength ? String(localEpochLength) : ''"
                 @change="onEpochLengthChanged($event)"
-                @keydown.stop=""
-                @keyup.stop=""
             >
             </wa-input>
             /

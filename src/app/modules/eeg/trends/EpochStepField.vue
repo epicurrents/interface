@@ -8,8 +8,6 @@
         type="number"
         :value="localStep ? String(localStep) : ''"
         @change="onStepChanged($event)"
-        @keydown.stop=""
-        @keyup.stop=""
     >
     </wa-input>
     <wa-tooltip :for="`epicv-${trend}-epoch-step`"
