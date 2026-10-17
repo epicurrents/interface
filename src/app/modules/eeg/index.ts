@@ -19,7 +19,12 @@ import { initialTrend, isTrendOffered, offeredTrends, schemas, settings } from "
 import { TREND_REGISTRY } from "./trends"
 import { applyModuleSettings, useContext } from "#config"
 import { createPropertySetter, type ModulePropertyRegistry } from "#config/properties"
-import type { EegInterfaceSettings, EegModuleConfiguration, LeadFieldProvider } from "./types"
+import type {
+    EegInterfaceSettings,
+    EegModuleConfiguration,
+    HedScorePolicyProvider,
+    LeadFieldProvider,
+} from "./types"
 
 const SCOPE = 'interface-eeg-module'
 
@@ -131,6 +136,10 @@ export const runtime = {
         short: 'EEG',
     },
     cursorToolActive: null as string | null,
+    hedScore: {
+        palette: [] as string[],
+        policy: null as HedScorePolicyProvider | null,
+    },
     isReportOpen: false,
     leadFieldProvider: null as LeadFieldProvider | null,
     openSidebar: null as string | null,
@@ -285,6 +294,14 @@ export const runtime = {
         if (config.leadFieldProvider) {
             runtime.leadFieldProvider = config.leadFieldProvider
         }
+        // The finding picker's palette and the host's policy source. Like the lead fields, the interface holds no URL
+        // for the policy; without a provider the picker offers the whole schema.
+        if (Array.isArray(config.hedScore?.palette)) {
+            runtime.hedScore.palette = config.hedScore.palette.filter(name => typeof name === 'string')
+        }
+        if (typeof config.hedScore?.policy === 'function') {
+            runtime.hedScore.policy = config.hedScore.policy
+        }
         // Hotkeys.
         if (config.hotkeys?.annotation) {
             settings.hotkeys.annotation = config.hotkeys.annotation
@@ -347,6 +364,11 @@ export const runtime = {
 } as InterfaceResourceModule & {
     /** Name of the cursor tool that is active in the interface, null if no tool is active. */
     cursorToolActive: string | null
+    /** The finding picker's configured palette and the host's policy source, null when the host supplied none. */
+    hedScore: {
+        palette: string[]
+        policy: HedScorePolicyProvider | null
+    }
     /** Is the report currently open. */
     isReportOpen: boolean
     /** Host-injected source of pre-computed lead fields, null when the host supplied none (in
@@ -393,4 +415,10 @@ export const useEegContext = (store: EpiCStore, component?: string) => {
 }
 
 export { schemas, settings }
-export type { EegModuleConfiguration, LeadFieldData, LeadFieldProvider } from "./types"
+export type {
+    EegModuleConfiguration,
+    HedScorePolicy,
+    HedScorePolicyProvider,
+    LeadFieldData,
+    LeadFieldProvider,
+} from "./types"

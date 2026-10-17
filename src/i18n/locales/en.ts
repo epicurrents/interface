@@ -44,6 +44,10 @@ const messagesEN = {
     'Setting up montage {current} of {total}': 'Setting up montage {current} of {total}',
     'Signals are resampled to {rate} Hz, as the destination requires.': 'Signals are resampled to {rate} Hz, as the destination requires.',
     'The recording is {duration} s long.': 'The recording is {duration} s long.',
+    'The server and this viewer have different copies of HED-SCORE {version}.':
+        'The server and this viewer have different copies of HED-SCORE {version}.',
+    'The server validates findings against HED-SCORE {server}; this viewer has {viewer}.':
+        'The server validates findings against HED-SCORE {server}; this viewer has {viewer}.',
     'Voltage / Δ ({unit})': 'Voltage / Δ ({unit})',
     'uV': 'µV', // Display ASCII-compatible unit uV in the interface as µV.
     welcome: {

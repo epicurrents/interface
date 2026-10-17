@@ -26,6 +26,14 @@
                     :value="annoClass.name"
                 >{{ $t(annoClass.label) }}</wa-option>
             </wa-select>
+            <!-- Before the save button in the tab order, after it on screen: a row of its own below. -->
+            <div v-if="$slots.codes" class="codes">
+                <slot name="codes"
+                    :codes="annotationCodes"
+                    :disabled="isLocked"
+                    :setCode="setCode"
+                ></slot>
+            </div>
             <wa-button ref="savebtn"
                 appearance="filled-outlined"
                 :disabled="isLocked"
@@ -44,7 +52,11 @@
 
 <script lang="ts">
 /**
- * Context menu for EEG annotation editing.
+ * Editor overlay for an annotation's text and class, shared by the biosignal viewers.
+ *
+ * A viewer that codes annotations in a standard puts its own control in the `codes` slot, which receives the codes
+ * being edited, `setCode(standard, value)` to change one, and whether the annotation is locked. The editor saves the
+ * codes with the text and class, so the slot's control needs no save path of its own.
  */
 import { Ref, defineComponent, ref } from "vue"
 import { T } from "#i18n"
@@ -71,12 +83,14 @@ export default defineComponent({
     setup () {
         const store = useStore()
         const annotationClass = ref('event')
+        const annotationCodes = ref<Record<string, number | string>>({})
         const annotationLabel = ref('')
         const closeTimeout = ref(0)
         const input = ref<WaInput>() as Ref<WaInput>
         const savebtn = ref<WaButton>() as Ref<WaButton>
         return {
             annotationClass,
+            annotationCodes,
             annotationLabel,
             closeTimeout,
             input,
@@ -132,7 +146,25 @@ export default defineComponent({
             }, 100)
         },
         save () {
-            this.$emit('save', { class: this.annotationClass, label: this.annotationLabel })
+            this.$emit('save', {
+                class: this.annotationClass,
+                codes: { ...this.annotationCodes },
+                label: this.annotationLabel,
+            })
+        },
+        /**
+         * Set the code of `standard`, or remove it with `null`.
+         * @param standard - Standard the code follows, such as `hed`.
+         * @param value - The code, or `null` to remove it.
+         */
+        setCode (standard: string, value: number | string | null) {
+            const codes = { ...this.annotationCodes }
+            if (value === null) {
+                delete codes[standard]
+            } else {
+                codes[standard] = value
+            }
+            this.annotationCodes = codes
         },
         updateClass (newClass: string) {
             this.annotationClass = newClass as typeof this.annotationClass
@@ -143,6 +175,8 @@ export default defineComponent({
     },
     beforeMount () {
         this.annotationClass = this.annotation.class
+        // An event created from a class template may carry its codes as an empty array.
+        this.annotationCodes = Array.isArray(this.annotation.codes) ? {} : { ...this.annotation.codes }
         this.annotationLabel = this.annotation.label
         // Add component styles to shadow root
         this.$store.dispatch(
@@ -171,7 +205,7 @@ export default defineComponent({
 }
 .editor {
     display: flex;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     width: 100%;
     max-width: 40rem;
     min-width: 20rem;
@@ -197,5 +231,9 @@ export default defineComponent({
     }
     .editor wa-button wa-icon {
         font-size: 1rem;
+    }
+    .editor .codes {
+        flex: 0 0 100%;
+        order: 1;
     }
 </style>

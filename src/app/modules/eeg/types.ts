@@ -14,7 +14,7 @@ import type {
     ConfigBiosignalSetup,
     SettingsColor,
 } from '@epicurrents/core/types'
-import type { EegModuleSettings } from '@epicurrents/eeg-module/types'
+import type { EegModuleSettings, HedScoreSchema } from '@epicurrents/eeg-module/types'
 
 export type EegInterfaceSchemas = InterfaceSchema
 
@@ -57,6 +57,30 @@ export type LeadFieldProvider = (
     nOrient:     number,
     gridResMm:   number,
 ) => Promise<LeadFieldData | null>
+
+/**
+ * What the host's server accepts as a HED-SCORE finding, which the finding picker narrows itself to. The server's
+ * validator decides; this only keeps the picker from offering what it would refuse.
+ */
+export type HedScorePolicy = {
+    /**
+     * Top-level branches of the merged schema the server accepts, `null` for all of them. The artifact terms sit under
+     * the standard's `Property` branch.
+     */
+    allowedBranches: string[] | null
+    /**
+     * The release the server validates against. The picker disables itself when it differs from the index's; a
+     * `sha256` that is present must match too.
+     */
+    schema: Omit<HedScoreSchema, 'sha256'> & { sha256?: string }
+}
+
+/**
+ * Host-supplied source of the {@link HedScorePolicy}, called when the finding picker first opens. Resolve to `null`
+ * when the server takes no HED codes, which hides the picker. Reject when the lookup failed; the picker then offers
+ * nothing and asks again the next time it opens.
+ */
+export type HedScorePolicyProvider = () => Promise<HedScorePolicy | null>
 
 export type EegInterfaceSettings = CommonBiosignalInterfaceSettings & {
     /** Per-trend display settings — keyed by trend id (`aeeg`, `ratio`, `pdbsi`,
@@ -362,6 +386,19 @@ export type EegModuleConfiguration = ModuleConfiguration & {
         highpass?: number
         lowpass?: number
         notch?: number
+    }
+    /**
+     * The finding picker of the annotation editor, which codes a finding in HED-SCORE under `codes.hed`. Omit it and
+     * the picker offers the whole schema with no palette, which suits a local file with no server behind it.
+     */
+    hedScore?: {
+        /**
+         * Short-form tags offered one click away, in order, at most twenty; the first ten take the number keys 1 to 9
+         * and 0 while the search field is empty. A tag the policy does not offer is left out.
+         */
+        palette?: string[]
+        /** Source of the server's policy. See {@link HedScorePolicyProvider}. */
+        policy?: HedScorePolicyProvider
     }
     hotkeys?: Partial<EegInterfaceSettings['hotkeys']>
     /**

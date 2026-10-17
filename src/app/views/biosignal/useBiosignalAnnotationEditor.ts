@@ -16,6 +16,21 @@ import type {
     BiosignalResource,
 } from '@epicurrents/core/types'
 
+/**
+ * The codes of an event as a record. An event created from a class template may carry an empty array, which holds none.
+ */
+function codesOf (event: BiosignalAnnotationEvent): Record<string, number | string> {
+    return Array.isArray(event.codes) ? {} : event.codes
+}
+
+/**
+ * Whether `a` and `b` hold the same codes.
+ */
+function sameCodes (a: Record<string, number | string>, b: Record<string, number | string>) {
+    const entries = Object.entries(a)
+    return entries.length === Object.keys(b).length && entries.every(([standard, value]) => b[standard] === value)
+}
+
 export function useBiosignalAnnotationEditor (
     resource: BiosignalResource,
     editingEvents: Ref<BiosignalAnnotationEvent[]>,
@@ -34,9 +49,30 @@ export function useBiosignalAnnotationEditor (
         editingEvents.value.splice(0)
     }
 
-    function saveEventEdits (props: { class: string, label: string }) {
+    function saveEventEdits (props: { class: string, codes?: Record<string, number | string>, label: string }) {
         let anyChanged = false
+        // The editor shows the first event's codes, so only the standards changed from those are applied, and each
+        // event keeps the codes of every other standard it carries.
+        const edited = props.codes ?? {}
+        const shown = editingEvents.value.length ? codesOf(editingEvents.value[0]) : {}
+        const changed = props.codes
+            ? [...new Set([...Object.keys(shown), ...Object.keys(edited)])].filter(std => shown[std] !== edited[std])
+            : []
         for (const event of editingEvents.value) {
+            if (changed.length) {
+                const codes = { ...codesOf(event) }
+                for (const standard of changed) {
+                    if (edited[standard] === undefined) {
+                        delete codes[standard]
+                    } else {
+                        codes[standard] = edited[standard]
+                    }
+                }
+                if (!sameCodes(codesOf(event), codes)) {
+                    event.codes = codes
+                    anyChanged = true
+                }
+            }
             if (event.class !== props.class) {
                 event.class = props.class as typeof event['class']
                 anyChanged = true

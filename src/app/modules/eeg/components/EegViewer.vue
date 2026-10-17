@@ -135,7 +135,15 @@
                                 :annotation="editingEvents[0]"
                                 v-on:exit="exitEventEditor"
                                 v-on:save="saveEventEdits"
-                            ></annotation-editor>
+                            >
+                                <template #codes="{ codes, disabled, setCode }">
+                                    <finding-picker
+                                        :code="findingCode(codes)"
+                                        :disabled="disabled"
+                                        @change="setFindingCode(setCode, $event)"
+                                    ></finding-picker>
+                                </template>
+                            </annotation-editor>
                             <!-- Video must come after the cursor to stay on top -->
                             <div v-if="RESOURCE.videos.length" ref="videoWrapper"
                                 :class="[
@@ -303,7 +311,7 @@ import { useBiosignalNavigation } from '#app/views/biosignal/useBiosignalNavigat
 import { TREND_REGISTRY } from '../trends'
 import { useBiosignalPointer } from '#app/views/biosignal/useBiosignalPointer'
 import type { ContextMenuContext } from '#types/interface'
-import { EegEvent } from '@epicurrents/eeg-module'
+import { EegEvent, HED_STANDARD } from '@epicurrents/eeg-module'
 import type { PlotSelection } from '#app/views/biosignal/types'
 
 // Persists the user's last explicit trend-strip state per resource across remounts.
@@ -327,6 +335,7 @@ import EegChannelProperties from './overlays/EegChannelProperties.vue'
 import EegNavigator from './EegNavigator.vue'
 import EegPlot from './EegPlot.vue'
 import EegTrend from './EegTrend.vue'
+import FindingPicker from './overlays/FindingPicker.vue'
 import PlotYAxis from '#app/views/biosignal/plots/PlotYAxis.vue'
 import SplitPanelView from '#root/src/app/views/SplitPanelView.vue'
 import TimescaleGrid from '#app/views/biosignal/overlays/TimescaleGrid.vue'
@@ -365,6 +374,7 @@ export default defineComponent({
         EegNavigator,
         EegPlot,
         EegTrend,
+        FindingPicker,
         PlotYAxis,
         SplitPanelView,
         TimescaleGrid,
@@ -1071,6 +1081,14 @@ export default defineComponent({
             }
             this.addUndoAction('add-annotations', true, ...undoEvents)
         },
+        /**
+         * The finding an annotation's codes carry, as the HED string the finding picker shows, empty when none.
+         * @param codes - The codes being edited.
+         */
+        findingCode (codes: Record<string, number | string>) {
+            const code = codes[HED_STANDARD]
+            return code === undefined ? '' : String(code)
+        },
         getHighlightProperties (channel: BiosignalChannel, range: number[]) {
             const overlayW = this.overlay.getOffsetWidth()
             const startX = (Math.max(range[0] - this.RESOURCE.viewStart, 0)/this.viewRange)*overlayW
@@ -1386,6 +1404,14 @@ export default defineComponent({
         },
         selectDrawerTab (value: string) {
             this.sidebarTab = value
+        },
+        /**
+         * Store the finding the picker emitted under the HED standard, or remove it.
+         * @param setCode - The annotation editor's code setter.
+         * @param code - The HED string, or `null` to remove the finding.
+         */
+        setFindingCode (setCode: (standard: string, value: string | null) => void, code: string | null) {
+            setCode(HED_STANDARD, code)
         },
         signalCacheChanged () {
             if (this.RESOURCE.signalCacheStatus[1] > 0) {

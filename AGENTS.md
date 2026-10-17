@@ -150,6 +150,7 @@ App.vue
               ├── VerticalCursors (time cursor overlays)
               ├── ContextMenu (right-click actions)
               ├── AnnotationEditor
+              │     └── FindingPicker (the `codes` slot: HED-SCORE findings)
               ├── EegAnalysisTools (PSD, topomap windows)
               ├── AnnotationSidebar (right panel)
               └── EegNavigator (overview strip at bottom)
@@ -415,6 +416,12 @@ Components are `defineComponent` objects whose `setup()` creates the local state
 
 The rule keeps a component's state in one place, next to the context it is spread beside, rather than split between two declaration styles, and it types the state through `ref<T>()` rather than `as` casts on initial values. State that has to start from settings or props is created in `setup()` with its default and assigned in `beforeMount`, as [EpochStepField.vue](src/app/modules/eeg/trends/EpochStepField.vue) does. A `watch` entry named `data` is a watcher on a prop of that name, not this option, which is worth knowing before searching the tree for stray declarations.
 
+### The finding picker
+
+The annotation editor is shared by every biosignal viewer and knows no coding standard. A viewer that codes annotations fills its `codes` slot, which receives the codes being edited and a `setCode(standard, value)` setter, and the editor saves the codes with the text and class. EegViewer puts [FindingPicker.vue](src/app/modules/eeg/components/overlays/FindingPicker.vue) there, writing a short-form HED-SCORE tag under `codes.hed`.
+
+What the picker offers is decided in [findings.ts](src/app/modules/eeg/findings.ts), from eeg-module's term index: terms that stand as a code on their own, under nine plain-named groups, narrowed by the host's policy. The policy is a provider the host injects, like the lead fields, and the interface holds no URL for it. Without one the whole schema is offered, which is the case for a local file; a provider resolving `null` hides the picker, and a policy naming another schema release disables it. Matching a branch policy goes through the index's `schemaBranchOf`, because the artifact terms sit under the HED standard's `Property` branch rather than their own root. The picker is a convenience, not a control: the server's validator decides what is stored.
+
 ### EEG module registration
 
 Source: [src/app/modules/eeg/index.ts](src/app/modules/eeg/index.ts)
@@ -426,6 +433,7 @@ The `runtime` export is a plain object (not a class) that satisfies `InterfaceRe
 - `extraMontages`: per-setup arrays of montage templates (URL strings → fetched, or inline objects)
 - `extraSetups`: setup config objects (URL strings → fetched)
 - `hotkeys`: annotation, examine, fft, topogram hotkeys
+- `hedScore`: the finding picker's `palette` of tags and the host's `policy` provider, called when the picker first opens
 
 **Component getters** — all lazy-loaded:
 ```ts
