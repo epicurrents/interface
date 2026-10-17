@@ -136,10 +136,11 @@
                                 v-on:exit="exitEventEditor"
                                 v-on:save="saveEventEdits"
                             >
-                                <template #codes="{ codes, disabled, setCode }">
+                                <template #codes="{ codes, disabled, focusSave, setCode }">
                                     <finding-picker
                                         :code="findingCode(codes)"
                                         :disabled="disabled"
+                                        :focus-next="focusSave"
                                         @change="setFindingCode(setCode, $event)"
                                     ></finding-picker>
                                 </template>
@@ -313,6 +314,11 @@ import { useBiosignalPointer } from '#app/views/biosignal/useBiosignalPointer'
 import type { ContextMenuContext } from '#types/interface'
 import { EegEvent, HED_STANDARD } from '@epicurrents/eeg-module'
 import type { PlotSelection } from '#app/views/biosignal/types'
+import { registerCodeNamer } from '#app/views/biosignal/eventNames'
+import { hedFindingName } from '../findings'
+
+// A coded finding names its event when the reader types no label.
+registerCodeNamer(HED_STANDARD, hedFindingName)
 
 // Persists the user's last explicit trend-strip state per resource across remounts.
 // Keyed by resource id; only populated after the first unmount so a first-ever visit
@@ -1018,11 +1024,11 @@ export default defineComponent({
                         codes: eventClass.codes || [],
                         duration: selection.range[1] - selection.range[0],
                         id: `annotation_${Date.now()}_${selection.channel ? selection.channel.name : 'global'}`,
-                        label: props?.text || eventClass.label,
+                        label: props?.text || '',
                         priority: 1,
                         start: selection.range[0],
                         text: '',
-                        value: [selection.range[0], selection.range[1] - selection.range[0]],
+                        value: null,
                     } as AnnotationEventTemplate)
                     this.addUserEvents(newEvent)
                     undoEvents.push(newEvent)
@@ -1043,11 +1049,11 @@ export default defineComponent({
                         codes: eventClass.codes || [],
                         duration: props?.duration ? props.duration : 0,
                         id: `annotation_${Date.now()}_${chan}`,
-                        label: props?.text || eventClass.label,
+                        label: props?.text || '',
                         priority: 1,
                         start: props?.start || 0,
                         text: '',
-                        value: [props?.start || 0, props?.duration ? props.duration : 0],
+                        value: null,
                     } as AnnotationEventTemplate)
                     this.addUserEvents(newEvent)
                     undoEvents.push(newEvent)
@@ -1064,11 +1070,11 @@ export default defineComponent({
                     codes: eventClass.codes || [],
                     duration: props?.duration ? props.duration : 0,
                     id: `annotation_${Date.now()}`,
-                    label: props?.text || eventClass.label,
+                    label: props?.text || '',
                     priority: 1,
                     start: props?.start || 0,
                     text: '',
-                    value: [props?.start || 0, props?.duration ? props.duration : 0],
+                    value: null,
                 } as AnnotationEventTemplate)
                 this.RESOURCE.addEvents(newEvent)
                 undoEvents.push(newEvent)

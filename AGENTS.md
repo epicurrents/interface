@@ -418,9 +418,13 @@ The rule keeps a component's state in one place, next to the context it is sprea
 
 ### The finding picker
 
-The annotation editor is shared by every biosignal viewer and knows no coding standard. A viewer that codes annotations fills its `codes` slot, which receives the codes being edited and a `setCode(standard, value)` setter, and the editor saves the codes with the text and class. EegViewer puts [FindingPicker.vue](src/app/modules/eeg/components/overlays/FindingPicker.vue) there, writing a short-form HED-SCORE tag under `codes.hed`.
+The annotation editor is shared by every biosignal viewer and knows no coding standard. A viewer that codes annotations fills its `codes` slot, which receives the codes being edited, a `setCode(standard, value)` setter and `focusSave()`, which a control calls once a code is chosen so focus moves on to the save button, and the editor saves the codes with the text and class. EegViewer puts [FindingPicker.vue](src/app/modules/eeg/components/overlays/FindingPicker.vue) there, writing a short-form HED-SCORE tag under `codes.hed`.
 
 What the picker offers is decided in [findings.ts](src/app/modules/eeg/findings.ts), from eeg-module's term index: terms that stand as a code on their own, under nine plain-named groups, narrowed by the host's policy. The policy is a provider the host injects, like the lead fields, and the interface holds no URL for it. Without one the whole schema is offered, which is the case for a local file; a provider resolving `null` hides the picker, and a policy naming another schema release disables it. Matching a branch policy goes through the index's `schemaBranchOf`, because the artifact terms sit under the HED standard's `Property` branch rather than their own root. The picker is a convenience, not a control: the server's validator decides what is stored.
+
+### Event names
+
+A new event is created with an empty label, and what it is shown by is worked out when it is shown, in [eventNames.ts](src/app/views/biosignal/eventNames.ts): the typed label, else the name of its primary code, else its class label. Never store the derived name as the label; a coded event with no typed label carries no free text, and a stored name would no longer follow its code. A module names its standard's codes with `registerCodeNamer`, as EegViewer does for `hed`. The primary code is the code of the first registered standard the event carries, a display convention that ranks nothing; a finding written with its properties as a HED group puts the finding first so the name follows it. An event template passes `value: null`, because core's `labelFromTemplate` would otherwise show the value in place of the empty label. Every surface that shows an event's name goes through `eventDisplayName`, the MNE export included, since MNE has no field for codes.
 
 ### EEG module registration
 

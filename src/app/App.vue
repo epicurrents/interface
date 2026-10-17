@@ -1022,11 +1022,10 @@ General styles
     --epicv-background: #FFFFFF;
     --epicv-background-active: var(--wa-color-neutral-fill-quiet);
     --epicv-background-disabled: #e0e0e0;
-    --epicv-background-focus: var(--wa-color-neutral-fill-quiet);
-    --epicv-background-hover: var(--wa-color-brand-fill-quiet);
-    --epicv-background-highlight: #F0F0F0;
-    --epicv-background-hover: #eef7ff;
     --epicv-background-emphasize: #E0E0E0;
+    --epicv-background-focus: var(--wa-color-neutral-fill-quiet);
+    --epicv-background-highlight: #F0F0F0;
+    --epicv-background-hover: var(--wa-color-brand-fill-quiet);
     --epicv-background-modal: #fcfcfc;
     --epicv-background-dialog: rgba(255, 255, 255, 0.7);
     --epicv-border: #C0C0C0;

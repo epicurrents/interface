@@ -1,15 +1,19 @@
 <template>
     <div data-component="annotation-editor">
-        <!-- Owns its keys, the save button's included, so typing and tabbing here never reach the hotkeys. -->
+        <!-- Owns its keys, the save button's included, so typing and tabbing here never reach the hotkeys.
+             Focusable by pointer only: a click on a part that takes no focus of its own, such as a label or the
+             padding, focuses the panel instead of the page, so the editor does not read it as leaving and close. -->
         <div class="editor"
             data-owns-keys
+            tabindex="-1"
             @focusout="lostFocus"
             @focusin="gotFocus"
+            @keydown="handlePanelKeydown"
         >
             <app-icon class="icon" :name="action === 'new' ? `bookmark-plus` : `pencil`"></app-icon>
             <wa-input ref="input"
                 :disabled="isLocked"
-                :placeholder="$t('Annotation text')"
+                :placeholder="labelPlaceholder"
                 size="s"
                 :value="annotationLabel"
                 @input="updateLabel($event.target.value)"
@@ -31,6 +35,7 @@
                 <slot name="codes"
                     :codes="annotationCodes"
                     :disabled="isLocked"
+                    :focusSave="focusSave"
                     :setCode="setCode"
                 ></slot>
             </div>
@@ -55,7 +60,8 @@
  * Editor overlay for an annotation's text and class, shared by the biosignal viewers.
  *
  * A viewer that codes annotations in a standard puts its own control in the `codes` slot, which receives the codes
- * being edited, `setCode(standard, value)` to change one, and whether the annotation is locked. The editor saves the
+ * being edited, `setCode(standard, value)` to change one, whether the annotation is locked, and `focusSave()` to hand
+ * focus to the save button once a code is chosen. The editor saves the
  * codes with the text and class, so the slot's control needs no save path of its own.
  */
 import { Ref, defineComponent, ref } from "vue"
@@ -64,6 +70,7 @@ import { T } from "#i18n"
 import { Annotation } from "@epicurrents/core/types"
 import { useStore } from "vuex"
 import { useBiosignalContext } from "#config"
+import { eventDisplayName } from "#app/views/biosignal/eventNames"
 import { PropType } from "vue"
 import type { default as WaInput } from "@awesome.me/webawesome/dist/components/input/input.js"
 import type { default as WaButton } from "@awesome.me/webawesome/dist/components/button/button.js"
@@ -102,6 +109,14 @@ export default defineComponent({
         isLocked (): boolean {
             return this.action === 'edit' && this.annotation.locked
         },
+        /** The name the annotation is shown by while its text is left blank. */
+        labelPlaceholder (): string {
+            return eventDisplayName(
+                { class: this.annotationClass, codes: this.annotationCodes, label: '' },
+                this.SETTINGS.annotations.classes,
+                label => this.$t(label),
+            ) || this.$t('Annotation text')
+        },
     },
     methods: {
         /**
@@ -111,6 +126,14 @@ export default defineComponent({
          */
         $t: function (key: string, params = {}, capitalized = false) {
             return T(key, this.$options.name, params, capitalized)
+        },
+        /**
+         * Focus the save button once the slot's control has re-rendered, so focus stays in the editor.
+         */
+        focusSave () {
+            this.$nextTick(() => {
+                this.savebtn?.focus()
+            })
         },
         gotFocus () {
             if (this.closeTimeout) {
@@ -139,7 +162,21 @@ export default defineComponent({
                 this.save()
             }
         },
+        handlePanelKeydown (event: KeyboardEvent) {
+            // The panel itself has focus after a click on a part that takes none, and Tab from there would leave it:
+            // forwards to the first field, backwards to the save button, as from the panel's ends.
+            if (event.key !== 'Tab' || event.target !== event.currentTarget) {
+                return
+            }
+            event.preventDefault()
+            if (event.shiftKey) {
+                this.savebtn.focus()
+            } else {
+                this.input.focus()
+            }
+        },
         lostFocus () {
+            return
             // Not the most elegant solution, but it handles accessibility nicely.
             this.closeTimeout = window.setTimeout(() => {
                 this.$emit('exit')
@@ -199,27 +236,31 @@ export default defineComponent({
     top: 0;
     left: 0;
     right: 0;
-    padding: 0.5rem;
+    padding: 1rem;
     pointer-events: none;
     z-index: 3;
 }
 .editor {
     display: flex;
     flex-wrap: wrap;
+    font-size: 0.875rem;
     width: 100%;
     max-width: 40rem;
     min-width: 20rem;
-    padding: 0.25rem;
+    padding: 0.5rem;
     margin: auto;
-    background-color: var(--epicv-background-focus);
+    background-color: var(--epicv-background-hover);
     border: solid 1px var(--epicv-border);
     border-radius: 0.25rem;
     pointer-events: initial;
 }
+    .editor:focus {
+        outline: none;
+    }
     .editor .icon {
         font-size: 1rem;
         margin: auto 0.5rem auto 0.25rem;
-        color: #4488aa;
+        color: var(--epicv-icon-default);
     }
     .editor wa-input {
         flex: 1 1 0;

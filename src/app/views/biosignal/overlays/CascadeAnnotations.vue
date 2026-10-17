@@ -20,6 +20,7 @@ import { defineComponent, PropType, Ref, ref } from 'vue'
 import { settingsColorToRgba } from '@epicurrents/core/util'
 import { useStore } from 'vuex'
 import { useBiosignalContext } from '#config'
+import { eventDisplayName } from '#app/views/biosignal/eventNames'
 import type {
     BiosignalAnnotationEvent,
     BiosignalCascadeMontage,
@@ -123,7 +124,8 @@ export default defineComponent({
                     continue
                 }
                 const color = settingsColorToRgba(this.resolveColor(event))
-                const title = event.label + (event.text ? '\n' + event.text : '')
+                const title = eventDisplayName(event, this.SETTINGS.annotations.classes)
+                              + (event.text ? '\n' + event.text : '')
                 // Spot events: vertical line spanning the full row band at the event's x.
                 if (!event.duration) {
                     const range = cascade.getRowTimeRange(startRow)

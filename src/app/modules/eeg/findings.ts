@@ -68,6 +68,21 @@ export function findingLabel (name: string) {
 }
 
 /**
+ * The readable name of a HED string, by its first tag: the finding the picker writes first in a group. A value is
+ * kept after the name, so `Line-noise-artifact/50 Hz` reads as "Line noise artifact 50 Hz". `null` for a string with
+ * no tag.
+ * @param value - HED string.
+ */
+export function hedFindingName (value: number | string) {
+    const first = String(value).replace(/[()]/g, ',').split(',').map(tag => tag.trim()).find(tag => tag.length)
+    if (!first) {
+        return null
+    }
+    const [tag, ...tagValue] = first.split('/')
+    return tagValue.length ? `${findingLabel(tag)} ${tagValue.join('/')}` : findingLabel(tag)
+}
+
+/**
  * Every term the picker may offer under `policy`, in index order. A term is offered when it stands as a code on its
  * own: not deprecated, not requiring a child or a value, under one of the groups, and in a branch the policy allows.
  * @param index - The loaded term index.

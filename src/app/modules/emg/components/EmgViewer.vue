@@ -413,11 +413,11 @@ export default defineComponent({
                         codes: eventClass.codes || [],
                         duration: selection.range[1] - selection.range[0],
                         id: `annotation_${Date.now()}_${selection.channel ? selection.channel.name : 'global'}`,
-                        label: props?.text || eventClass.label,
+                        label: props?.text || '',
                         priority: 1,
                         start: selection.range[0],
                         text: '',
-                        value: [selection.range[0], selection.range[1] - selection.range[0]],
+                        value: null,
                     } as AnnotationEventTemplate)
                     this.addUserEvents(newEvent)
                     undoEvents.push(newEvent)
@@ -438,11 +438,11 @@ export default defineComponent({
                         codes: eventClass.codes || [],
                         duration: props?.duration ? props.duration : 0,
                         id: `annotation_${Date.now()}_${chan}`,
-                        label: props?.text || eventClass.label,
+                        label: props?.text || '',
                         priority: 1,
                         start: props?.start || 0,
                         text: '',
-                        value: [props?.start || 0, props?.duration ? props.duration : 0],
+                        value: null,
                     } as AnnotationEventTemplate)
                     this.addUserEvents(newEvent)
                     undoEvents.push(newEvent)
@@ -459,11 +459,11 @@ export default defineComponent({
                     codes: eventClass.codes || [],
                     duration: props?.duration ? props.duration : 0,
                     id: `annotation_${Date.now()}`,
-                    label: props?.text || eventClass.label,
+                    label: props?.text || '',
                     priority: 1,
                     start: props?.start || 0,
                     text: '',
-                    value: [props?.start || 0, props?.duration ? props.duration : 0],
+                    value: null,
                 } as AnnotationEventTemplate)
                 this.RESOURCE.addEvents(newEvent)
                 undoEvents.push(newEvent)

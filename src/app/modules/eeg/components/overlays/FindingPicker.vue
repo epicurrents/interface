@@ -41,15 +41,25 @@
                     >{{ $t(findingGroup.label) }}</wa-option>
                 </wa-select>
             </div>
-            <div v-if="results.length" class="results" role="listbox">
+            <!-- One tab stop for the whole list: the arrow keys move within it, as from the search field. -->
+            <div v-if="results.length" ref="list"
+                :aria-activedescendant="`finding-result-${highlighted}`"
+                class="results"
+                role="listbox"
+                tabindex="0"
+                @keydown="handleListKeydown"
+            >
                 <button v-for="(finding, idx) of results" :key="`finding-result-${finding.term.name}`"
                     :aria-selected="idx === highlighted"
                     :class="['result', { 'result--active': idx === highlighted }]"
+                    :id="`finding-result-${idx}`"
                     role="option"
+                    tabindex="-1"
                     :title="finding.term.description"
                     type="button"
                     @click="pick(finding)"
                     @mousedown.prevent
+                    @mousemove="highlightResult(idx)"
                 >{{ finding.label }}</button>
             </div>
             <div v-if="palette.length && !code" class="palette">
@@ -82,7 +92,7 @@
  * @copyright  2026 Sampsa Lohi
  * @license    Apache-2.0
  */
-import { defineComponent, Ref, ref, shallowRef } from "vue"
+import { defineComponent, PropType, Ref, ref, shallowRef } from "vue"
 import { T } from "#i18n"
 import { loadHedScoreIndex } from "@epicurrents/eeg-module"
 import type { HedScoreTermIndex } from "@epicurrents/eeg-module/types"
@@ -117,6 +127,14 @@ export default defineComponent({
             type: Boolean,
             default: false,
         },
+        /**
+         * Moves focus to what follows a pick, such as the editor's save button. Without it the picker focuses its
+         * own remove button, since the search field a pick replaces held the focus and an editor that loses it closes.
+         */
+        focusNext: {
+            type: Function as PropType<() => void>,
+            default: null,
+        },
     },
     emits: ['change'],
     setup () {
@@ -124,6 +142,7 @@ export default defineComponent({
         const group = ref('')
         const highlighted = ref(0)
         const index = shallowRef<HedScoreTermIndex | null>(null)
+        const list = ref<HTMLDivElement>()
         const offered = shallowRef<OfferedFinding[]>([])
         const query = ref('')
         const search = ref<WaInput>() as Ref<WaInput>
@@ -135,6 +154,7 @@ export default defineComponent({
             groups: FINDING_GROUPS,
             highlighted,
             index,
+            list,
             offered,
             query,
             search,
@@ -189,17 +209,14 @@ export default defineComponent({
                 this.search?.focus()
             })
         },
+        handleListKeydown (event: KeyboardEvent) {
+            this.navigateResults(event)
+        },
         handleSearchKeydown (event: KeyboardEvent) {
-            if (event.key === 'ArrowDown' && this.results.length) {
-                event.preventDefault()
-                this.highlighted = (this.highlighted + 1)%this.results.length
-            } else if (event.key === 'ArrowUp' && this.results.length) {
-                event.preventDefault()
-                this.highlighted = (this.highlighted - 1 + this.results.length)%this.results.length
-            } else if (event.key === 'Enter' && this.results.length) {
-                event.preventDefault()
-                this.pick(this.results[this.highlighted])
-            } else if (event.key === 'Escape' && (this.query || this.group)) {
+            if (this.navigateResults(event)) {
+                return
+            }
+            if (event.key === 'Escape' && (this.query || this.group)) {
                 event.preventDefault()
                 this.query = ''
                 this.group = ''
@@ -210,6 +227,16 @@ export default defineComponent({
                     event.preventDefault()
                     this.pick(finding)
                 }
+            }
+        },
+        /**
+         * Highlight the result under the pointer. Bound to pointer movement rather than entry, so a list scrolled
+         * under a still pointer by the arrow keys keeps the keyboard's highlight.
+         * @param idx - Index of the result.
+         */
+        highlightResult (idx: number) {
+            if (this.highlighted !== idx) {
+                this.highlighted = idx
             }
         },
         async load () {
@@ -246,13 +273,49 @@ export default defineComponent({
                 this.state = 'unavailable'
             }
         },
+        /**
+         * Move the highlight through the results, or pick the highlighted one, for a key pressed in the search field
+         * or the list. Returns whether the key was one of these.
+         * @param event - The key event.
+         */
+        navigateResults (event: KeyboardEvent) {
+            const count = this.results.length
+            if (!count) {
+                return false
+            }
+            let next = this.highlighted
+            if (event.key === 'ArrowDown') {
+                next = (this.highlighted + 1)%count
+            } else if (event.key === 'ArrowUp') {
+                next = (this.highlighted - 1 + count)%count
+            } else if (event.key === 'Home') {
+                next = 0
+            } else if (event.key === 'End') {
+                next = count - 1
+            } else if (event.key === 'Enter') {
+                event.preventDefault()
+                this.pick(this.results[Math.min(this.highlighted, count - 1)])
+                return true
+            } else {
+                return false
+            }
+            event.preventDefault()
+            this.highlighted = next
+            this.$nextTick(() => {
+                this.list?.children[next]?.scrollIntoView({ block: 'nearest' })
+            })
+            return true
+        },
         pick (finding: OfferedFinding) {
             rememberFinding(finding.term.name)
             this.query = ''
             this.group = ''
             this.highlighted = 0
             this.$emit('change', finding.term.name)
-            // The focused field is replaced by the selection, and an editor that loses focus closes.
+            if (this.focusNext) {
+                this.focusNext()
+                return
+            }
             this.$nextTick(() => {
                 this.clearbtn?.focus()
             })
@@ -261,6 +324,12 @@ export default defineComponent({
             this.group = branch || ''
             this.query = ''
             this.highlighted = 0
+            if (this.group) {
+                // Into the group's list, so the arrow keys move through it rather than reopening the menu.
+                this.$nextTick(() => {
+                    this.list?.focus()
+                })
+            }
         },
         updateQuery (value: string) {
             this.query = value
@@ -296,11 +365,13 @@ export default defineComponent({
     .row .icon {
         font-size: 1rem;
         margin: auto 0.5rem auto 0.25rem;
-        color: #4488aa;
+        color: var(--epicv-icon-default);
     }
     .row wa-input,
     .row .selected {
         flex: 1 1 0;
+    }
+    .row wa-input{
         margin-right: 0.25rem;
     }
     .row wa-select {
@@ -311,8 +382,10 @@ export default defineComponent({
     align-items: center;
     min-height: 1.75rem;
     padding-left: 0.5rem;
+    background-color: var(--epicv-background-focus);
     border: solid 1px var(--epicv-border);
     border-radius: 0.25rem;
+    color: var(--epicv-text-emphasis);
 }
     .selected .label {
         flex: 1 1 0;
@@ -324,36 +397,40 @@ export default defineComponent({
     display: flex;
     flex-direction: column;
     max-height: 12rem;
-    margin-left: 1.75rem;
+    margin-left: 2rem;
     overflow-y: auto;
     border: solid 1px var(--epicv-border);
     border-radius: 0.25rem;
 }
+    .results:focus {
+        outline: none;
+    }
+    .results:focus-visible {
+        border-color: var(--epicv-border-focus);
+    }
 .result {
     padding: 0.25rem 0.5rem;
     border: none;
-    background: none;
+    background-color: var(--epicv-background);
+    border-radius: 0;
     color: inherit;
     font: inherit;
     text-align: left;
     cursor: pointer;
 }
-    .result:hover {
-        background-color: var(--epicv-background-hover);
-    }
+    .result:hover,
     .result--active {
-        background-color: var(--epicv-background-highlight);
+        background-color: var(--epicv-background-hover);
     }
 .palette {
     display: flex;
     flex-wrap: wrap;
     gap: 0.25rem;
-    margin-left: 1.75rem;
+    margin-left: 2rem;
 }
 .palette-item {
     padding: 0.125rem 0.5rem;
     border: solid 1px var(--epicv-border);
-    border-radius: 0.25rem;
     background: none;
     color: inherit;
     font: inherit;
@@ -367,11 +444,11 @@ export default defineComponent({
         opacity: 0.6;
     }
 .status {
-    margin-left: 1.75rem;
+    margin-left: 2rem;
     opacity: 0.8;
 }
 .attribution {
-    margin-left: 1.75rem;
+    margin-left: 2.25rem;
     font-size: 0.75rem;
     opacity: 0.6;
 }

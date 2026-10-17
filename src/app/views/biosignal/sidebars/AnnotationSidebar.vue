@@ -71,8 +71,8 @@
                                     'epicv-oneliner',
                                     'label',
                                 ]"
-                                :title="event.label"
-                            >{{ event.label }}</div>
+                                :title="eventName(event)"
+                            >{{ eventName(event) }}</div>
                             <div v-if="!event.locked" class="action" @click="removeEvent($event, event.id)">
                                 <app-icon name="trash" :title="$t('Remove event')"></app-icon>
                             </div>
@@ -173,7 +173,9 @@ import {
     settingsColorToRgba,
     timePartsToShortString,
 } from "@epicurrents/core/util"
+import type { BiosignalAnnotationEvent } from '@epicurrents/core/types'
 import { PlotSelection } from '#app/views/biosignal/types'
+import { eventDisplayName } from '#app/views/biosignal/eventNames'
 import { Log } from "scoped-event-log"
 import { ResourceLabel } from '@epicurrents/core'
 
@@ -379,6 +381,13 @@ export default defineComponent({
             dlEl.click()
             document.body.removeChild(dlEl)
         },
+        /**
+         * The name an event is listed by.
+         * @param event - The annotation event.
+         */
+        eventName (event: BiosignalAnnotationEvent) {
+            return eventDisplayName(event, this.SETTINGS.annotations.classes, label => this.$t(label)) || this.$t('Event')
+        },
         exportAnnotations () {
             if (!this.RESOURCE.events.length && !this.RESOURCE.labels.length) {
                 return ''
@@ -393,7 +402,8 @@ export default defineComponent({
                 // https://mne.tools/stable/generated/mne.Annotations.html#mne.Annotations
                 return JSON.stringify({
                     ch_names: events.map(a => a.channels),
-                    description: events.map(a => a.label),
+                    // MNE carries no codes, so a coded event is described by its name, untranslated as a file is.
+                    description: this.RESOURCE.events.map(e => eventDisplayName(e, this.SETTINGS.annotations.classes)),
                     duration: events.map(a => a.duration),
                     format: 'mne',
                     onset: events.map(a => a.start),

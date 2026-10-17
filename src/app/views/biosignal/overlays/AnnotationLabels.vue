@@ -26,11 +26,11 @@
                             'label',
                             { 'active': context.event.isActive }
                         ]"
-                        :title="context.event.label + (context.event.text ? '\n' + context.event.text : '')"
+                        :title="eventName(context.event) + (context.event.text ? '\n' + context.event.text : '')"
                         @focusin="activateAnnotation(context.event)"
                         @focusout="deactivateAnnotation(context.event)"
                     >
-                        {{ context.event.label || context.label || $t('Event') }}
+                        {{ eventName(context.event) }}
                     </button>
                     <div v-if="context.event.duration && !context.extendsRight && !context.event.locked"
                         id="end"
@@ -53,6 +53,7 @@ import {
     settingsColorToRgba,
 } from "@epicurrents/core/util"
 import { resolveEventChannelIndices } from "#app/views/biosignal/eventChannels"
+import { eventDisplayName } from "#app/views/biosignal/eventNames"
 import { useStore } from "vuex"
 import { useBiosignalContext } from "#config"
 import { NO_POINTER_BUTTON_DOWN } from "#util"
@@ -73,7 +74,6 @@ type AnnotationContext = {
     el: null | HTMLDivElement
     extendsLeft: boolean
     extendsRight: boolean
-    label?: string
     opacity: number
     row: number
     style: string
@@ -242,6 +242,13 @@ export default defineComponent({
         /**
          * Helper method to calculate annotation properties.
          */
+        /**
+         * The name an annotation is shown by on the plot.
+         * @param event - The annotation event.
+         */
+        eventName (event: BiosignalAnnotationEvent) {
+            return eventDisplayName(event, this.SETTINGS.annotations.classes, label => this.$t(label)) || this.$t('Event')
+        },
         getAnnotationProperties (event: BiosignalAnnotationEvent) {
             const properties = {
                 color: this.SETTINGS.annotations.color,
@@ -690,7 +697,6 @@ export default defineComponent({
                         dragging: false,
                         extendsLeft: properties.extendsLeft,
                         extendsRight: properties.extendsRight,
-                        label: properties.label,
                         opacity: event.opacity || 1,
                         row: NUMERIC_ERROR_VALUE,
                         style: properties.styles.join(';'),
@@ -717,7 +723,7 @@ export default defineComponent({
             const sortedIds = [...this.annotationContexts.values()].sort((a, b) => {
                 return a.event.start - b.event.start ||
                        a.event.priority - b.event.priority ||
-                       a.event.label.localeCompare(b.event.label)
+                       this.eventName(a.event).localeCompare(this.eventName(b.event))
             }).map(ctx => ctx.event.id)
             const curId = sortedIds[index]
             //const context = this.visibleAnnotations[index]
