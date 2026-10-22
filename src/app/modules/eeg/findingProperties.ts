@@ -23,6 +23,10 @@
  *
  * Side and symmetry are tags of the HED standard rather than of SCORE, so the term index does not hold them. They come
  * from `standard-terms.json`, a copy taken from the plugin's vendored schema and pinned to it by the plugin's tests.
+ *
+ * A number is written in the one unit, range and precision the platform declares for its placeholder, so a reading
+ * cannot carry digits that are not one. The domains come from `numeric-domains.json`, a copy of the plugin's table
+ * pinned to it the same way; a number is rounded and held to its domain as the reader enters it.
  * @package    epicurrents/interface
  * @copyright  2026 Sampsa Lohi
  * @license    Apache-2.0
@@ -34,6 +38,7 @@ import type { OfferedFinding } from './findings'
 import { findingLabel } from './findings'
 import CANONICAL_ELECTRODES from './canonical-electrodes.json'
 import STANDARD_TERMS from './standard-terms.json'
+import NUMERIC_DOMAINS from './numeric-domains.json'
 
 /** A property the reader picks from a list of tags. */
 export type ChoiceField = {
@@ -75,8 +80,16 @@ export type ValueField = {
     label: string
     /** The tag, whose placeholder takes a number. */
     tag: string
-    /** The unit the number is written in. */
+    /** The unit the number is written in, from the tag's numeric domain; empty for a unitless one. */
     unit: string
+}
+
+/** The values a numeric placeholder accepts: in `unit`, or unitless, from `low` to `high`, to `decimals` places. */
+export type NumericDomain = {
+    decimals: number
+    high: number
+    low: number
+    unit: string | null
 }
 
 export type PropertyField = ChoiceField | ValueField
@@ -178,15 +191,18 @@ export const FINDING_GROUP = 'ID'
 /** The numbers a finding group may take. The platform holds back 0 to 99 for a use not yet defined. */
 export const FINDING_GROUP_NUMBERS = { first: 100, last: 999 }
 
+/** A value field written in its tag's numeric domain. */
+function valueField (field: Omit<ValueField, 'unit'>): ValueField {
+    return { ...field, unit: numericDomain(field.tag)?.unit ?? '' }
+}
+
 const INCIDENCE: ChoiceField = {
     key: 'incidence', kind: 'choice', label: 'Incidence', omit: ['feature', 'incidence'], under: 'Feature-incidence',
 }
 const PREVALENCE: ChoiceField = {
     key: 'prevalence', kind: 'choice', label: 'Prevalence', omit: ['prevalence'], under: 'Feature-prevalence',
 }
-const FREQUENCY: ValueField = {
-    key: 'frequency', kind: 'value', label: 'Frequency', tag: 'Feature-frequency', unit: 'Hz',
-}
+const FREQUENCY = valueField({ key: 'frequency', kind: 'value', label: 'Frequency', tag: 'Feature-frequency' })
 /** The two sides; both chosen together mean bilateral. */
 export const SIDES: Side[] = ['Left', 'Right']
 
@@ -200,9 +216,7 @@ const ASYMMETRICAL = 'Asymmetrical'
 const SIDE: ChoiceField = {
     key: 'side', kind: 'choice', label: 'Side', multiple: true, terms: [...SIDES, SYMMETRICAL, ASYMMETRICAL],
 }
-const AMPLITUDE: ValueField = {
-    key: 'amplitude', kind: 'value', label: 'Amplitude', tag: 'Feature-amplitude', unit: 'uV',
-}
+const AMPLITUDE = valueField({ key: 'amplitude', kind: 'value', label: 'Amplitude', tag: 'Feature-amplitude' })
 
 /** The critical-care patterns, whose fields the schema describes by which of them each applies to. */
 const PERIODIC_DISCHARGES = 'Critically-ill-patient-periodic-discharges'
@@ -940,6 +954,28 @@ export function composeFindingCode (code: FindingCode, fields: OfferedField[] = 
 }
 
 /**
+ * `number` as the platform accepts it in `tag`: rounded to the domain's decimals and held within its range, or `null`
+ * when the platform accepts no number in the tag.
+ * @param tag - The numeric tag.
+ * @param number - The number entered.
+ */
+export function confineNumber (tag: string, number: number) {
+    const domain = numericDomain(tag)
+    if (!domain) {
+        return null
+    }
+    return Math.min(domain.high, Math.max(domain.low, Number(number.toFixed(domain.decimals))))
+}
+
+/**
+ * The domain the platform accepts a number of `tag` in, or `undefined` when it accepts none.
+ * @param tag - The numeric tag.
+ */
+export function numericDomain (tag: string): NumericDomain | undefined {
+    return (NUMERIC_DOMAINS.domains as Record<string, NumericDomain>)[tag]
+}
+
+/**
  * Whether the comparison tags are allowed under `policy`, so a value may be given as more than an exact number.
  * @param policy - The host's policy, or `null` with no host.
  */
@@ -1231,7 +1267,10 @@ function termOf (index: HedScoreTermIndex, name: string) {
  * @param unit - The unit, if the field names one.
  */
 function valueTags (tag: string, value: FindingValue, unit?: string) {
-    const write = (number: number) => unit ? `${tag}/${number} ${unit}` : `${tag}/${number}`
+    const write = (number: number) => {
+        const confined = confineNumber(tag, number) ?? number
+        return unit ? `${tag}/${confined} ${unit}` : `${tag}/${confined}`
+    }
     const bound = (relation: string, number: number) => `(${relation}, ${write(number)})`
     switch (value.mode) {
         case 'about':

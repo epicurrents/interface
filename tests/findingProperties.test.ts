@@ -16,12 +16,14 @@ import {
     canonicalElectrode,
     balanceOf,
     composeFindingCode,
+    confineNumber,
     electrodesByRegion,
     findingGroupOf,
     groupedFindingCode,
     groupsAllowed,
     lateralityOf,
     nextFindingGroup,
+    numericDomain,
     recordedFindingGroups,
     offeredFields,
     parseFindingCode,
@@ -632,6 +634,28 @@ describe('values', () => {
         expect(valueText({ mode: 'about', value: 3 }, 'Hz')).toBe('≈ 3 Hz')
         expect(valueText({ mode: 'min', value: 3 })).toBe('≥ 3')
         expect(valueText({ mode: 'range', upper: 3, value: 2 }, 'Hz')).toBe('2–3 Hz')
+    })
+
+    it('are written in their domain: rounded to its decimals and held within its range', () => {
+        const written = (value: Parameters<typeof valueText>[0]) => composeFindingCode(coded(value), fields())
+            .replace('(Epileptiform-interictal-activity, ', '').slice(0, -1)
+        expect(written({ mode: 'exact', value: 2.125 })).toBe('Feature-frequency/2.13 Hz')
+        expect(written({ mode: 'exact', value: 2.5000001 })).toBe('Feature-frequency/2.5 Hz')
+        expect(written({ mode: 'max', value: 5000 })).toBe('(Less-than-or-equal-to, Feature-frequency/1000 Hz)')
+        expect(confineNumber('Feature-amplitude', 150.6)).toBe(151)
+        expect(confineNumber('Feature-amplitude', -3)).toBe(0)
+        expect(confineNumber('Age', 67)).toBeNull()
+    })
+
+    it('take their unit from the domain of their tag', () => {
+        for (const fieldSet of Object.values(PROPERTY_SETS)) {
+            for (const field of fieldSet) {
+                if (field.kind === 'value') {
+                    expect(numericDomain(field.tag), field.tag).toBeDefined()
+                    expect(field.unit).toBe(numericDomain(field.tag)?.unit ?? '')
+                }
+            }
+        }
     })
 
     it('allow comparisons only where the policy allows the relation branch', () => {

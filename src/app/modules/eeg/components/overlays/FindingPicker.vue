@@ -249,9 +249,10 @@
                                 <wa-input
                                     :disabled="disabled"
                                     :id="`finding-field-${field.key}`"
-                                    min="0"
+                                    :max="domainOf(field).high"
+                                    :min="domainOf(field).low"
                                     size="s"
-                                    step="any"
+                                    :step="domainOf(field).step"
                                     type="number"
                                     :value="parsed.values[field.tag]?.value ?? ''"
                                     @change="setValue(field, 'value', $event.target.value)"
@@ -263,9 +264,10 @@
                                     <wa-input
                                         :aria-label="$t('Upper bound')"
                                         :disabled="disabled || parsed.values[field.tag] === undefined"
-                                        min="0"
+                                        :max="domainOf(field).high"
+                                        :min="domainOf(field).low"
                                         size="s"
-                                        step="any"
+                                        :step="domainOf(field).step"
                                         type="number"
                                         :value="parsed.values[field.tag]?.upper ?? ''"
                                         @change="setValue(field, 'upper', $event.target.value)"
@@ -402,11 +404,13 @@ import {
     VALUE_MODES,
     balanceOf,
     composeFindingCode,
+    confineNumber,
     electrodesByRegion,
     groupsAllowed,
     isAcronym,
     offeredFields,
     lateralityOf,
+    numericDomain,
     parseFindingCode,
     relationsAllowed,
     relocate,
@@ -843,6 +847,16 @@ export default defineComponent({
                 this.search?.focus()
             })
         },
+        /**
+         * The range and step a value field's inputs take, from the domain the platform accepts its number in.
+         * @param field - The field.
+         */
+        domainOf (field: OfferedField) {
+            const domain = field.kind === 'value' ? numericDomain(field.tag) : undefined
+            return domain
+                ? { high: domain.high, low: domain.low, step: 10**-domain.decimals }
+                : { high: undefined, low: 0, step: 'any' as const }
+        },
         handleListKeydown (event: KeyboardEvent) {
             this.navigateResults(event)
         },
@@ -1166,8 +1180,10 @@ export default defineComponent({
             if (field.kind !== 'value') {
                 return
             }
-            const number = Number(entry)
-            const valid = entry.trim() !== '' && Number.isFinite(number) && number >= 0
+            const entered = Number(entry)
+            const valid = entry.trim() !== '' && Number.isFinite(entered)
+            // Rounded and held to the tag's domain here, so the field shows the number that will be written.
+            const number = valid ? confineNumber(field.tag, entered) ?? entered : entered
             const mode = this.modeOf(field)
             this.update(code => {
                 const current = code.values[field.tag]

@@ -1,0 +1,101 @@
+{
+    "version": "2.1.0",
+    "domains": {
+        "Feature-amplitude": {
+            "unit": "uV",
+            "low": 0,
+            "high": 10000,
+            "decimals": 0
+        },
+        "RPP-absolute-amplitude": {
+            "unit": "uV",
+            "low": 0,
+            "high": 10000,
+            "decimals": 0
+        },
+        "Feature-frequency": {
+            "unit": "Hz",
+            "low": 0,
+            "high": 1000,
+            "decimals": 2
+        },
+        "Intermittent-photic-stimulation": {
+            "unit": "Hz",
+            "low": 0,
+            "high": 100,
+            "decimals": 1
+        },
+        "Myoclonus-rhythmic": {
+            "unit": "Hz",
+            "low": 0,
+            "high": 100,
+            "decimals": 1
+        },
+        "Number-of-RPP-phases": {
+            "unit": null,
+            "low": 1,
+            "high": 3,
+            "decimals": 0
+        },
+        "Episode-event-count": {
+            "unit": null,
+            "low": 0,
+            "high": 10000,
+            "decimals": 0
+        },
+        "Apnea": {
+            "unit": null,
+            "low": 0,
+            "high": 600,
+            "decimals": 0
+        },
+        "Hypopnea": {
+            "unit": null,
+            "low": 0,
+            "high": 600,
+            "decimals": 0
+        },
+        "Apnea-hypopnea-index": {
+            "unit": null,
+            "low": 0,
+            "high": 200,
+            "decimals": 1
+        },
+        "Tachypnea": {
+            "unit": null,
+            "low": 0,
+            "high": 150,
+            "decimals": 0
+        },
+        "Oxygen-saturation": {
+            "unit": null,
+            "low": 0,
+            "high": 100,
+            "decimals": 0
+        },
+        "ECG-QT-period": {
+            "unit": "ms",
+            "low": 0,
+            "high": 2000,
+            "decimals": 0
+        },
+        "ECG-asystolia": {
+            "unit": "s",
+            "low": 0,
+            "high": 600,
+            "decimals": 1
+        },
+        "Time-interval": {
+            "unit": "s",
+            "low": 0,
+            "high": 3600,
+            "decimals": 2
+        },
+        "Percentage": {
+            "unit": null,
+            "low": 0,
+            "high": 100,
+            "decimals": 0
+        }
+    }
+}
