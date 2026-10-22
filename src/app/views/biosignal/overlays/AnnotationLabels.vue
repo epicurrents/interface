@@ -7,11 +7,15 @@
                 :class="[
                     'annotation',
                     { 'active': context.event.isActive },
+                    { 'grouped': !context.event.isActive && focusedIds.has(context.event.id) },
                     { 'locked': context.event.locked },
                     { 'spot': !context.event.duration }
                 ]"
                 :style="context.style"
                 @pointerdown.prevent.stop="handleAnnotationPointerdown(id, $event)"
+                @pointerenter="focusGroup(context.event)"
+                @pointerleave="unfocusGroup"
+                @pointermove="focusGroup(context.event)"
                 @pointerup.prevent.stop="handleAnnotationPointerup(id, $event)"
             >
                 <div id="wrapper" class="labelwrapper">
@@ -53,6 +57,7 @@ import {
     settingsColorToRgba,
 } from "@epicurrents/core/util"
 import { resolveEventChannelIndices } from "#app/views/biosignal/eventChannels"
+import { eventGroupFocus, eventGroupKey, focusedEventIds } from "#app/views/biosignal/eventGroups"
 import { eventDisplayName } from "#app/views/biosignal/eventNames"
 import { useStore } from "vuex"
 import { useBiosignalContext } from "#config"
@@ -166,6 +171,10 @@ export default defineComponent({
         },
     },
     computed: {
+        /** The events marked with what the reader points at, so a group's members show together. */
+        focusedIds (): Set<string> {
+            return focusedEventIds(this.RESOURCE.events)
+        },
         annotationStyles (): string {
             const styles = [
                 `width: ${10 + this.SETTINGS.annotations.width}px`,
@@ -195,6 +204,7 @@ export default defineComponent({
                 }
             }
             event.isActive = true
+            eventGroupFocus.active = event.id
         },
         addPointerLeaveHandler (handler: (event?: PointerEvent) => void) {
             this.pointerLeaveHandlers.push(handler)
@@ -237,6 +247,9 @@ export default defineComponent({
             // Manually update annotations in case the handler has already fired (this caused problems at one point).
             annotation.removeEventListener('isActive', this.updateAnnotations, this.ID)
             annotation.isActive = false
+            if (eventGroupFocus.active === annotation.id) {
+                eventGroupFocus.active = null
+            }
             this.updateAnnotations()
         },
         /**
@@ -248,6 +261,13 @@ export default defineComponent({
          */
         eventName (event: BiosignalAnnotationEvent) {
             return eventDisplayName(event, this.SETTINGS.annotations.classes, label => this.$t(label)) || this.$t('Event')
+        },
+        /**
+         * Point at the group of the annotation under the pointer, so its other members are marked with it.
+         * @param event - The annotation event.
+         */
+        focusGroup (event: BiosignalAnnotationEvent) {
+            eventGroupFocus.hovered = eventGroupKey(event)
         },
         getAnnotationProperties (event: BiosignalAnnotationEvent) {
             const properties = {
@@ -637,6 +657,9 @@ export default defineComponent({
                 }
             }
         },
+        unfocusGroup () {
+            eventGroupFocus.hovered = null
+        },
         updateAnnotations () {
             // Store visible annotation IDs to prune the annotation map later.
             const visibleAnnoIds = [] as string[]
@@ -886,6 +909,9 @@ export default defineComponent({
         //this.RESOURCE.onPropertyChange('pageLength', this.updateAnnotations, this.ID)
         // Cancel all ongoing drag events if the view start changes.
         this.RESOURCE.onPropertyChange('viewStart', this.adjustDraggingAnnotation, this.ID)
+        // An annotation moved away from under the pointer reports no leave, so navigating ends the hover; moving the
+        // pointer over an annotation picks it up again.
+        this.RESOURCE.onPropertyChange('viewStart', this.unfocusGroup, this.ID)
         // Listen to keydown and keyup events.
         window.addEventListener('keydown', this.handleKeydown, false)
         window.addEventListener('keyup', this.handleKeyup, false)
@@ -896,6 +922,7 @@ export default defineComponent({
     beforeUnmount () {
         // Remove property update handlers
         this.RESOURCE.removeAllEventListeners(this.ID)
+        this.unfocusGroup()
         // Remove key handlers.
         window.removeEventListener('keydown', this.handleKeydown, false)
         window.removeEventListener('keyup', this.handleKeyup, false)
@@ -965,6 +992,11 @@ export default defineComponent({
             .annotation .labelwrapper:hover,
             .annotation.active .labelwrapper {
                 opacity: 1;
+            }
+            .annotation.grouped .labelwrapper {
+                opacity: 1;
+                outline: 1px dashed var(--annotation-color);
+                outline-offset: 1px;
             }
             .annotation .labelwrapper:has(button:not(.active)) {
                 /* Applying dynamic color to the shadow via JS. */

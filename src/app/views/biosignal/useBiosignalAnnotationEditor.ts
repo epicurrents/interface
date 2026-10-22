@@ -11,6 +11,7 @@
  */
 
 import type { Ref } from 'vue'
+import { eventGroupFocus } from '#app/views/biosignal/eventGroups'
 import type {
     BiosignalAnnotationEvent,
     BiosignalResource,
@@ -45,6 +46,9 @@ export function useBiosignalAnnotationEditor (
     function exitEventEditor () {
         for (const anno of editingEvents.value) {
             anno.isActive = false
+            if (eventGroupFocus.active === anno.id) {
+                eventGroupFocus.active = null
+            }
         }
         editingEvents.value.splice(0)
     }

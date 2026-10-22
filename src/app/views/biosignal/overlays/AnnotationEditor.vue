@@ -34,6 +34,7 @@
             <div v-if="$slots.codes" class="codes">
                 <slot name="codes"
                     :annotation="annotation"
+                    :applyToGroup="applyToGroup"
                     :codes="annotationCodes"
                     :disabled="isLocked"
                     :focusSave="focusSave"
@@ -164,6 +165,10 @@ export default defineComponent({
         $t: function (key: string, params = {}, capitalized = false) {
             return T(key, this.$options.name, params, capitalized)
         },
+        /** Save, and ask the viewer to give the other events of the annotation's group the same codes. */
+        applyToGroup () {
+            this.submit({ applyToGroup: true })
+        },
         /**
          * Focus the save button once the slot's control has re-rendered, so focus stays in the editor.
          */
@@ -244,7 +249,7 @@ export default defineComponent({
             }, 100)
         },
         save () {
-            this.submit(false)
+            this.submit()
         },
         /**
          * Set the code of `standard`, or remove it with `null`.
@@ -262,20 +267,22 @@ export default defineComponent({
         },
         /** Save, and ask the viewer to stamp copies of the annotation. */
         stamp () {
-            this.submit(true)
+            this.submit({ stamp: true })
         },
         /**
          * Save the edits.
-         * @param stamp - Ask the viewer to go on stamping copies of the annotation.
+         * @param options - What the viewer does after saving: `applyToGroup` gives the other events of the annotation's
+         *                  group the same codes, and `stamp` goes on stamping copies of it.
          */
-        submit (stamp: boolean) {
+        submit (options: { applyToGroup?: boolean, stamp?: boolean } = {}) {
             this.saved = true
             clearAnnotationDraft()
             this.$emit('save', {
+                applyToGroup: !!options.applyToGroup,
                 class: this.annotationClass,
                 codes: { ...this.annotationCodes },
                 label: this.annotationLabel,
-                stamp,
+                stamp: !!options.stamp,
             })
         },
         updateClass (newClass: string) {

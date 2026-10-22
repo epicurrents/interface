@@ -118,6 +118,7 @@ import { T } from "#i18n"
 import { padTime, secondsToTimeString, settingsColorToRgba } from "@epicurrents/core/util"
 import { timeSpanToPixels, timeToPixel } from "#util"
 import { useEegContext } from "#app/modules/eeg"
+import { eventGroupFocus, focusedEventIds } from "#app/views/biosignal/eventGroups"
 import { useStore } from "vuex"
 import { SettingsColor } from "@epicurrents/core/types"
 import { HighlightContext } from "#types/plot"
@@ -333,6 +334,9 @@ export default defineComponent({
             const colorByIdPrefix = Object.entries(this.SETTINGS.annotations.typeColors)
                 .map(([id, color]) => [id, settingsColorToRgba(color as SettingsColor)] as const)
             const defaultEvtColor = settingsColorToRgba(this.SETTINGS.navigator.annotationColor)
+            // The finding group the reader points at, drawn the full height of the strip over whatever shares a pixel,
+            // so its members stand out wherever they are in the recording.
+            const focused = focusedEventIds(this.RESOURCE.events)
             // Pixel map: x-pixel → row → color.  row = -1 means full-height instant event.
             // Deduplicates events that collapse to the same canvas pixel.
             const pixelMap = new Map<number, Map<number, string>>()
@@ -345,6 +349,15 @@ export default defineComponent({
                     ?? colorByIdPrefix.find(([id]) => event.id?.startsWith(id))?.[1]
                     ?? defaultEvtColor
                 const { x: xPos, width: xWidth } = timeSpanToPixels(event.start, event.duration, durWidth)
+                if (focused.has(event.id)) {
+                    // Two pixels at least, so a member that is already a full-height instant still widens.
+                    for (let x = xPos; x < xPos + Math.max(xWidth, 2); x++) {
+                        const col = pixelMap.get(x) ?? new Map<number, string>()
+                        col.set(-1, evtColor)
+                        pixelMap.set(x, col)
+                    }
+                    continue
+                }
                 if (!event.duration) {
                     // Instant event: full-height marker, no row stacking.
                     const col = pixelMap.get(xPos) ?? new Map<number, string>()
@@ -599,6 +612,7 @@ export default defineComponent({
         // Add property update handlers
         this.RESOURCE.onPropertyChange('activeMontage', this.montageChanged, this.ID)
         this.RESOURCE.onPropertyChange('events', this.drawNavigator, this.ID)
+        this.$watch(() => [eventGroupFocus.active, eventGroupFocus.hovered], this.drawNavigator)
         this.RESOURCE.onPropertyChange('exploredEnd', this.drawNavigator, this.ID)
         this.RESOURCE.onPropertyChange('interruptions', this.drawNavigator, this.ID)
         // View-position changes only repaint the lightweight viewbox overlay layer (separate

@@ -28,7 +28,9 @@ const messagesEN = {
     'Dipole ({x}, {y}, {z}) mm — GOF {gof}%': 'Dipole ({x}, {y}, {z}) mm — GOF {gof}%',
     'Document has a total of {n} pages': 'Document has a total of {n} pages',
     'Duration: {t}': 'Duration: {t}',
+    'Finding group {number}': 'Finding group {number}',
     'GOF {gof}%': 'GOF {gof}%',
+    'Group {number}': 'Group {number}',
     'Lead field model for {montage} is not available on this server. Contact an administrator to compute it.':
         'Lead field model for {montage} is not available on this server. Contact an administrator to compute it.',
     'Loading studies from {c}...': 'Loading studies from {c}...',
@@ -41,9 +43,12 @@ const messagesEN = {
     'Peak at {t} ms': 'Peak at {t} ms',
     'Remove {property}': 'Remove {property}',
     'Samples are clipped to {min} … {max} {unit} with {resolution} {unit} resolution.': 'Samples are clipped to {min} … {max} {unit} with {resolution} {unit} resolution.',
+    'Save and apply to the other {count} events of group {number}, each keeping its location':
+        'Save and apply to the other {count} events of group {number}, each keeping its location',
     'Send to {label}': 'Send to {label}',
     'Setting up montage {current} of {total}': 'Setting up montage {current} of {total}',
     'Signals are resampled to {rate} Hz, as the destination requires.': 'Signals are resampled to {rate} Hz, as the destination requires.',
+    'Take this event out of group {number}': 'Take this event out of group {number}',
     'The recording is {duration} s long.': 'The recording is {duration} s long.',
     'The server and this viewer have different copies of HED-SCORE {version}.':
         'The server and this viewer have different copies of HED-SCORE {version}.',

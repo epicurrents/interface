@@ -10,6 +10,21 @@
                 <div v-if="code" class="selected" :title="selectedDescription">
                     <span class="label">{{ selectedLabel }}</span>
                     <span v-if="selectedGroup" class="group">{{ $t(selectedGroup) }}</span>
+                    <template v-if="findingGroup !== null">
+                        <span class="finding-group">{{ $t('Group {number}', { number: findingGroup }) }}</span>
+                        <wa-button
+                            appearance="plain"
+                            :disabled="disabled"
+                            id="finding-picker-ungroup-button"
+                            size="s"
+                            @click="leaveGroup"
+                        >
+                            <app-icon name="link-slash"></app-icon>
+                        </wa-button>
+                        <wa-tooltip for="finding-picker-ungroup-button">
+                            {{ $t('Take this event out of group {number}', { number: findingGroup }) }}
+                        </wa-tooltip>
+                    </template>
                     <wa-button ref="clearbtn"
                         appearance="plain"
                         :disabled="disabled"
@@ -41,6 +56,24 @@
                         :value="findingGroup.branch"
                     >{{ $t(findingGroup.label) }}</wa-option>
                 </wa-select>
+                <template v-if="applyToGroup && findingGroup !== null && groupMembers">
+                    <wa-button
+                        appearance="plain"
+                        class="apply"
+                        :disabled="disabled"
+                        id="finding-picker-apply-button"
+                        size="s"
+                        @click="applyToGroup"
+                    >
+                        <app-icon name="check-double"></app-icon>
+                    </wa-button>
+                    <wa-tooltip for="finding-picker-apply-button">
+                        {{ $t(
+                            'Save and apply to the other {count} events of group {number}, each keeping its location',
+                            { count: groupMembers, number: findingGroup }
+                        ) }}
+                    </wa-tooltip>
+                </template>
                 <template v-if="stamp">
                     <wa-button
                         appearance="plain"
@@ -383,6 +416,14 @@ export default defineComponent({
     name: SCOPE,
     props: {
         /**
+         * Saves the annotation and gives the other events of its finding group the same finding and properties, each
+         * keeping its own location; offered at the end of the row when given and the finding is in a group.
+         */
+        applyToGroup: {
+            type: Function as PropType<() => void>,
+            default: null,
+        },
+        /**
          * Canonical labels of the electrodes the recording has, which the location is chosen from. Empty offers the
          * whole 10-10 table, for a recording whose electrodes are not known.
          */
@@ -407,6 +448,11 @@ export default defineComponent({
             type: Function as PropType<() => void>,
             default: null,
         },
+        /** How many other events are in the finding group of the annotation being edited. */
+        groupMembers: {
+            type: Number,
+            default: 0,
+        },
         /** A frequency measured within the annotation's span, filled in when a finding with a frequency is picked. */
         measuredFrequency: {
             type: Object as PropType<FrequencyMeasurement | null>,
@@ -428,6 +474,8 @@ export default defineComponent({
         const clearbtn = ref<WaButton>() as Ref<WaButton>
         const group = ref('')
         const highlighted = ref(0)
+        // The finding group of a finding removed to pick another, which the new pick stays in.
+        const keptGroup = ref<number | null>(null)
         const index = shallowRef<HedScoreTermIndex | null>(null)
         const list = ref<HTMLDivElement>()
         const offered = shallowRef<OfferedFinding[]>([])
@@ -447,6 +495,7 @@ export default defineComponent({
             groups: FINDING_GROUPS,
             highlighted,
             index,
+            keptGroup,
             list,
             offered,
             policy,
@@ -623,6 +672,10 @@ export default defineComponent({
             }
             return offeredFields(this.index, this.policy, this.parsed.finding)
         },
+        /** The number of the finding group the coded finding is one occurrence of, or `null`. */
+        findingGroup (): number | null {
+            return this.parsed?.group ?? null
+        },
         /** The coded finding is offered a side. */
         hasSide (): boolean {
             return this.fields.some(field => field.key === 'side')
@@ -699,6 +752,7 @@ export default defineComponent({
         },
         clear () {
             this.chosenModes = {}
+            this.keptGroup = this.parsed?.group ?? null
             this.$emit('change', null)
             this.$nextTick(() => {
                 this.search?.focus()
@@ -777,6 +831,13 @@ export default defineComponent({
                 this.state = 'unavailable'
             }
         },
+        /** Take the event out of its finding group; the rest of the group stays as it is. */
+        leaveGroup () {
+            this.keptGroup = null
+            this.update(code => {
+                delete code.group
+            })
+        },
         /**
          * Move the highlight through the results, or pick the highlighted one, for a key pressed in the search field
          * or the list. Returns whether the key was one of these.
@@ -824,6 +885,9 @@ export default defineComponent({
             }
             if (fields.some(field => field.key === 'side')) {
                 setLaterality(code, sensorLaterality(code.sensors))
+            }
+            if (this.keptGroup !== null) {
+                code.group = this.keptGroup
             }
             if (this.measuredFrequency && fields.some(field => field.kind === 'value' && field.tag === FREQUENCY_TAG)) {
                 // A frequency read off markers is a mean over uneven intervals, so it is approximate where allowed.
@@ -1122,9 +1186,11 @@ export default defineComponent({
     .row wa-select {
         flex: 0 0 12rem;
     }
+    .row .apply,
     .row .stamp {
         margin-left: 0.25rem;
     }
+    .row .apply wa-icon,
     .row .stamp wa-icon {
         font-size: 1rem;
     }
@@ -1298,6 +1364,13 @@ export default defineComponent({
     }
     .selected .group {
         margin-left: 0.5rem;
+    }
+    .selected .finding-group {
+        flex: 0 0 auto;
+        margin-left: 0.5rem;
+        color: var(--epicv-text-minor);
+        font-size: 0.75rem;
+        font-variant-numeric: tabular-nums;
     }
     .result:hover,
     .result--active {

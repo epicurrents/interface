@@ -9,6 +9,7 @@ import type { HedScoreTermIndex } from '@epicurrents/eeg-module/types'
 import { FINDING_GROUPS, findingGroupTag, hedFindingName, offeredFindings } from '#app/modules/eeg/findings'
 import {
     ELECTRODE_REGIONS,
+    FINDING_GROUP_NUMBERS,
     FINDING_SYNONYMS,
     PARTIAL_SYNONYM_LIMIT,
     PROPERTY_SETS,
@@ -16,7 +17,11 @@ import {
     balanceOf,
     composeFindingCode,
     electrodesByRegion,
+    findingGroupOf,
+    groupedFindingCode,
+    groupsAllowed,
     lateralityOf,
+    nextFindingGroup,
     offeredFields,
     parseFindingCode,
     relationsAllowed,
@@ -87,6 +92,18 @@ describe('property sets', () => {
         expect(names).not.toContain('Seizure-semiology')
     })
 
+    it('offer the onset pattern of a seizure and the large slow wave among the interictal waveforms', () => {
+        const names = (finding: string, key: string) => {
+            const field = offeredFields(index, null, finding).find(field => field.key === key)
+            return field?.kind === 'choice' ? field.options.map(option => option.term.name) : []
+        }
+        expect(names('Episode', 'onsetPattern')).toEqual([
+            'Low-voltage-fast-activity', 'Electrodecremental-change', 'DC-shift', 'Disappearance-of-ongoing-activity',
+        ])
+        expect(names('Epileptiform-interictal-activity', 'morphology'))
+            .toContain('Slow-wave-large-amplitude')
+    })
+
     it('name their options without the words the field already says', () => {
         const labels = (branch: string, key: string) => {
             const field = offeredFields(index, null, branch).find(field => field.key === key)
@@ -155,6 +172,55 @@ describe('fields per finding', () => {
         const all = (branch: string) => PROPERTY_SETS[branch].map(field => field.key)
         expect(keys('Critically-ill-patient-patterns')).toEqual(all('Critically-ill-patient-patterns'))
         expect(keys('Interictal-activity')).toEqual(all('Interictal-activity'))
+    })
+})
+
+describe('finding groups', () => {
+    const spike = '(Epileptiform-interictal-activity, Left, Spike, Sensor-list/F7;T7)'
+
+    it('are written last and read back', () => {
+        const grouped = groupedFindingCode(spike, 104, index, null)
+        expect(grouped).toBe('(Epileptiform-interictal-activity, Left, Spike, Sensor-list/F7;T7, ID/104)')
+        expect(parseFindingCode(grouped!, index)?.group).toBe(104)
+        expect(groupedFindingCode(grouped!, null, index, null)).toBe(spike)
+        expect(groupedFindingCode('Epileptiform-interictal-activity', 100, index, null))
+            .toBe('(Epileptiform-interictal-activity, ID/100)')
+    })
+
+    it('stay with a finding that moves', () => {
+        const grouped = groupedFindingCode(spike, 104, index, null)!
+        expect(relocatedFindingCode(grouped, ['F8', 'T8'], index, null))
+            .toBe('(Epileptiform-interictal-activity, Right, Spike, Sensor-list/F8;T8, ID/104)')
+    })
+
+    it('are read from the string alone, only within their numbers', () => {
+        expect(findingGroupOf('(Epileptiform-interictal-activity, ID/104)')).toBe(104)
+        expect(findingGroupOf('(Epileptiform-interictal-activity, ID/104, Left)')).toBe(104)
+        expect(findingGroupOf('(Epileptiform-interictal-activity, Left)')).toBeNull()
+        for (const outside of ['ID/99', 'ID/1000', 'ID/0104', 'ID/abc', 'Sensor-list/ID/104']) {
+            expect(findingGroupOf(`(Epileptiform-interictal-activity, ${outside})`), outside).toBeNull()
+        }
+        expect(findingGroupOf(3)).toBeNull()
+    })
+
+    it('make a string with a number outside them one the picker did not write', () => {
+        expect(parseFindingCode('(Epileptiform-interictal-activity, ID/99)', index)).toBeNull()
+        expect(parseFindingCode('(Epileptiform-interictal-activity, ID/104, ID/105)', index)).toBeNull()
+        expect(parseFindingCode('(Epileptiform-interictal-activity, (Approximately-equal-to, ID/104))', index))
+            .toBeNull()
+    })
+
+    it('take the number after the highest in use', () => {
+        expect(nextFindingGroup([])).toBe(FINDING_GROUP_NUMBERS.first)
+        expect(nextFindingGroup(['Spike', '(Spike, ID/104)', '(Spike, ID/102)', 7])).toBe(105)
+        expect(nextFindingGroup([`(Spike, ID/${FINDING_GROUP_NUMBERS.last})`])).toBeNull()
+    })
+
+    it('are not written under a policy that does not allow the tag', () => {
+        expect(groupsAllowed(index, policyFor(['Interictal-activity']))).toBe(false)
+        expect(groupsAllowed(index, policyFor(['Interictal-activity', 'Property']))).toBe(true)
+        expect(groupedFindingCode(spike, 104, index, policyFor(['Interictal-activity']))).toBeNull()
+        expect(groupedFindingCode('Not a finding', 104, index, null)).toBeNull()
     })
 })
 

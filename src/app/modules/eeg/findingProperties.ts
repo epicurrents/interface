@@ -102,6 +102,8 @@ export type FindingCode = {
     dominantSide?: Side
     /** The location's electrodes the finding is greatest at; written only when they are some of the location. */
     maxSensors?: string[]
+    /** The number of the group of events this finding is one occurrence of, from {@link FINDING_GROUP_NUMBERS}. */
+    group?: number
     /** Numbers of the value fields, by tag. */
     values: Record<string, FindingValue>
 }
@@ -156,6 +158,16 @@ export const SENSOR_LIST = 'Sensor-list'
 
 const SENSOR_SEPARATOR = ';'
 
+/**
+ * The tag a finding group is numbered by. The events of one finding seen in several places, or many times, carry the
+ * same number, which holds within one recording only. HED annotates events and has no finding owning several of them,
+ * and the standard's `ID` names a unique object, which is what the group is.
+ */
+export const FINDING_GROUP = 'ID'
+
+/** The numbers a finding group may take. The platform holds back 0 to 99 for a use not yet defined. */
+export const FINDING_GROUP_NUMBERS = { first: 100, last: 999 }
+
 const INCIDENCE: ChoiceField = {
     key: 'incidence', kind: 'choice', label: 'Incidence', omit: ['feature', 'incidence'], under: 'Feature-incidence',
 }
@@ -199,7 +211,8 @@ export const PROPERTY_SETS: Record<string, PropertyField[]> = {
             terms: [
                 'Spike', 'Spike-and-slow-wave', 'Polyspikes', 'Polyspike-and-slow-wave', 'Runs-of-rapid-spikes',
                 'Fast-spike-activity', 'Sharp-wave', 'Sharp-and-slow-wave', 'Slow-sharp-wave', 'Polysharp-waves',
-                'High-frequency-oscillation', 'Hypsarrhythmia-classic', 'Hypsarrhythmia-modified',
+                'Slow-wave-large-amplitude', 'High-frequency-oscillation', 'Hypsarrhythmia-classic',
+                'Hypsarrhythmia-modified',
             ],
         },
         {
@@ -237,6 +250,18 @@ export const PROPERTY_SETS: Record<string, PropertyField[]> = {
     'Episode': [
         SIDE,
         { key: 'classification', kind: 'choice', label: 'Seizure type', under: 'Seizure-classification' },
+        {
+            // The EEG change a seizure starts with; the schema files these under signal morphology, beside the
+            // interictal waveforms, so the list is given.
+            key: 'onsetPattern',
+            kind: 'choice',
+            label: 'Onset pattern',
+            multiple: true,
+            terms: [
+                'Low-voltage-fast-activity', 'Electrodecremental-change', 'DC-shift',
+                'Disappearance-of-ongoing-activity',
+            ],
+        },
         { key: 'semiology', kind: 'choice', label: 'Semiology', multiple: true, under: 'Seizure-semiology' },
         { key: 'postictal', kind: 'choice', label: 'Postictal', multiple: true, under: 'Postictal-semiology' },
         {
@@ -524,6 +549,67 @@ export function balanceOf (code: FindingCode): Balance {
 }
 
 /**
+ * The number of the finding group `value` is one occurrence of, or `null` when it is in none. Read from the string
+ * without the term index, so a list can show the group of every event; a number outside
+ * {@link FINDING_GROUP_NUMBERS} is no group.
+ * @param value - The code's value.
+ */
+export function findingGroupOf (value: number | string) {
+    if (typeof value !== 'string') {
+        return null
+    }
+    const written = value.match(/(?:^|[(,])\s*ID\/([^,()\s]*)\s*(?=[,)]|$)/)
+    return written ? findingGroupNumber(written[1]) : null
+}
+
+/**
+ * `value` made an occurrence of the finding group `group`, or taken out of its group with `null`; `null` in turn when
+ * the string cannot carry a group: one the picker did not write, or a policy that does not allow the tag.
+ * @param value - HED string.
+ * @param group - The group's number, or `null` for none.
+ * @param index - The loaded term index.
+ * @param policy - The host's policy, or `null` with no host.
+ */
+export function groupedFindingCode (
+    value: string,
+    group: number | null,
+    index: HedScoreTermIndex,
+    policy: HedScorePolicy | null,
+) {
+    const code = parseFindingCode(value, index)
+    if (!code || !groupsAllowed(index, policy)) {
+        return null
+    }
+    if (group === null) {
+        delete code.group
+    } else {
+        code.group = group
+    }
+    return composeFindingCode(code, offeredFields(index, policy, code.finding))
+}
+
+/**
+ * Whether `policy` allows the tag a finding group is numbered by.
+ * @param index - The loaded term index.
+ * @param policy - The host's policy, or `null` with no host.
+ */
+export function groupsAllowed (index: HedScoreTermIndex, policy: HedScorePolicy | null) {
+    return !policy?.allowedBranches
+        || policy.allowedBranches.includes(schemaBranchOf(index, FINDING_GROUP) ?? '')
+}
+
+/**
+ * The number a new finding group takes: one above the highest among `values`, or the first of
+ * {@link FINDING_GROUP_NUMBERS} when none is in a group; `null` once the last number is in use.
+ * @param values - The codes of every event of the recording.
+ */
+export function nextFindingGroup (values: (number | string)[]) {
+    const taken = values.map(findingGroupOf).filter((group): group is number => group !== null)
+    const next = taken.length ? Math.max(...taken) + 1 : FINDING_GROUP_NUMBERS.first
+    return next <= FINDING_GROUP_NUMBERS.last ? next : null
+}
+
+/**
  * Whether a synonym is an acronym, written with two or more capitals, such as `SW` or `BiPLEDs`.
  * @param synonym - The synonym as written in the table.
  */
@@ -696,6 +782,15 @@ export function parseFindingCode (value: string, index: HedScoreTermIndex): Find
             [relation, tag] = inner
         }
         const [name, ...valueParts] = tag.split('/')
+        if (name === FINDING_GROUP) {
+            const group = findingGroupNumber(valueParts.join('/'))
+            // One group, written without a comparison.
+            if (relation || group === null || code.group !== undefined) {
+                return null
+            }
+            code.group = group
+            continue
+        }
         const term = termOf(index, name)
         if (!term || /[()]/.test(tag)) {
             return null
@@ -794,6 +889,9 @@ export function composeFindingCode (code: FindingCode, fields: OfferedField[] = 
                 + `(${GREATER_RELATION}, ${SENSOR_LIST}/${lesser.join(SENSOR_SEPARATOR)}))`
             )
         }
+    }
+    if (code.group !== undefined) {
+        tags.push(`${FINDING_GROUP}/${code.group}`)
     }
     return tags.length ? `(${[code.finding, ...tags].join(', ')})` : code.finding
 }
@@ -941,6 +1039,18 @@ function descendants (index: HedScoreTermIndex, root: string) {
         }
     }
     return found
+}
+
+/**
+ * A finding group's number as written, or `null` unless it is one of {@link FINDING_GROUP_NUMBERS} spelled exactly.
+ * @param written - The tag's value.
+ */
+function findingGroupNumber (written: string) {
+    if (!/^[1-9]\d*$/.test(written)) {
+        return null
+    }
+    const number = Number(written)
+    return number >= FINDING_GROUP_NUMBERS.first && number <= FINDING_GROUP_NUMBERS.last ? number : null
 }
 
 /**

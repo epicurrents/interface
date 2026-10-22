@@ -136,12 +136,16 @@
                                 v-on:exit="exitEventEditor"
                                 v-on:save="saveAnnotation"
                             >
-                                <template #codes="{ annotation, codes, disabled, focusSave, setCode, stamp }">
+                                <template
+                                    #codes="{ annotation, applyToGroup, codes, disabled, focusSave, setCode, stamp }"
+                                >
                                     <finding-picker
+                                        :apply-to-group="applyToGroup"
                                         :available-sensors="recordingSensors"
                                         :code="findingCode(codes)"
                                         :disabled="disabled"
                                         :focus-next="focusSave"
+                                        :group-members="findingGroupMembers(codes)"
                                         :measured-frequency="findingFrequency(annotation)"
                                         :sensors="findingSensors(annotation)"
                                         :stamp="stamp"
@@ -325,15 +329,33 @@ import { useBiosignalPointer } from '#app/views/biosignal/useBiosignalPointer'
 import type { ContextMenuContext } from '#types/interface'
 import { EegEvent, HED_STANDARD, loadHedScoreIndex } from '@epicurrents/eeg-module'
 import type { PlotSelection } from '#app/views/biosignal/types'
+import { registerCodeGrouper } from '#app/views/biosignal/eventGroups'
+import type { HedScoreTermIndex } from '@epicurrents/eeg-module/types'
+import type { HedScorePolicy } from '../types'
 import { eventDisplayName, registerCodeNamer } from '#app/views/biosignal/eventNames'
 import { findingPolicy, hedFindingName } from '../findings'
-import { canonicalElectrode, relocatedFindingCode } from '../findingProperties'
+import {
+    canonicalElectrode,
+    findingGroupOf,
+    groupedFindingCode,
+    nextFindingGroup,
+    relocatedFindingCode,
+} from '../findingProperties'
 import { runtime } from '#app/modules/eeg'
 import CANONICAL_ELECTRODES from '../canonical-electrodes.json'
 import { frequencyMeasurementWithin } from '#app/views/biosignal/measurements'
 
-// A coded finding names its event when the reader types no label.
+// A coded finding names its event when the reader types no label, and groups it with the other occurrences of its
+// finding.
 registerCodeNamer(HED_STANDARD, hedFindingName)
+registerCodeGrouper(HED_STANDARD, findingGroupOf)
+
+/**
+ * The codes of an event as a record. An event created from a class template may carry an empty array, which holds none.
+ * @param event - The event.
+ */
+const codesOf = (event: BiosignalAnnotationEvent): Record<string, number | string> =>
+    Array.isArray(event.codes) ? {} : event.codes
 
 // Persists the user's last explicit trend-strip state per resource across remounts.
 // Keyed by resource id; only populated after the first unmount so a first-ever visit
@@ -371,6 +393,8 @@ import { SchemaManager } from '#root/src/components/report'
 type AnnotationCopy = {
     class: string
     codes: Record<string, number | string>
+    /** The ids of the annotations copied, which join the finding group their copies are made in. */
+    sources?: string[]
 }
 
 /**
@@ -997,6 +1021,40 @@ export default defineComponent({
          * @param handler - method to execute in the event of pointer leaving the element
          */
         /**
+         * Give the other events of `copy`'s finding group its class and finding, each keeping its own location as a
+         * copy does. Events locked against editing are left as they are.
+         * @param copy - The class and codes saved.
+         * @param edited - The ids of the events saved, which already carry them.
+         */
+        async applyToFindingGroup (copy: AnnotationCopy, edited: string[]) {
+            const finding = copy.codes[HED_STANDARD]
+            const group = finding === undefined ? null : findingGroupOf(finding)
+            if (typeof finding !== 'string' || group === null) {
+                return
+            }
+            const members = this.RESOURCE.events.filter(event => !edited.includes(event.id) && !event.locked
+                && findingGroupOf(codesOf(event)[HED_STANDARD] ?? '') === group)
+            if (!members.length) {
+                return
+            }
+            let index, policy
+            try {
+                [index, policy] = await Promise.all([loadHedScoreIndex(), findingPolicy(runtime.hedScore.policy)])
+            } catch (error) {
+                Log.error(
+                    ['Could not load the finding vocabulary.', 'The other events of the group were not changed.'],
+                    this.$options.name!
+                )
+                return
+            }
+            for (const event of members) {
+                const located = relocatedFindingCode(finding, this.channelSensors(event.channels ?? []), index, policy)
+                event.class = copy.class as typeof event['class']
+                event.codes = { ...codesOf(event), [HED_STANDARD]: located }
+            }
+            this.RESOURCE.dispatchPropertyChangeEvent('events', undefined, undefined, 'after', { source: 'user' })
+        },
+        /**
          * Return a promise that resolves when the plot is updated next time.
          */
         awaitPlotUpdate (): Promise<any> {
@@ -1079,8 +1137,8 @@ export default defineComponent({
         },
         /**
          * Add a copy of `copy` at each of `targets`, without opening the editor. A coded finding's location follows
-         * each copy's channels, so a finding repeated elsewhere says where that copy is; every other code is copied as
-         * it is.
+         * each copy's channels, so a finding repeated elsewhere says where that copy is, and the copies join the
+         * finding group of the annotation copied; every other code is copied as it is.
          * @param copy - The class and codes to copy.
          * @param targets - Where the copies go.
          */
@@ -1099,17 +1157,16 @@ export default defineComponent({
             const finding = copy.codes[HED_STANDARD]
             let relocate = (_channels: string[]) => finding
             if (typeof finding === 'string') {
+                let index, policy
                 try {
-                    const [index, policy] = await Promise.all([
-                        loadHedScoreIndex(),
-                        findingPolicy(runtime.hedScore.policy),
-                    ])
-                    relocate = channels => relocatedFindingCode(finding, this.channelSensors(channels), index, policy)
+                    [index, policy] = await Promise.all([loadHedScoreIndex(), findingPolicy(runtime.hedScore.policy)])
                 } catch (error) {
                     // Copying the location as it is would place every copy where the first one was.
                     Log.error(['Could not load the finding vocabulary.', 'No copies were made.'], this.$options.name!)
                     return
                 }
+                const grouped = this.groupCopies(copy, index, policy)
+                relocate = channels => relocatedFindingCode(grouped, this.channelSensors(channels), index, policy)
             }
             const created = targets.map((target, idx) => EegEvent.fromTemplate({
                 annotator: '',
@@ -1261,6 +1318,19 @@ export default defineComponent({
             return frequencyMeasurementWithin(annotation.start, annotation.start + annotation.duration)
         },
         /**
+         * How many events besides those being edited are in the finding group of the codes being edited.
+         * @param codes - The codes being edited.
+         */
+        findingGroupMembers (codes: Record<string, number | string>) {
+            const group = findingGroupOf(codes[HED_STANDARD] ?? '')
+            if (group === null) {
+                return 0
+            }
+            const edited = new Set(this.editingEvents.map(event => event.id))
+            return this.RESOURCE.events.filter(event => !edited.has(event.id)
+                && findingGroupOf(codesOf(event)[HED_STANDARD] ?? '') === group).length
+        },
+        /**
          * The canonical labels of the electrodes an annotation is drawn on, which a picked finding takes as its
          * location.
          * @param annotation - The annotation being edited.
@@ -1277,6 +1347,41 @@ export default defineComponent({
             const left = `${startX}px`
             const right = `${overlayW - endX}px`
             return `top: ${top}; bottom: ${bottom}; left: ${left}; right: ${right}`
+        },
+        /**
+         * The finding the copies of `copy` are made with: its finding in its finding group. A finding in none starts a
+         * new group, which the annotations copied join as well, and `copy` keeps it so every later copy joins it too.
+         * A finding that cannot carry a group, or a recording with every group number in use, is copied without one.
+         * Read from `copy` when called rather than before, so copies made while the vocabulary loads join one group.
+         * @param copy - The class and codes copied, changed in place to the grouped finding.
+         * @param index - The loaded term index.
+         * @param policy - The host's policy, or `null` with no host.
+         */
+        groupCopies (copy: AnnotationCopy, index: HedScoreTermIndex, policy: HedScorePolicy | null) {
+            const finding = String(copy.codes[HED_STANDARD])
+            if (findingGroupOf(finding) !== null) {
+                return finding
+            }
+            const group = nextFindingGroup(
+                this.RESOURCE.events.map(event => codesOf(event)[HED_STANDARD]).filter(value => value !== undefined)
+            )
+            const grouped = group === null ? null : groupedFindingCode(finding, group, index, policy)
+            if (grouped === null) {
+                if (group === null) {
+                    Log.warn('Every finding group number of the recording is in use.', this.$options.name!)
+                }
+                return finding
+            }
+            copy.codes = { ...copy.codes, [HED_STANDARD]: grouped }
+            const sources = this.RESOURCE.events.filter(event => copy.sources?.includes(event.id) && !event.locked
+                && codesOf(event)[HED_STANDARD] === finding)
+            for (const event of sources) {
+                event.codes = { ...codesOf(event), [HED_STANDARD]: grouped }
+            }
+            if (sources.length) {
+                this.RESOURCE.dispatchPropertyChangeEvent('events', undefined, undefined, 'after', { source: 'user' })
+            }
+            return grouped
         },
         handleContextMenuAction (props: any) {
             switch (props.action) {
@@ -1635,14 +1740,18 @@ export default defineComponent({
             this.removeAllHighlights()
         },
         /**
-         * Save the editor's changes, keep them as the annotation the repeat key copies, and start stamping copies when
-         * the reader asked for it.
-         * @param props - The editor's values, and whether to stamp.
+         * Save the editor's changes, keep them as the annotation the repeat key copies, and start stamping copies or
+         * apply the finding to the rest of its group when the reader asked for it.
+         * @param props - The editor's values, and what to do after saving.
          */
-        saveAnnotation (props: AnnotationCopy & { label: string, stamp?: boolean }) {
+        saveAnnotation (props: AnnotationCopy & { applyToGroup?: boolean, label: string, stamp?: boolean }) {
+            const sources = this.editingEvents.map(event => event.id)
             this.saveEventEdits(props)
-            this.lastAnnotation = { class: props.class, codes: { ...props.codes } }
+            this.lastAnnotation = { class: props.class, codes: { ...props.codes }, sources }
             this.stamping = props.stamp ? this.lastAnnotation : null
+            if (props.applyToGroup) {
+                this.applyToFindingGroup(props, sources)
+            }
         },
         selectDrawerTab (value: string) {
             this.sidebarTab = value
@@ -2160,6 +2269,17 @@ export default defineComponent({
         border: solid 1px var(--epicv-border);
         border-radius: 0.25rem;
         z-index: 3;
+        /* Fades once read, so it covers little of the signal while stamping; pointing at it brings it back. */
+        animation: stamp-bar-fade 0.5s ease 2.5s forwards;
+    }
+        .stamp-bar:hover,
+        .stamp-bar:focus-within {
+            animation: none;
+        }
+    @keyframes stamp-bar-fade {
+        to {
+            opacity: 0.4;
+        }
     }
     .video {
         position: absolute;

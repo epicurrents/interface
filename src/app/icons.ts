@@ -40,6 +40,7 @@ import dangerous from '@material-symbols/svg-400/outlined/dangerous.svg?raw'
 import delete_ from '@material-symbols/svg-400/outlined/delete.svg?raw'
 import description from '@material-symbols/svg-400/outlined/description.svg?raw'
 import directorySync from '@material-symbols/svg-400/outlined/directory_sync.svg?raw'
+import done_all from '@material-symbols/svg-400/outlined/done_all.svg?raw'
 import download from '@material-symbols/svg-400/outlined/download.svg?raw'
 import drag_indicator from '@material-symbols/svg-400/outlined/drag_indicator.svg?raw'
 import edit from '@material-symbols/svg-400/outlined/edit.svg?raw'
@@ -58,6 +59,7 @@ import keyboard_double_arrow_left from '@material-symbols/svg-400/outlined/keybo
 import keyboard_double_arrow_right from '@material-symbols/svg-400/outlined/keyboard_double_arrow_right.svg?raw'
 import library_add from '@material-symbols/svg-400/outlined/library_add.svg?raw'
 import link from '@material-symbols/svg-400/outlined/link.svg?raw'
+import link_off from '@material-symbols/svg-400/outlined/link_off.svg?raw'
 import manage_search from '@material-symbols/svg-400/outlined/manage_search.svg?raw'
 import memory from '@material-symbols/svg-400/outlined/memory.svg?raw'
 import menu from '@material-symbols/svg-400/outlined/menu.svg?raw'
@@ -112,6 +114,7 @@ export const ICON_SVGS: Record<string, { outlined: string; filled?: string }> = 
     delete:                         { outlined: delete_ },
     description:                    { outlined: description },
     directory_sync:                 { outlined: directorySync },
+    done_all:                       { outlined: done_all },
     download:                       { outlined: download },
     drag_indicator:                 { outlined: drag_indicator },
     edit:                           { outlined: edit },
@@ -130,6 +133,7 @@ export const ICON_SVGS: Record<string, { outlined: string; filled?: string }> = 
     keyboard_double_arrow_right:    { outlined: keyboard_double_arrow_right },
     library_add:                    { outlined: library_add },
     link:                           { outlined: link },
+    link_off:                       { outlined: link_off },
     manage_search:                  { outlined: manage_search },
     memory:                         { outlined: memory },
     menu:                           { outlined: menu },
@@ -180,6 +184,7 @@ const FA_TO_MATERIAL: Record<string, string> = {
     'calendar':                         'calendar_month',
     'check':                            'check',
     'check-circle':                     'check_circle',
+    'check-double':                     'done_all',
     'chevron-down':                     'keyboard_arrow_down',
     'chevron-left':                     'chevron_left',
     'chevron-right':                    'chevron_right',
@@ -212,6 +217,7 @@ const FA_TO_MATERIAL: Record<string, string> = {
     'info-circle':                      'info',
     'input-text':                       'text_fields',
     'link':                             'link',
+    'link-slash':                       'link_off',
     'magnifying-glass-waveform':        'manage_search',
     'message-dots':                     'chat',
     'message-middle':                   'chat_bubble',

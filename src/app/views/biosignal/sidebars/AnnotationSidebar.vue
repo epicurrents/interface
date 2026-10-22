@@ -54,8 +54,11 @@
                             {{ $t('No events') }}
                         </div>
                         <div v-for="(event, idy) of RESOURCE.events" :key="`eeg-event-${idy}`"
-                            class="row"
+                            :class="['row', { 'grouped': focusedIds.has(event.id) }]"
                             @click="goToEvent(event.start)"
+                            @pointerenter="focusGroup(event)"
+                            @pointerleave="unfocusGroup"
+                            @pointermove="focusGroup(event)"
                         >
                             <div :class="[
                                     'epicv-oneliner',
@@ -74,6 +77,10 @@
                                 ]"
                                 :title="eventName(event)"
                             >{{ eventName(event) }}</div>
+                            <div v-if="groupNumber(event)"
+                                class="group"
+                                :title="$t('Finding group {number}', { number: groupNumber(event) })"
+                            >{{ groupNumber(event) }}</div>
                             <div v-if="!event.locked" class="action" @click="removeEvent($event, event.id)">
                                 <app-icon name="trash" :title="$t('Remove event')"></app-icon>
                             </div>
@@ -171,6 +178,7 @@ import type { default as WaTextarea } from "@awesome.me/webawesome/dist/componen
 import { settingsColorToRgba } from "@epicurrents/core/util"
 import type { BiosignalAnnotationEvent } from '@epicurrents/core/types'
 import { PlotSelection } from '#app/views/biosignal/types'
+import { eventGroup, eventGroupFocus, eventGroupKey, focusedEventIds } from '#app/views/biosignal/eventGroups'
 import { eventDisplayName } from '#app/views/biosignal/eventNames'
 import { eventTimeLabel, eventTimeTitle, eventTimeWidth } from '#app/views/biosignal/eventTime'
 import { Log } from "scoped-event-log"
@@ -266,6 +274,10 @@ export default defineComponent({
             const borderWidth = this.SETTINGS.border.bottom.width
             const borderColor = settingsColorToRgba(this.SETTINGS.border.bottom.color)
             return `${borderStyle} ${borderWidth}px ${borderColor}`
+        },
+        /** The events marked with what the reader points at, so a group's members show together. */
+        focusedIds (): Set<string> {
+            return focusedEventIds(this.RESOURCE.events)
         },
         hasAnnotationConnector (): boolean {
             const dataset = this.$store.state.APP.activeDataset
@@ -410,11 +422,25 @@ export default defineComponent({
             this.exportFormat = value
             this.annotationsUpdated()
         },
+        /**
+         * Point at the group of the event under the pointer, so its members are marked here and on the plot.
+         * @param event - The annotation event.
+         */
+        focusGroup (event: BiosignalAnnotationEvent) {
+            eventGroupFocus.hovered = eventGroupKey(event)
+        },
         goToEvent (time: number) {
             // Center the view on the selected annotation.
             const annoRange = this.viewStep < this.visibleRange ? time - this.visibleRange/2 : time
             const viewStart = Math.max(0, annoRange - annoRange%this.viewStep)
             this.RESOURCE.viewStart = viewStart
+        },
+        /**
+         * The number of the group `event` is in, or `null`.
+         * @param event - The annotation event.
+         */
+        groupNumber (event: BiosignalAnnotationEvent) {
+            return eventGroup(event)?.number ?? null
         },
         relativeTimeChanged () {
             this.relativeTime = navigatorRelativeTime(this.SETTINGS)
@@ -459,6 +485,9 @@ export default defineComponent({
         },
         timeTitle (time: number) {
             return eventTimeTitle(this.RESOURCE, time, this.relativeTime)
+        },
+        unfocusGroup () {
+            eventGroupFocus.hovered = null
         },
         undoRemove () {
             this.$emit('undo-remove')
@@ -614,6 +643,19 @@ export default defineComponent({
         .label {
             flex-grow: 1;
         }
+        .group {
+            flex: 0 0 auto;
+            padding: 0 0.25rem;
+            color: var(--epicv-text-faint);
+            font-size: 0.75rem;
+            font-variant-numeric: tabular-nums;
+        }
+        .row.grouped {
+            background-color: var(--epicv-background-hover);
+        }
+            .row.grouped .group {
+                color: var(--epicv-text-emphasis);
+            }
         .action {
             flex: 1.5rem 0 0;
             padding: 0 0.25rem;

@@ -24,6 +24,12 @@
             "description": "Lacking symmetry or having parts that fail to correspond to one another in shape, size, or arrangement.",
             "hedId": "HED_0012566",
             "name": "Asymmetrical"
+        },
+        {
+            "branch": "Property",
+            "description": "An alphanumeric name that identifies either a unique object or a unique class of objects. Here the object or class may be an idea, physical countable object (or class), or physical uncountable substance (or class).",
+            "hedId": "HED_0012758",
+            "name": "ID"
         }
     ]
 }
