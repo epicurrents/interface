@@ -217,6 +217,8 @@ export type EegInterfaceSettings = CommonBiosignalInterfaceSettings & {
         montage4: HotkeyProperties
         /** Hotkey to toggle default notch filter. */
         notch: HotkeyProperties
+        /** Hotkey to copy the annotation last saved to the selections, or to the cursor with none selected. */
+        repeat: HotkeyProperties
         /** Hotkey to open the report window. */
         report: HotkeyProperties
         /** Hotkey to open the topogram tool window (if MNE is loaded). */

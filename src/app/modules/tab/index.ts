@@ -127,6 +127,7 @@ export const mutations = {
 export const settings: CommonInterfaceSettings = safeObjectFrom({
     _userDefinable: {},
     annotations: {
+        offerSubmit: false,
         saveToDataset: false,
     },
     compatibleView: 'media',

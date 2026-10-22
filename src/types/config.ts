@@ -100,6 +100,11 @@ export type CommonBiosignalInterfaceSettings = CommonInterfaceSettings & {
          * This only restricts annotation editing and does not affect already existing annotations.
          */
         containWithinRecording: boolean
+        /**
+         * Offer a button in the annotation sidebar that marks the reader's annotations submitted, by adding a `submit`
+         * label set to true. A host whose workflow listens for that label turns it on; off, the label is never written.
+         */
+        offerSubmit: boolean
         /** Save changes to recording annotations to the output dataset. */
         saveToDataset: boolean
         typeColors: Record<string, SettingsColor>

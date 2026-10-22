@@ -5,14 +5,14 @@
         }"
     >
         <div class="title">{{ $t('Annotations') }}</div>
-        <div class="save">
+        <div v-if="hasAnnotationConnector || SETTINGS.annotations.offerSubmit" class="save">
             <wa-switch v-if="hasAnnotationConnector"
                 :checked="SETTINGS.annotations.saveToDataset"
                 @change="saveAnnotationsChanged($event.target.checked)"
             >
                 {{ $t('Save annotations to dataset') }}
             </wa-switch>
-            <template v-else>
+            <template v-else-if="SETTINGS.annotations.offerSubmit">
                 <wa-button
                     appearance="filled"
                     :disabled="isAnnotationsSubmitted"

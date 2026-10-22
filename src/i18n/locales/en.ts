@@ -51,6 +51,7 @@ const messagesEN = {
         'The server validates findings against HED-SCORE {server}; this viewer has {viewer}.',
     'Voltage / Δ ({unit})': 'Voltage / Δ ({unit})',
     'uV': 'µV', // Display ASCII-compatible unit uV in the interface as µV.
+    '{name}: click the signal to stamp one, drag for a span': '{name}: click the signal to stamp one, drag for a span',
     welcome: {
         advanced: 'Advanced',
         basic: 'Basic',

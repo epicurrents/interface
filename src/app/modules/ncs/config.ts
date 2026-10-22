@@ -261,6 +261,7 @@ export const settings: NcsInterfaceSettings = safeObjectFrom({
         },
         color: [0, 0, 1, 0.75] as SettingsColor,
         containWithinRecording: true,
+        offerSubmit: false,
         saveToDataset: false,
         typeColors: {},
         width: 1,

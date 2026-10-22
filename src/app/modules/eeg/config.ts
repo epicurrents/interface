@@ -659,6 +659,7 @@ export const settings: EegInterfaceSettings = safeObjectFrom({
         },
         color: [0, 0, 1, 0.75] as SettingsColor,
         containWithinRecording: true,
+        offerSubmit: false,
         saveToDataset: false,
         typeColors: {
             'act_ec': [0.25, 0.5, 0.25, 0.75] as SettingsColor,
@@ -793,6 +794,12 @@ export const settings: EegInterfaceSettings = safeObjectFrom({
             code: 'KeyN',
             key: 'n',
             modKey: false,
+        },
+        repeat: {
+            code: 'KeyA',
+            key: 'A',
+            modKey: 'Shift',
+            shift: true,
         },
         report: {
             code: 'KeyR',

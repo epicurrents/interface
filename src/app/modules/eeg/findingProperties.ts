@@ -37,6 +37,11 @@ import STANDARD_TERMS from './standard-terms.json'
 
 /** A property the reader picks from a list of tags. */
 export type ChoiceField = {
+    /**
+     * Offer the field only after these findings, the findings under them, and the more general findings above them,
+     * which may be any of them; after every finding of the set when not given.
+     */
+    findings?: string[]
     /** A heading shown before the field, opening a part of the set that applies to fewer findings. */
     heading?: string
     /** Stable key of the field within its set. */
@@ -63,6 +68,7 @@ export type ChoiceField = {
 
 /** A property the reader gives a number for, written as `Tag/<number> <unit>`. */
 export type ValueField = {
+    findings?: string[]
     heading?: string
     key: string
     kind: 'value'
@@ -176,23 +182,30 @@ const AMPLITUDE: ValueField = {
     key: 'amplitude', kind: 'value', label: 'Amplitude', tag: 'Feature-amplitude', unit: 'uV',
 }
 
+/** The critical-care patterns, whose fields the schema describes by which of them each applies to. */
+const PERIODIC_DISCHARGES = 'Critically-ill-patient-periodic-discharges'
+const RHYTHMIC_DELTA = 'Rhythmic-delta-activity'
+const SPIKE_AND_WAVE = 'Spike-or-sharp-and-wave'
+
 /** The properties offered after a finding, per group branch, in the order they are shown and written. */
 export const PROPERTY_SETS: Record<string, PropertyField[]> = {
     'Interictal-activity': [
         SIDE,
         {
+            findings: ['Epileptiform-interictal-activity'],
             key: 'morphology',
             kind: 'choice',
             label: 'Morphology',
             terms: [
                 'Spike', 'Spike-and-slow-wave', 'Polyspikes', 'Polyspike-and-slow-wave', 'Runs-of-rapid-spikes',
-                'Sharp-wave', 'Sharp-and-slow-wave', 'Slow-sharp-wave', 'Polysharp-waves', 'High-frequency-oscillation',
-                'Hypsarrhythmia-classic', 'Hypsarrhythmia-modified',
+                'Fast-spike-activity', 'Sharp-wave', 'Sharp-and-slow-wave', 'Slow-sharp-wave', 'Polysharp-waves',
+                'High-frequency-oscillation', 'Hypsarrhythmia-classic', 'Hypsarrhythmia-modified',
             ],
         },
         {
             // Irregular and polymorphic slowing first, the most common interictal abnormality; the irregular form is
             // not a rhythmic property in the schema, so the list is given rather than taken from that branch.
+            findings: ['Abnormal-interictal-rhythmic-activity'],
             key: 'activity',
             kind: 'choice',
             label: 'Activity',
@@ -202,7 +215,14 @@ export const PROPERTY_SETS: Record<string, PropertyField[]> = {
                 'Temporal-intermittent-rhythmic-delta-activity', 'Alpha-activity', 'Beta-activity', 'Gamma-activity',
             ],
         },
-        { key: 'discharge', kind: 'choice', label: 'Discharge pattern', under: 'Discharge-pattern' },
+        {
+            // The organisation within a discharge, which a rhythmic slowing has none of.
+            findings: ['Epileptiform-interictal-activity'],
+            key: 'discharge',
+            kind: 'choice',
+            label: 'Discharge pattern',
+            under: 'Discharge-pattern',
+        },
         INCIDENCE,
         {
             key: 'spread',
@@ -254,7 +274,9 @@ export const PROPERTY_SETS: Record<string, PropertyField[]> = {
     'Critically-ill-patient-patterns': [
         SIDE,
         {
-            // The sharpness, which for these patterns is what tells a spike from a sharp wave, and triphasic beside it.
+            // The sharpness, which for these patterns is what tells a spike from a sharp wave, and triphasic beside it;
+            // the schema gives both for periodic discharges and spike-and-wave only.
+            findings: [PERIODIC_DISCHARGES, SPIKE_AND_WAVE],
             key: 'morphology',
             kind: 'choice',
             label: 'Morphology',
@@ -277,6 +299,7 @@ export const PROPERTY_SETS: Record<string, PropertyField[]> = {
         { key: 'onset', kind: 'choice', label: 'Onset', omit: ['RPP', 'onset'], under: 'RPP-onset' },
         { key: 'dynamics', kind: 'choice', label: 'Dynamics', omit: ['RPP', 'dynamics'], under: 'RPP-dynamics' },
         {
+            findings: [PERIODIC_DISCHARGES, RHYTHMIC_DELTA],
             key: 'superimposed',
             kind: 'choice',
             label: 'Superimposed',
@@ -306,7 +329,16 @@ export const PROPERTY_SETS: Record<string, PropertyField[]> = {
     ],
 }
 
-/** Abbreviations readers type, and what each stands for. Matched whole, case ignored. */
+/** The fewest letters of a word-form synonym that match it before it is typed whole. */
+export const PARTIAL_SYNONYM_LENGTH = 3
+
+/** The most synonyms matched by their first letters, which a short query can match many of. */
+export const PARTIAL_SYNONYM_LIMIT = 5
+
+/**
+ * Abbreviations and word forms readers type, and what each stands for. Case, spaces and hyphens are ignored; see
+ * {@link synonymFindings} for when each matches.
+ */
 export const FINDING_SYNONYMS: FindingSynonym[] = [
     { abbreviations: ['LPD', 'PLED', 'PLEDs'], finding: 'Lateralized-periodic-discharges' },
     { abbreviations: ['GPD', 'GPDs', 'GPED'], finding: 'Generalized-periodic-discharges' },
@@ -328,6 +360,29 @@ export const FINDING_SYNONYMS: FindingSynonym[] = [
         abbreviations: ['TIRDA'],
         finding: 'Abnormal-interictal-rhythmic-activity',
         properties: ['Temporal-intermittent-rhythmic-delta-activity'],
+    },
+    // A single discharge is a finding with its waveform as a property, so the waveform's own name finds it, ahead of
+    // the critical-care spike-and-wave pattern, whose name also starts with it.
+    {
+        abbreviations: ['spike', 'spikes'],
+        finding: 'Epileptiform-interictal-activity',
+        properties: ['Spike'],
+    },
+    {
+        abbreviations: ['polyspike', 'polyspikes'],
+        finding: 'Epileptiform-interictal-activity',
+        properties: ['Polyspikes'],
+    },
+    {
+        abbreviations: ['sharp wave', 'sharp waves', 'sharp-wave'],
+        finding: 'Epileptiform-interictal-activity',
+        properties: ['Sharp-wave'],
+    },
+    {
+        // The schema's name for paroxysmal fast activity: a burst of spikes over 1 s at alpha frequency or above.
+        abbreviations: ['PFA', 'GPFA', 'paroxysmal fast activity', 'fast spike activity'],
+        finding: 'Epileptiform-interictal-activity',
+        properties: ['Fast-spike-activity'],
     },
     {
         abbreviations: ['SW', 'SSW', 'spike-wave'],
@@ -469,6 +524,14 @@ export function balanceOf (code: FindingCode): Balance {
 }
 
 /**
+ * Whether a synonym is an acronym, written with two or more capitals, such as `SW` or `BiPLEDs`.
+ * @param synonym - The synonym as written in the table.
+ */
+export function isAcronym (synonym: string) {
+    return (synonym.match(/[A-Z]/g)?.length ?? 0) >= 2
+}
+
+/**
  * Where `code`'s finding is: left, right, bilateral when both sides are among its properties, or empty.
  * @param code - The finding and its properties.
  */
@@ -535,6 +598,52 @@ export function setLaterality (code: FindingCode, laterality: Laterality) {
     } else if (laterality) {
         code.properties.push(laterality)
     }
+}
+
+/**
+ * Move `code`'s finding to the electrodes `sensors`. A side that is still what the old location gave follows the new
+ * one; a side the reader chose stays. Electrodes of the maximum outside the new location are dropped, and the maximum
+ * with them when none is left.
+ * @param code - The finding and its properties, changed in place.
+ * @param sensors - Canonical electrode labels of the new location; none for a finding with no location.
+ * @param hasSide - Whether the finding's set offers a side, so the side may follow.
+ */
+export function relocate (code: FindingCode, sensors: string[], hasSide: boolean) {
+    const followsLocation = lateralityOf(code) === sensorLaterality(code.sensors)
+    code.sensors = [...sensors]
+    if (followsLocation && hasSide) {
+        setLaterality(code, sensorLaterality(code.sensors))
+    }
+    const max = code.maxSensors?.filter(label => code.sensors.includes(label))
+    if (max?.length) {
+        code.maxSensors = max
+    } else {
+        delete code.maxSensors
+    }
+}
+
+/**
+ * `value` with its finding moved to the electrodes `sensors`, as {@link relocate} moves it, so a finding repeated on
+ * other channels says where each copy is. A string the picker did not write, or one whose location the policy does not
+ * allow, is returned as it is.
+ * @param value - HED string.
+ * @param sensors - Canonical electrode labels of the new location.
+ * @param index - The loaded term index.
+ * @param policy - The host's policy, or `null` with no host.
+ */
+export function relocatedFindingCode (
+    value: string,
+    sensors: string[],
+    index: HedScoreTermIndex,
+    policy: HedScorePolicy | null,
+) {
+    const code = parseFindingCode(value, index)
+    if (!code || !sensorsAllowed(index, policy)) {
+        return value
+    }
+    const fields = offeredFields(index, policy, code.finding)
+    relocate(code, sensors, fields.some(field => field.key === 'side'))
+    return composeFindingCode(code, fields)
 }
 
 /**
@@ -712,18 +821,23 @@ export function valueText (value: FindingValue, unit = '') {
 }
 
 /**
- * The fields offered after a finding of `branch` under `policy`, each choice resolved to the terms that stand as a code
- * and that the policy allows. A field left with no choices is dropped, and so is a value field whose tag the policy or
- * the index does not allow.
+ * The fields offered after `finding` under `policy`: its group's set, less the fields that apply only to other findings
+ * of the group, each choice resolved to the terms that stand as a code and that the policy allows. A field left with no
+ * choices is dropped, and so is a value field whose tag the policy or the index does not allow.
  * @param index - The loaded term index.
  * @param policy - The host's policy, or `null` with no host.
- * @param branch - The finding's group branch.
+ * @param finding - The finding's short-form tag.
  */
-export function offeredFields (index: HedScoreTermIndex, policy: HedScorePolicy | null, branch: string) {
+export function offeredFields (index: HedScoreTermIndex, policy: HedScorePolicy | null, finding: string) {
+    const lineage = lineageOf(index, finding)
+    const suits = (names: string[]) => names.some(name => lineage.has(name) || lineageOf(index, name).has(finding))
     const allowed = (term: HedScoreTerm | null): term is HedScoreTerm => !!term && !term.deprecated
         && (!policy?.allowedBranches || policy.allowedBranches.includes(schemaBranchOf(index, term.name) ?? ''))
     const offered = [] as OfferedField[]
-    for (const field of PROPERTY_SETS[branch] ?? []) {
+    for (const field of PROPERTY_SETS[index.branchOf(finding) ?? ''] ?? []) {
+        if (field.findings && !suits(field.findings)) {
+            continue
+        }
         if (field.kind === 'value') {
             if (allowed(index.getTerm(field.tag))) {
                 offered.push(field)
@@ -759,6 +873,11 @@ export function sensorsAllowed (index: HedScoreTermIndex, policy: HedScorePolicy
 /**
  * The offered findings an abbreviation in `query` stands for, with the properties each sets. A synonym whose finding
  * is not offered, or one of whose properties is not allowed, is left out.
+ *
+ * An acronym, written with two or more capitals, matches only when typed whole, since its first letters would match
+ * half the table. A word form such as "polyspike" also matches from its first {@link PARTIAL_SYNONYM_LENGTH} letters,
+ * so a finding filed under another name is offered before the word is finished. Whole matches come first, then the
+ * partial ones, at most {@link PARTIAL_SYNONYM_LIMIT} of them.
  * @param offered - The offered terms.
  * @param query - What the reader typed.
  * @param index - The loaded term index.
@@ -770,20 +889,30 @@ export function synonymFindings (
     index: HedScoreTermIndex,
     policy: HedScorePolicy | null,
 ) {
-    const typed = query.trim().toLowerCase()
+    const typed = normalizedSynonym(query)
     if (!typed) {
         return []
     }
     const byName = new Map(offered.map(finding => [finding.term.name, finding]))
-    const matches = [] as OfferedFinding[]
+    const whole = [] as OfferedFinding[]
+    const partial = [] as OfferedFinding[]
     for (const synonym of FINDING_SYNONYMS) {
-        const abbreviation = synonym.abbreviations.find(abbr => abbr.toLowerCase() === typed)
         const finding = byName.get(synonym.finding)
-        if (!abbreviation || !finding) {
+        if (!finding) {
+            continue
+        }
+        let abbreviation = synonym.abbreviations.find(abbr => normalizedSynonym(abbr) === typed)
+        const matches = abbreviation ? whole : partial
+        if (!abbreviation && typed.length >= PARTIAL_SYNONYM_LENGTH) {
+            abbreviation = synonym.abbreviations.find(
+                abbr => !isAcronym(abbr) && normalizedSynonym(abbr).startsWith(typed)
+            )
+        }
+        if (!abbreviation) {
             continue
         }
         const properties = synonym.properties ?? []
-        const fields = offeredFields(index, policy, finding.branch)
+        const fields = offeredFields(index, policy, finding.term.name)
         const offeredProperties = new Set(
             fields.flatMap(field => field.kind === 'choice' ? field.options.map(option => option.term.name) : [])
         )
@@ -793,7 +922,7 @@ export function synonymFindings (
         const label = [finding.label, ...properties.map(findingLabel)].join(': ')
         matches.push({ ...finding, abbreviation, label, properties })
     }
-    return matches
+    return [...whole, ...partial.slice(0, PARTIAL_SYNONYM_LIMIT)]
 }
 
 /**
@@ -812,6 +941,27 @@ function descendants (index: HedScoreTermIndex, root: string) {
         }
     }
     return found
+}
+
+/**
+ * `name` and every term above it.
+ * @param index - The loaded term index.
+ * @param name - Short-form tag.
+ */
+function lineageOf (index: HedScoreTermIndex, name: string) {
+    const lineage = new Set<string>()
+    for (let term: string | null = name; term && !lineage.has(term); term = index.getTerm(term)?.parent ?? null) {
+        lineage.add(term)
+    }
+    return lineage
+}
+
+/**
+ * A synonym or query as matched: lower case, without spaces or hyphens, so "poly spike" finds "polyspike".
+ * @param text - The synonym or what the reader typed.
+ */
+function normalizedSynonym (text: string) {
+    return text.toLowerCase().replace(/[\s-]+/g, '')
 }
 
 /**

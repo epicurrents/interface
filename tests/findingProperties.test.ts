@@ -6,10 +6,11 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { loadHedScoreIndex } from '@epicurrents/eeg-module'
 import type { HedScoreTermIndex } from '@epicurrents/eeg-module/types'
-import { FINDING_GROUPS, hedFindingName, offeredFindings } from '#app/modules/eeg/findings'
+import { FINDING_GROUPS, findingGroupTag, hedFindingName, offeredFindings } from '#app/modules/eeg/findings'
 import {
     ELECTRODE_REGIONS,
     FINDING_SYNONYMS,
+    PARTIAL_SYNONYM_LIMIT,
     PROPERTY_SETS,
     canonicalElectrode,
     balanceOf,
@@ -19,6 +20,8 @@ import {
     offeredFields,
     parseFindingCode,
     relationsAllowed,
+    relocate,
+    relocatedFindingCode,
     sensorLaterality,
     sensorsAllowed,
     setBalance,
@@ -123,6 +126,96 @@ describe('property sets', () => {
         expect(sensorsAllowed(index, policyFor(['Interictal-activity']))).toBe(false)
         expect(sensorsAllowed(index, policyFor([branch]))).toBe(true)
         expect(sensorsAllowed(index, null)).toBe(true)
+    })
+})
+
+describe('fields per finding', () => {
+    const keys = (finding: string) => offeredFields(index, null, finding).map(field => field.key)
+
+    it('follow the patterns the schema names for the critical-care fields', () => {
+        // Sharpness and triphasic for PDs and SW, superimposed activity for PDs and RDA, timing for all three.
+        expect(keys('Critically-ill-patient-periodic-discharges')).toEqual(expect.arrayContaining(
+            ['morphology', 'superimposed', 'duration', 'onset', 'dynamics']
+        ))
+        expect(keys('Rhythmic-delta-activity')).not.toContain('morphology')
+        expect(keys('Rhythmic-delta-activity')).toContain('superimposed')
+        expect(keys('Spike-or-sharp-and-wave')).toContain('morphology')
+        expect(keys('Spike-or-sharp-and-wave')).not.toContain('superimposed')
+    })
+
+    it('keep the waveform to discharges and the rhythm to slowing among interictal findings', () => {
+        expect(keys('Epileptiform-interictal-activity')).toEqual(expect.arrayContaining(['morphology', 'discharge']))
+        expect(keys('Epileptiform-interictal-activity')).not.toContain('activity')
+        expect(keys('Abnormal-interictal-rhythmic-activity')).toContain('activity')
+        expect(keys('Abnormal-interictal-rhythmic-activity')).not.toContain('morphology')
+        expect(keys('Abnormal-interictal-rhythmic-activity')).not.toContain('discharge')
+    })
+
+    it('offer every field of the set to a general finding that may be any of them', () => {
+        const all = (branch: string) => PROPERTY_SETS[branch].map(field => field.key)
+        expect(keys('Critically-ill-patient-patterns')).toEqual(all('Critically-ill-patient-patterns'))
+        expect(keys('Interictal-activity')).toEqual(all('Interictal-activity'))
+    })
+})
+
+describe('relocation', () => {
+    const fields = () => offeredFields(index, null, 'Epileptiform-interictal-activity')
+    const written = (code: Parameters<typeof composeFindingCode>[0]) => composeFindingCode(code, fields())
+
+    it('moves the location, with a side that followed it and the maximum where it still lies', () => {
+        const code = {
+            finding: 'Epileptiform-interictal-activity',
+            maxSensors: ['T7'],
+            properties: ['Spike-and-slow-wave', 'Left'],
+            sensors: ['F7', 'T7'],
+            values: {},
+        }
+        relocate(code, ['F8', 'T8'], true)
+        expect(code).toEqual({
+            finding: 'Epileptiform-interictal-activity',
+            properties: ['Spike-and-slow-wave', 'Right'],
+            sensors: ['F8', 'T8'],
+            values: {},
+        })
+        relocate(code, ['T8', 'P8'], true)
+        expect(code.sensors).toEqual(['T8', 'P8'])
+    })
+
+    it('keeps a side the reader chose, and a maximum still within the new location', () => {
+        const code = {
+            finding: 'Epileptiform-interictal-activity',
+            maxSensors: ['T7'],
+            properties: ['Right'],
+            sensors: ['F7', 'T7'],
+            values: {},
+        }
+        relocate(code, ['T7', 'P7'], true)
+        expect(code.properties).toEqual(['Right'])
+        expect(code.maxSensors).toEqual(['T7'])
+    })
+
+    it('drops a followed side and the location for a global copy', () => {
+        const code = { finding: 'Epileptiform-interictal-activity', properties: ['Left'], sensors: ['T7'], values: {} }
+        relocate(code, [], true)
+        expect(code).toEqual({ finding: 'Epileptiform-interictal-activity', properties: [], sensors: [], values: {} })
+    })
+
+    it('rewrites a string the picker wrote, and returns any other as it is', () => {
+        const value = written({
+            finding: 'Epileptiform-interictal-activity',
+            properties: ['Spike-and-slow-wave', 'Left'],
+            sensors: ['T7'],
+            values: { 'Feature-frequency': { mode: 'about', value: 3 } },
+        })
+        expect(relocatedFindingCode(value, ['F8', 'T8'], index, null)).toBe(written({
+            finding: 'Epileptiform-interictal-activity',
+            properties: ['Spike-and-slow-wave', 'Right'],
+            sensors: ['F8', 'T8'],
+            values: { 'Feature-frequency': { mode: 'about', value: 3 } },
+        }))
+        const foreign = '(Spike, (Sharp-wave, Spike))'
+        expect(relocatedFindingCode(foreign, ['T8'], index, null)).toBe(foreign)
+        expect(relocatedFindingCode(value, ['T8'], index, policyFor(['Interictal-activity']))).toBe(value)
     })
 })
 
@@ -284,6 +377,54 @@ describe('abbreviations', () => {
             expect(found.properties).toEqual(['Irregular-delta-or-theta-activity'])
         }
         expect(synonymFindings(offered, 'PDA', index, null)[0].properties).toEqual(['Polymorphic-delta-activity'])
+    })
+
+    it('find a single discharge by its waveform, with the waveform set', () => {
+        const offered = offeredFindings(index, null)
+        const cases = [
+            ['spike', 'Spike'],
+            ['Polyspike', 'Polyspikes'],
+            ['sharp wave', 'Sharp-wave'],
+            ['PFA', 'Fast-spike-activity'],
+            ['paroxysmal fast activity', 'Fast-spike-activity'],
+        ]
+        for (const [typed, property] of cases) {
+            const [found] = synonymFindings(offered, typed, index, null)
+            expect(found.term.name, typed).toBe('Epileptiform-interictal-activity')
+            expect(found.properties, typed).toEqual([property])
+        }
+    })
+
+    it('match a word form from its first letters, so a namesake in another group is not all a search offers', () => {
+        const offered = offeredFindings(index, null)
+        const found = synonymFindings(offered, 'spi', index, null)
+        expect(found[0].properties).toEqual(['Spike'])
+        expect(found.map(finding => finding.properties?.[0])).toContain('Spike-and-slow-wave')
+        expect(synonymFindings(offered, 'Poly-spi', index, null)[0].properties).toEqual(['Polyspikes'])
+        expect(synonymFindings(offered, 'sp', index, null)).toEqual([])
+    })
+
+    it('match an acronym only whole, and list whole matches before partial ones', () => {
+        const offered = offeredFindings(index, null)
+        expect(synonymFindings(offered, 'FIR', index, null)).toEqual([])
+        expect(synonymFindings(offered, 'GPD', index, null).map(finding => finding.term.name))
+            .toEqual(['Generalized-periodic-discharges'])
+        const spike = synonymFindings(offered, 'spike', index, null)
+        expect(spike[0].abbreviation).toBe('spike')
+        expect(spike.length).toBeLessThanOrEqual(1 + PARTIAL_SYNONYM_LIMIT)
+    })
+
+    it('carry the group a finding is filed in, to tell it from a namesake', () => {
+        const offered = offeredFindings(index, null)
+        const tags = (query: string) => synonymFindings(offered, query, index, null)
+            .map(finding => findingGroupTag(finding.branch))
+        expect(tags('spike')[0]).toBe('Interictal')
+        expect(tags('LPD')).toEqual(['Interictal'])
+        expect(tags('RDA')).toEqual(['Critical care'])
+        for (const group of FINDING_GROUPS) {
+            expect(group.tag, group.branch).toBeTruthy()
+        }
+        expect(findingGroupTag('Feature-property')).toBe('')
     })
 
     it('are dropped when the policy refuses a property they set', () => {

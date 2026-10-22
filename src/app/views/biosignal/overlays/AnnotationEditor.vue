@@ -38,6 +38,7 @@
                     :disabled="isLocked"
                     :focusSave="focusSave"
                     :setCode="setCode"
+                    :stamp="stamp"
                 ></slot>
             </div>
             <wa-button ref="savebtn"
@@ -64,6 +65,8 @@
  * annotation, the codes being edited, `setCode(standard, value)` to change one, whether the annotation is locked, and
  * `focusSave()` to hand focus to the save button once a code is chosen. The editor saves the codes with the text and
  * class, so the slot's control needs no save path of its own.
+ * The slot also receives `stamp()`, which saves with `stamp: true` to ask the viewer to keep adding annotations like
+ * this one wherever the reader clicks; the slot's control offers it where it fits its own layout.
  *
  * Edits left unsaved when the editor closes are kept as a draft and restored when it next opens on the same
  * annotation; opening it on another drops them ({@link keepAnnotationDraft}).
@@ -241,13 +244,7 @@ export default defineComponent({
             }, 100)
         },
         save () {
-            this.saved = true
-            clearAnnotationDraft()
-            this.$emit('save', {
-                class: this.annotationClass,
-                codes: { ...this.annotationCodes },
-                label: this.annotationLabel,
-            })
+            this.submit(false)
         },
         /**
          * Set the code of `standard`, or remove it with `null`.
@@ -262,6 +259,24 @@ export default defineComponent({
                 codes[standard] = value
             }
             this.annotationCodes = codes
+        },
+        /** Save, and ask the viewer to stamp copies of the annotation. */
+        stamp () {
+            this.submit(true)
+        },
+        /**
+         * Save the edits.
+         * @param stamp - Ask the viewer to go on stamping copies of the annotation.
+         */
+        submit (stamp: boolean) {
+            this.saved = true
+            clearAnnotationDraft()
+            this.$emit('save', {
+                class: this.annotationClass,
+                codes: { ...this.annotationCodes },
+                label: this.annotationLabel,
+                stamp,
+            })
         },
         updateClass (newClass: string) {
             this.annotationClass = newClass as typeof this.annotationClass

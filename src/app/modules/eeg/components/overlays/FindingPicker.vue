@@ -9,6 +9,7 @@
                 <app-icon class="icon" name="wave-pulse"></app-icon>
                 <div v-if="code" class="selected" :title="selectedDescription">
                     <span class="label">{{ selectedLabel }}</span>
+                    <span v-if="selectedGroup" class="group">{{ $t(selectedGroup) }}</span>
                     <wa-button ref="clearbtn"
                         appearance="plain"
                         :disabled="disabled"
@@ -40,6 +41,21 @@
                         :value="findingGroup.branch"
                     >{{ $t(findingGroup.label) }}</wa-option>
                 </wa-select>
+                <template v-if="stamp">
+                    <wa-button
+                        appearance="plain"
+                        class="stamp"
+                        :disabled="disabled"
+                        id="finding-picker-stamp-button"
+                        size="s"
+                        @click="stamp"
+                    >
+                        <app-icon name="stamp"></app-icon>
+                    </wa-button>
+                    <wa-tooltip for="finding-picker-stamp-button">
+                        {{ $t('Save and stamp: each click on the signal adds a copy of this event') }}
+                    </wa-tooltip>
+                </template>
             </div>
             <div v-if="parsed && (fields.length || canLocate)" class="properties">
                 <div class="chips">
@@ -239,21 +255,26 @@
                     :id="`finding-result-${idx}`"
                     role="option"
                     tabindex="-1"
-                    :title="finding.term.description"
+                    :title="resultTitle(finding)"
                     type="button"
                     @click="pick(finding)"
                     @mousedown.prevent
                     @mousemove="highlightResult(idx)"
                 >
-                    <span v-if="finding.abbreviation" class="abbreviation">{{ finding.abbreviation }}</span>
-                    {{ finding.label }}
+                    <span class="result-label">
+                        <span v-if="showsAbbreviation(finding)" class="abbreviation">
+                            {{ finding.abbreviation }}
+                        </span>
+                        {{ finding.label }}
+                    </span>
+                    <span class="group">{{ groupTag(finding) }}</span>
                 </button>
             </div>
             <div v-if="palette.length && !code" class="palette">
                 <button v-for="(finding, idx) of palette" :key="`finding-palette-${finding.term.name}`"
                     class="palette-item"
                     :disabled="disabled"
-                    :title="finding.term.description"
+                    :title="paletteTitle(finding)"
                     type="button"
                     @click="pick(finding)"
                     @mousedown.prevent
@@ -295,6 +316,7 @@ import { runtime } from "#app/modules/eeg"
 import {
     FINDING_GROUPS,
     type OfferedFinding,
+    findingGroupTag,
     findingLabel,
     findingPolicy,
     offeredFindings,
@@ -316,10 +338,12 @@ import {
     balanceOf,
     composeFindingCode,
     electrodesByRegion,
+    isAcronym,
     offeredFields,
     lateralityOf,
     parseFindingCode,
     relationsAllowed,
+    relocate,
     sensorLaterality,
     sensorsAllowed,
     setBalance,
@@ -392,6 +416,11 @@ export default defineComponent({
         sensors: {
             type: Array as PropType<string[]>,
             default: () => [],
+        },
+        /** Saves the annotation and goes on stamping copies of it, offered at the end of the row when given. */
+        stamp: {
+            type: Function as PropType<() => void>,
+            default: null,
         },
     },
     emits: ['change'],
@@ -522,12 +551,7 @@ export default defineComponent({
                     kind: this.$t('Location'),
                     label: this.parsed.sensors.join(', '),
                     remove: code => {
-                        const followsLocation = lateralityOf(code) === sensorLaterality(code.sensors)
-                        code.sensors = []
-                        delete code.maxSensors
-                        if (followsLocation) {
-                            setLaterality(code, '')
-                        }
+                        relocate(code, [], this.hasSide)
                     },
                 })
             }
@@ -592,12 +616,16 @@ export default defineComponent({
             }
             return rows
         },
-        /** The property fields of the coded finding's group. */
+        /** The property fields of the coded finding. */
         fields (): OfferedField[] {
             if (!this.index || !this.parsed) {
                 return []
             }
-            return offeredFields(this.index, this.policy, this.index.branchOf(this.parsed.finding) ?? '')
+            return offeredFields(this.index, this.policy, this.parsed.finding)
+        },
+        /** The coded finding is offered a side. */
+        hasSide (): boolean {
+            return this.fields.some(field => field.key === 'side')
         },
         /** The value modes the host's policy allows: the exact number only, unless it allows comparisons. */
         valueModes (): typeof VALUE_MODES {
@@ -635,6 +663,11 @@ export default defineComponent({
         },
         selectedDescription (): string {
             return this.index?.getTerm(this.parsed?.finding ?? this.code)?.description ?? ''
+        },
+        /** The short name of the coded finding's group, so it is not taken for a namesake in another group. */
+        selectedGroup (): string {
+            const finding = this.parsed?.finding
+            return finding && this.index ? findingGroupTag(this.index.branchOf(finding) ?? '') : ''
         },
         selectedLabel (): string {
             // A string the picker did not write is shown as stored.
@@ -690,6 +723,14 @@ export default defineComponent({
                     this.pick(finding)
                 }
             }
+        },
+        /**
+         * The short name of a finding's group, translated, so it is not taken for a namesake in another group.
+         * @param finding - An offered finding.
+         */
+        groupTag (finding: OfferedFinding) {
+            const tag = findingGroupTag(finding.branch)
+            return tag ? this.$t(tag) : ''
         },
         /**
          * Highlight the result under the pointer. Bound to pointer movement rather than entry, so a list scrolled
@@ -774,7 +815,7 @@ export default defineComponent({
             this.query = ''
             this.group = ''
             this.highlighted = 0
-            const fields = offeredFields(this.index!, this.policy, finding.branch)
+            const fields = offeredFields(this.index!, this.policy, finding.term.name)
             const code: FindingCode = {
                 finding: finding.term.name,
                 properties: [...finding.properties ?? []],
@@ -827,6 +868,20 @@ export default defineComponent({
          */
         removeLabel (chip: PropertyChip) {
             return this.$t('Remove {property}', { property: chip.kind.toLocaleLowerCase() })
+        },
+        /**
+         * A palette entry's tooltip: its group, which the entry has no room to show, and its description.
+         * @param finding - The palette entry.
+         */
+        paletteTitle (finding: OfferedFinding) {
+            return [this.groupTag(finding), finding.term.description ?? ''].filter(part => part).join(': ')
+        },
+        /**
+         * A result's tooltip: its full name, which a narrow list cuts short, and its description.
+         * @param finding - The result.
+         */
+        resultTitle (finding: OfferedFinding) {
+            return [finding.label, finding.term.description ?? ''].filter(part => part).join('\n\n')
         },
         /**
          * A key for a result that tells an abbreviation's entry from the plain term.
@@ -883,18 +938,7 @@ export default defineComponent({
         setSensors (value: string[] | string) {
             const chosen = (Array.isArray(value) ? value : [value]).filter(label => label)
             this.update(code => {
-                // A side that still is what the old location gave follows the new one; one the reader chose stays.
-                const followsLocation = lateralityOf(code) === sensorLaterality(code.sensors)
-                code.sensors = this.electrodes.filter(label => chosen.includes(label))
-                if (followsLocation && this.fields.some(field => field.key === 'side')) {
-                    setLaterality(code, sensorLaterality(code.sensors))
-                }
-                const max = code.maxSensors?.filter(label => code.sensors.includes(label))
-                if (max?.length) {
-                    code.maxSensors = max
-                } else {
-                    delete code.maxSensors
-                }
+                relocate(code, this.electrodes.filter(label => chosen.includes(label)), this.hasSide)
             })
         },
         /**
@@ -1002,6 +1046,14 @@ export default defineComponent({
             this.expanded = !this.expanded
         },
         /**
+         * Whether a result shows the abbreviation it was found by: only an acronym, whose match its name does not
+         * explain, where a word form such as "polyspike" is spelled out in the name already.
+         * @param finding - The result.
+         */
+        showsAbbreviation (finding: OfferedFinding) {
+            return !!finding.abbreviation && isAcronym(finding.abbreviation)
+        },
+        /**
          * Change the coded finding and emit the string it is written as.
          * @param change - Changes a copy of the parsed code.
          */
@@ -1069,6 +1121,12 @@ export default defineComponent({
     }
     .row wa-select {
         flex: 0 0 12rem;
+    }
+    .row .stamp {
+        margin-left: 0.25rem;
+    }
+    .row .stamp wa-icon {
+        font-size: 1rem;
     }
 .selected {
     display: flex;
@@ -1203,18 +1261,43 @@ export default defineComponent({
         border-color: var(--epicv-border-focus);
     }
 .result {
+    /* Rows take the height of their text and the list scrolls. The native button styles give a button the height of a
+       form control, which a list of one-line rows does not want. */
+    flex: 0 0 auto;
+    display: flex;
+    align-items: baseline;
+    height: auto;
+    min-height: 0;
+    gap: 0.5rem;
     padding: 0.25rem 0.5rem;
     border: none;
     background-color: var(--epicv-background);
     border-radius: 0;
     color: inherit;
     font: inherit;
+    line-height: 1.125;
     text-align: left;
     cursor: pointer;
 }
+    .result .result-label {
+        flex: 1 1 0;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
     .result .abbreviation {
         margin-right: 0.25rem;
         font-weight: 600;
+    }
+    .result .group,
+    .selected .group {
+        flex: 0 0 auto;
+        color: var(--epicv-text-minor);
+        font-size: 0.75rem;
+    }
+    .selected .group {
+        margin-left: 0.5rem;
     }
     .result:hover,
     .result--active {

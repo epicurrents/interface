@@ -51,7 +51,7 @@
                                 :secPerPage="secPerPage"
                                 :viewRange="viewRange"
                                 :visibleRange="navigatorRange"
-                                v-on:double-click="handlePlotDoubleClick"
+                                v-on:double-click="handleDoubleClickOrStamp"
                                 v-on:go-backward="goBackward"
                                 v-on:go-forward="goForward"
                                 v-on:go-to="goTo"
@@ -60,8 +60,8 @@
                                 v-on:pointer-down="handlePlotPointerdown"
                                 v-on:pointer-drag="handlePlotPointerDrag"
                                 v-on:pointer-drag-cancel="handlePlotPointerDragCancel"
-                                v-on:pointer-drag-end="handlePlotPointerDragEnd"
-                                v-on:pointer-up="handlePlotPointerup"
+                                v-on:pointer-drag-end="handleDragEndOrStamp"
+                                v-on:pointer-up="handlePointerupOrStamp"
                                 v-on:plot-navigation="handlePlotNavigation"
                                 v-on:plot-updated="handlePlotUpdated"
                                 v-on:touch-start="handlePlotTouchStart"
@@ -134,9 +134,9 @@
                                 :action="editingEventsMode"
                                 :annotation="editingEvents[0]"
                                 v-on:exit="exitEventEditor"
-                                v-on:save="saveEventEdits"
+                                v-on:save="saveAnnotation"
                             >
-                                <template #codes="{ annotation, codes, disabled, focusSave, setCode }">
+                                <template #codes="{ annotation, codes, disabled, focusSave, setCode, stamp }">
                                     <finding-picker
                                         :available-sensors="recordingSensors"
                                         :code="findingCode(codes)"
@@ -144,10 +144,18 @@
                                         :focus-next="focusSave"
                                         :measured-frequency="findingFrequency(annotation)"
                                         :sensors="findingSensors(annotation)"
+                                        :stamp="stamp"
                                         @change="setFindingCode(setCode, $event)"
                                     ></finding-picker>
                                 </template>
                             </annotation-editor>
+                            <div v-if="stamping" class="stamp-bar">
+                                <app-icon name="stamp"></app-icon>
+                                <span>{{ stampInstruction }}</span>
+                                <wa-button appearance="plain" size="s" @click="stopStamping">
+                                    {{ $t('Stop') }}
+                                </wa-button>
+                            </div>
                             <!-- Video must come after the cursor to stay on top -->
                             <div v-if="RESOURCE.videos.length" ref="videoWrapper"
                                 :class="[
@@ -315,11 +323,12 @@ import { useBiosignalNavigation } from '#app/views/biosignal/useBiosignalNavigat
 import { TREND_REGISTRY } from '../trends'
 import { useBiosignalPointer } from '#app/views/biosignal/useBiosignalPointer'
 import type { ContextMenuContext } from '#types/interface'
-import { EegEvent, HED_STANDARD } from '@epicurrents/eeg-module'
+import { EegEvent, HED_STANDARD, loadHedScoreIndex } from '@epicurrents/eeg-module'
 import type { PlotSelection } from '#app/views/biosignal/types'
-import { registerCodeNamer } from '#app/views/biosignal/eventNames'
-import { hedFindingName } from '../findings'
-import { canonicalElectrode } from '../findingProperties'
+import { eventDisplayName, registerCodeNamer } from '#app/views/biosignal/eventNames'
+import { findingPolicy, hedFindingName } from '../findings'
+import { canonicalElectrode, relocatedFindingCode } from '../findingProperties'
+import { runtime } from '#app/modules/eeg'
 import CANONICAL_ELECTRODES from '../canonical-electrodes.json'
 import { frequencyMeasurementWithin } from '#app/views/biosignal/measurements'
 
@@ -357,6 +366,21 @@ import WindowDialog from '#app/overlays/WindowDialog.vue'
 import { eventChannelNames, groupSelectionsBySpan } from '#app/views/biosignal/eventChannels'
 import type { default as WaSplitPanel } from '@awesome.me/webawesome/dist/components/split-panel/split-panel.js'
 import { SchemaManager } from '#root/src/components/report'
+
+/** What a copy of an annotation takes from it: its class and codes, not its text, which describes the one instance. */
+type AnnotationCopy = {
+    class: string
+    codes: Record<string, number | string>
+}
+
+/**
+ * Where a copy goes: the channels it is drawn on, none for a global one, and its span; an instant starts and ends
+ * together.
+ */
+type CopyTarget = {
+    channels: string[]
+    range: number[]
+}
 
 const NAVIGATOR_MIN_HEIGHT = 75   // natural navigator strip height (px)
 const TREND_MIN_HEIGHT = 40       // below this the strip auto-hides; navigator takes full slot
@@ -432,6 +456,10 @@ export default defineComponent({
         const dragButton = ref(NUMERIC_ERROR_VALUE)
         const editingEvents = ref([] as BiosignalAnnotationEvent[])
         const editingEventsMode = ref('new' as 'new' | 'edit')
+        // The annotation last saved from the editor, which the repeat key copies.
+        const lastAnnotation = ref(null as AnnotationCopy | null)
+        // The annotation being stamped, until Escape or the stop button ends stamp mode.
+        const stamping = ref(null as AnnotationCopy | null)
         const lastCacheEnd = ref(0)
         const lastVideoTime = ref(0)
         const menuChannel = ref(null as MontageChannel | null)
@@ -602,7 +630,7 @@ export default defineComponent({
         const keyboard = useBiosignalKeyboard(
             [
                 'annotation', 'examine', 'fft', 'inspect', 'montage1', 'montage2', 'montage3',
-                'montage4', 'notch', 'report', 'topogram',
+                'montage4', 'notch', 'repeat', 'report', 'topogram',
             ],
             eegCtx.SETTINGS,
             () => (store.state as any).INTERFACE.app.reservedKeys,
@@ -622,6 +650,7 @@ export default defineComponent({
                 pointer.hideAllDragElements()
                 store.dispatch('eeg.set-open-sidebar', null)
                 annoEditor.exitEventEditor()
+                stamping.value = null
                 pointer.removeAllDragElements(true)
                 if (activeSelection.value) {
                     activeSelection.value.canceled = true
@@ -644,6 +673,7 @@ export default defineComponent({
             editingEvents,
             editingEventsMode,
             epochFocusRange,
+            lastAnnotation,
             lastCacheEnd,
             lastVideoTime,
             menuChannel,
@@ -682,6 +712,7 @@ export default defineComponent({
             montageSetupDone,
             setupMessage,
             sidebar,
+            stamping,
             //timebase,
             video,
             videoWrapper,
@@ -802,6 +833,21 @@ export default defineComponent({
                 }
             }
             return CANONICAL_ELECTRODES.electrodes.filter(label => present.has(label))
+        },
+        /** What the stamp bar tells the reader to do. */
+        stampInstruction (): string {
+            return this.$t('{name}: click the signal to stamp one, drag for a span', { name: this.stampName })
+        },
+        /** The name of the annotation being stamped, as its events are listed. */
+        stampName (): string {
+            if (!this.stamping) {
+                return ''
+            }
+            return eventDisplayName(
+                { ...this.stamping, label: '' },
+                this.SETTINGS.annotations.classes,
+                label => this.$t(label),
+            )
         },
         sidebarTabs (): string[] {
             return this.RESOURCE.annotationsLocked
@@ -1002,6 +1048,26 @@ export default defineComponent({
             // Reset channel and signal data
             this.reportWindow.open = false
         },
+        /**
+         * The canonical labels of the scalp electrodes among an event's channels. A channel that is no scalp electrode,
+         * or whose label is not a standard one, is left out.
+         * @param channels - The event's channels, by record montage index or name.
+         */
+        channelSensors (channels: (number | string)[]) {
+            const recordChannels = this.RESOURCE.recordMontage?.channels ?? []
+            const sensors = [] as string[]
+            for (const reference of channels) {
+                const channel = typeof reference === 'number'
+                    ? recordChannels[reference]
+                    : recordChannels.find(chan => chan?.name?.toLowerCase() === reference.toLowerCase())
+                const label = canonicalElectrode(channel?.label ?? '')
+                              ?? canonicalElectrode(String(channel?.name ?? reference))
+                if (label && !sensors.includes(label)) {
+                    sensors.push(label)
+                }
+            }
+            return sensors
+        },
         closeChannelMenu () {
             this.menuChannel = null
             // Disable all active channels
@@ -1010,6 +1076,73 @@ export default defineComponent({
             for (const chan of actChans) {
                 chan.isActive = false
             }
+        },
+        /**
+         * Add a copy of `copy` at each of `targets`, without opening the editor. A coded finding's location follows
+         * each copy's channels, so a finding repeated elsewhere says where that copy is; every other code is copied as
+         * it is.
+         * @param copy - The class and codes to copy.
+         * @param targets - Where the copies go.
+         */
+        async copyAnnotation (copy: AnnotationCopy, targets: CopyTarget[]) {
+            if (!targets.length) {
+                return
+            }
+            if (this.RESOURCE.annotationsLocked) {
+                Log.warn(
+                    ['Annotations are locked.', 'No events or labels can be added to the recording.'],
+                    this.$options.name!,
+                    { announce: true }
+                )
+                return
+            }
+            const finding = copy.codes[HED_STANDARD]
+            let relocate = (_channels: string[]) => finding
+            if (typeof finding === 'string') {
+                try {
+                    const [index, policy] = await Promise.all([
+                        loadHedScoreIndex(),
+                        findingPolicy(runtime.hedScore.policy),
+                    ])
+                    relocate = channels => relocatedFindingCode(finding, this.channelSensors(channels), index, policy)
+                } catch (error) {
+                    // Copying the location as it is would place every copy where the first one was.
+                    Log.error(['Could not load the finding vocabulary.', 'No copies were made.'], this.$options.name!)
+                    return
+                }
+            }
+            const created = targets.map((target, idx) => EegEvent.fromTemplate({
+                annotator: '',
+                background: false,
+                channels: target.channels,
+                class: copy.class,
+                codes: finding === undefined
+                       ? { ...copy.codes }
+                       : { ...copy.codes, [HED_STANDARD]: relocate(target.channels) },
+                duration: target.range[1] - target.range[0],
+                id: `annotation_${Date.now()}_${idx}_${target.channels.join('_') || 'global'}`,
+                label: '',
+                priority: 1,
+                start: target.range[0],
+                text: '',
+                value: null,
+            } as AnnotationEventTemplate))
+            this.addUserEvents(...created)
+            this.addUndoAction('add-annotations', true, ...created)
+        },
+        /**
+         * Copy `copy` to the current selections, one copy per span, and clear them.
+         * @param copy - The class and codes to copy.
+         */
+        copyToSelections (copy: AnnotationCopy) {
+            const targets = groupSelectionsBySpan(this.plotSelections).map(group => ({
+                channels: [...new Set(group.selections.flatMap(
+                    sel => eventChannelNames(this.RESOURCE.recordMontage, sel.channel)
+                ))],
+                range: group.range,
+            }))
+            this.plotSelections.splice(0)
+            return this.copyAnnotation(copy, targets)
         },
         createEvents (props?: {
             channels?: string[],
@@ -1129,23 +1262,11 @@ export default defineComponent({
         },
         /**
          * The canonical labels of the electrodes an annotation is drawn on, which a picked finding takes as its
-         * location. A channel that is no scalp electrode, or whose label is not a standard one, is left out.
+         * location.
          * @param annotation - The annotation being edited.
          */
         findingSensors (annotation: BiosignalAnnotationEvent) {
-            const recordChannels = this.RESOURCE.recordMontage?.channels ?? []
-            const sensors = [] as string[]
-            for (const reference of annotation.channels ?? []) {
-                const channel = typeof reference === 'number'
-                    ? recordChannels[reference]
-                    : recordChannels.find(chan => chan?.name?.toLowerCase() === reference.toLowerCase())
-                const label = canonicalElectrode(channel?.label ?? '')
-                              ?? canonicalElectrode(String(channel?.name ?? reference))
-                if (label && !sensors.includes(label)) {
-                    sensors.push(label)
-                }
-            }
-            return sensors
+            return this.channelSensors(annotation.channels ?? [])
         },
         getHighlightProperties (channel: BiosignalChannel, range: number[]) {
             const overlayW = this.overlay.getOffsetWidth()
@@ -1214,8 +1335,35 @@ export default defineComponent({
             this.contextMenu = null
         },
         /**
-         * Handle keyup events with the viewer visible.
+         * Copy the annotation being stamped to where a drag ended, or end the drag as usual when not stamping.
+         * @param event - The plot's drag-end event.
          */
+        handleDragEndOrStamp (event: CustomEvent) {
+            this.handlePlotPointerDragEnd(event)
+            const stamps = this.stamping && event.detail.pointerButton === 0 && !this.activeCursorTool
+            if (stamps && this.plotSelections.length) {
+                this.copyToSelections(this.stamping!)
+            }
+        },
+        /**
+         * Stamp at a second quick click, which the plot reports as a double click, or handle it as usual when not
+         * stamping, so a run of close discharges is stamped at the pace it is clicked.
+         * @param event - The plot's double-click event.
+         */
+        handleDoubleClickOrStamp (event: CustomEvent) {
+            if (!this.stampAt(event.detail)) {
+                this.handlePlotDoubleClick(event)
+            }
+        },
+        /**
+         * Stamp at a click, or handle it as usual when not stamping.
+         * @param event - The plot's pointer-up event.
+         */
+        handlePointerupOrStamp (event: CustomEvent) {
+            if (!this.stampAt(event.detail)) {
+                this.handlePlotPointerup(event)
+            }
+        },
         /**
          * Handle keyup events with the viewer visible.
          */
@@ -1280,6 +1428,17 @@ export default defineComponent({
                 } else if (this.isHotkeyMatch('report', event)) {
                     this.toggleReport()
                     this.hotkeyEvents.annotation = false
+                } else if (this.isHotkeyMatch('repeat', event)) {
+                    // Copy the annotation last saved to what is selected, or to the cursor with nothing selected.
+                    if (this.lastAnnotation) {
+                        if (this.plotSelections.length) {
+                            this.copyToSelections(this.lastAnnotation)
+                        } else {
+                            const time = this.RESOURCE.viewStart + (this.cursors?.mainCursorPos || 0)
+                            this.copyAnnotation(this.lastAnnotation, [{ channels: [], range: [time, time] }])
+                        }
+                    }
+                    this.hotkeyEvents.repeat = false
                 } else if (this.isHotkeyMatch('annotation', event)) {
                     // Alone, the key annotates what is selected with the default class, and toggles the sidebar when
                     // nothing is; a number pressed with it picks the class instead (above).
@@ -1475,6 +1634,16 @@ export default defineComponent({
             this.removeAllDragElements(keepActiveDrag)
             this.removeAllHighlights()
         },
+        /**
+         * Save the editor's changes, keep them as the annotation the repeat key copies, and start stamping copies when
+         * the reader asked for it.
+         * @param props - The editor's values, and whether to stamp.
+         */
+        saveAnnotation (props: AnnotationCopy & { label: string, stamp?: boolean }) {
+            this.saveEventEdits(props)
+            this.lastAnnotation = { class: props.class, codes: { ...props.codes } }
+            this.stamping = props.stamp ? this.lastAnnotation : null
+        },
         selectDrawerTab (value: string) {
             this.sidebarTab = value
         },
@@ -1497,6 +1666,25 @@ export default defineComponent({
                 }
                 this.dataSetupDone = true
             }
+        },
+        /**
+         * Copy the annotation being stamped to a click: an instant on the clicked channel, or a global one between
+         * channels. Returns whether the click was stamped, which it is only with the main button and no cursor tool.
+         * @param detail - The plot pointer event's detail.
+         */
+        stampAt (detail: { channelProps: ChannelPositionProperties | null, pointerButton: number, position: number }) {
+            if (!this.stamping || detail.pointerButton !== 0 || this.activeCursorTool) {
+                return false
+            }
+            const channel = detail.channelProps ? this.RESOURCE.visibleChannels[detail.channelProps.index] : null
+            this.copyAnnotation(this.stamping, [{
+                channels: eventChannelNames(this.RESOURCE.recordMontage, channel),
+                range: [detail.position, detail.position],
+            }])
+            return true
+        },
+        stopStamping () {
+            this.stamping = null
         },
         handleInterfaceSettingChange (e: Event) {
             const detail = (e as CustomEvent).detail
@@ -1957,6 +2145,21 @@ export default defineComponent({
     .highlight-area {
         position: absolute;
         pointer-events: none;
+    }
+    .stamp-bar {
+        position: absolute;
+        bottom: 1rem;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.25rem 0.25rem 0.25rem 0.75rem;
+        font-size: 0.875rem;
+        background-color: var(--epicv-background-hover);
+        border: solid 1px var(--epicv-border);
+        border-radius: 0.25rem;
+        z-index: 3;
     }
     .video {
         position: absolute;

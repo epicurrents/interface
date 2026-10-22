@@ -20,6 +20,11 @@ export type FindingGroup = {
     branch: string
     /** Group name shown to the reader. */
     label: string
+    /**
+     * A short name for the group, shown beside each of its findings, so a finding of one group is not taken for a
+     * namesake in another: the critical-care spike-and-wave pattern for a single spike, for one.
+     */
+    tag: string
 }
 
 /** A term the picker offers, with the name it is shown by. */
@@ -40,15 +45,15 @@ export type OfferedFinding = {
  * properties of a finding rather than findings, and are offered with the property sets, not here.
  */
 export const FINDING_GROUPS: FindingGroup[] = [
-    { branch: 'Interictal-activity', label: 'Interictal' },
-    { branch: 'Episode', label: 'Seizures and episodes' },
-    { branch: 'Background-activity', label: 'Background' },
-    { branch: 'Sleep-and-drowsiness', label: 'Sleep' },
-    { branch: 'Uncertain-significant-pattern', label: 'Benign variants' },
-    { branch: 'Critically-ill-patient-patterns', label: 'Critical-care patterns' },
-    { branch: 'Physiologic-pattern', label: 'Physiologic' },
-    { branch: 'Polygraphic-channel-feature', label: 'Polygraphic channels' },
-    { branch: 'Data-artifact', label: 'Artifacts' },
+    { branch: 'Interictal-activity', label: 'Interictal', tag: 'Interictal' },
+    { branch: 'Episode', label: 'Seizures and episodes', tag: 'Episode' },
+    { branch: 'Background-activity', label: 'Background', tag: 'Background' },
+    { branch: 'Sleep-and-drowsiness', label: 'Sleep', tag: 'Sleep' },
+    { branch: 'Uncertain-significant-pattern', label: 'Benign variants', tag: 'Benign variant' },
+    { branch: 'Critically-ill-patient-patterns', label: 'Critical-care patterns', tag: 'Critical care' },
+    { branch: 'Physiologic-pattern', label: 'Physiologic', tag: 'Physiologic' },
+    { branch: 'Polygraphic-channel-feature', label: 'Polygraphic channels', tag: 'Polygraphic' },
+    { branch: 'Data-artifact', label: 'Artifacts', tag: 'Artifact' },
 ]
 
 /** The most palette entries the picker shows; the first ten take the number keys. */
@@ -62,6 +67,14 @@ const RECENT_KEY = 'epicurrents.eeg.recentFindings'
 
 let _policy: { promise: Promise<HedScorePolicy | null>, provider: HedScorePolicyProvider } | null = null
 let _recent: string[] | null = null
+
+/**
+ * The short name of the group `branch` holds, shown beside its findings; empty for a branch that is no group.
+ * @param branch - The finding's group branch.
+ */
+export function findingGroupTag (branch: string) {
+    return FINDING_GROUPS.find(group => group.branch === branch)?.tag ?? ''
+}
 
 /**
  * The readable name of a tag: `Epileptiform-interictal-activity` reads as "Epileptiform interictal activity".

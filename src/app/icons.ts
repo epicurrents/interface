@@ -21,6 +21,7 @@
 
 // outlined
 import add from '@material-symbols/svg-400/outlined/add.svg?raw'
+import approval from '@material-symbols/svg-400/outlined/approval.svg?raw'
 import biotech from '@material-symbols/svg-400/outlined/biotech.svg?raw'
 import bookmark_add from '@material-symbols/svg-400/outlined/bookmark_add.svg?raw'
 import calendar_month from '@material-symbols/svg-400/outlined/calendar_month.svg?raw'
@@ -92,6 +93,7 @@ import { registerIconLibrary } from '@awesome.me/webawesome'
 /** Lookup table: materialName → { outlined: svgString, filled?: svgString } */
 export const ICON_SVGS: Record<string, { outlined: string; filled?: string }> = {
     add:                            { outlined: add },
+    approval:                       { outlined: approval },
     biotech:                        { outlined: biotech },
     bookmark_add:                   { outlined: bookmark_add },
     calendar_month:                 { outlined: calendar_month },
@@ -225,6 +227,7 @@ const FA_TO_MATERIAL: Record<string, string> = {
     'redo':                             'redo',
     'search':                           'search',
     'square-question':                  'help',
+    'stamp':                            'approval',
     'trash':                            'delete',
     'triangle-exclamation':             'warning',
     'undo':                             'undo',

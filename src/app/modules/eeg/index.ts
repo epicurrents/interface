@@ -312,6 +312,9 @@ export const runtime = {
         if (config.hotkeys?.fft) {
             settings.hotkeys.fft = config.hotkeys.fft
         }
+        if (config.hotkeys?.repeat) {
+            settings.hotkeys.repeat = config.hotkeys.repeat
+        }
         if (config.hotkeys?.topogram) {
             settings.hotkeys.topogram = config.hotkeys.topogram
         }
