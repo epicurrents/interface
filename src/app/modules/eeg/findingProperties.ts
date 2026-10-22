@@ -108,6 +108,16 @@ export type FindingCode = {
     values: Record<string, FindingValue>
 }
 
+/** A finding group present in a recording, as the picker offers it to an event joining it. */
+export type RecordedFindingGroup = {
+    /** The HED string of the group's earliest event, which an event joining the group copies. */
+    code: string
+    /** How many events are in the group. */
+    members: number
+    /** The group's number. */
+    number: number
+}
+
 /** A side of the head, as the HED standard names it. */
 export type Side = 'Left' | 'Right'
 
@@ -607,6 +617,39 @@ export function nextFindingGroup (values: (number | string)[]) {
     const taken = values.map(findingGroupOf).filter((group): group is number => group !== null)
     const next = taken.length ? Math.max(...taken) + 1 : FINDING_GROUP_NUMBERS.first
     return next <= FINDING_GROUP_NUMBERS.last ? next : null
+}
+
+/**
+ * The finding groups among a recording's events, in order of number, each with the code of its earliest event. The
+ * event `exclude` names is left out, so the one being edited is not counted among a group's events and a group only
+ * it is in is not offered back to it.
+ * @param events - The events, each with its HED string, when it has one.
+ * @param exclude - The id of the event to leave out.
+ */
+export function recordedFindingGroups (
+    events: { code?: number | string, id: string, start: number }[],
+    exclude?: string,
+): RecordedFindingGroup[] {
+    const groups = new Map<number, RecordedFindingGroup & { start: number }>()
+    for (const event of events) {
+        const number = event.id === exclude || event.code === undefined ? null : findingGroupOf(event.code)
+        if (number === null) {
+            continue
+        }
+        const group = groups.get(number)
+        if (!group) {
+            groups.set(number, { code: String(event.code), members: 1, number, start: event.start })
+            continue
+        }
+        group.members++
+        if (event.start < group.start) {
+            group.code = String(event.code)
+            group.start = event.start
+        }
+    }
+    return [...groups.values()]
+        .sort((a, b) => a.number - b.number)
+        .map(({ code, members, number }) => ({ code, members, number }))
 }
 
 /**

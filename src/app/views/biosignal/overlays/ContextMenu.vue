@@ -2,6 +2,7 @@
     <wa-dropdown data-component="context-menu"
         :open="true"
         ref="component"
+        @wa-after-hide="handleAfterHide"
     >
         <wa-button slot="trigger"></wa-button>
         <h6 v-if="context.channel">{{ context.channel.label }}</h6>
@@ -61,8 +62,13 @@ import { SettingsColor } from "@epicurrents/core/types"
 import { SignalSelectionLimit } from "#types/interface"
 import type { default as WaDropdown } from "@awesome.me/webawesome/dist/components/dropdown/dropdown.js"
 
+/** What the menu of an event knows of it. */
 type AnnotationProps = {
     id: string
+    /** Whether the event is locked against editing. */
+    locked: boolean
+    /** The event's name, as the events list shows it. */
+    name: string
 }
 type ItemProps = {
     /** User-facing item label. */
@@ -129,6 +135,16 @@ export default defineComponent({
         $t: function (key: string, params = {}, capitalized = false) {
             return T(key, this.$options.name, params, capitalized)
         },
+        /**
+         * Report the menu closed, which it does by itself on a click outside it. A submenu closing reports the same
+         * event, and leaves the menu open.
+         * @param event - The hide event.
+         */
+        handleAfterHide (event: Event) {
+            if (event.target === this.component) {
+                this.$emit('close')
+            }
+        },
         executeAction (action?: string, value?: string | number) {
             if (!action) {
                 return
@@ -174,27 +190,20 @@ export default defineComponent({
     },
     mounted () {
         if (this.context.target === 'annotation') {
+            const annotation = this.context.props as AnnotationProps
             const annotationOptions = [
                 {
-                    label: T('Change type'),
-                    type: 'submenu',
-                    subItems: Object.values(this.SETTINGS.annotations.classes).map(c => {
-                        return {
-                            action: 'change-annotation-class',
-                            label: T(c.label),
-                            value: c.quickCode,
-                        }
-                    })
-                },
-                {
-                    type: 'divider',
+                    label: annotation.name,
+                    type: 'label',
                 },
                 {
                     action: 'delete-annotation',
-                    color: [0.5, 0, 0],
-                    label: T('Delete annotation'),
+                    disabled: annotation.locked || this.RESOURCE.annotationsLocked,
+                    icon: 'trash',
+                    label: T('Delete event'),
                     type: 'item',
-                    value: (this.context.props as AnnotationProps)?.id || '',
+                    value: annotation.id,
+                    variant: 'danger',
                 },
             ] as ItemProps[]
             this.contextOptions.push(...annotationOptions)

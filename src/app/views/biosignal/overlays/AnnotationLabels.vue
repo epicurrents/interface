@@ -12,6 +12,7 @@
                     { 'spot': !context.event.duration }
                 ]"
                 :style="context.style"
+                @contextmenu.prevent=""
                 @pointerdown.prevent.stop="handleAnnotationPointerdown(id, $event)"
                 @pointerenter="focusGroup(context.event)"
                 @pointerleave="unfocusGroup"
@@ -321,6 +322,11 @@ export default defineComponent({
             const annoEl = context?.el
             if (!annoEl) {
                 return // TypeScript.
+            }
+            // The other button asks for the event's menu.
+            if (event.button === 2) {
+                this.$emit('open-menu', context.event, event)
+                return
             }
             // Check if this qualifies as a double-click.
             // TODO: Touch action support?

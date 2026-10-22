@@ -46,22 +46,23 @@
                                 class="plot"
                                 :dimensions="plotDimensions"
                                 :epochFocus="epochFocusRange"
+                                :globalDrag="activeCursorTool === 'annotate'"
                                 :overlay="overlay"
                                 :pxPerSecond="pxPerSecond"
                                 :secPerPage="secPerPage"
                                 :viewRange="viewRange"
                                 :visibleRange="navigatorRange"
-                                v-on:double-click="handleDoubleClickOrStamp"
+                                v-on:double-click="handleDoubleClickOrAnnotate"
                                 v-on:go-backward="goBackward"
                                 v-on:go-forward="goForward"
                                 v-on:go-to="goTo"
                                 v-on:loaded="resizeElements"
                                 v-on:mouse-click="handlePlotMouseClick"
-                                v-on:pointer-down="handlePlotPointerdown"
+                                v-on:pointer-down="handlePointerdownOrAnnotate"
                                 v-on:pointer-drag="handlePlotPointerDrag"
                                 v-on:pointer-drag-cancel="handlePlotPointerDragCancel"
-                                v-on:pointer-drag-end="handleDragEndOrStamp"
-                                v-on:pointer-up="handlePointerupOrStamp"
+                                v-on:pointer-drag-end="handleDragEndOrAnnotate"
+                                v-on:pointer-up="handlePointerupOrAnnotate"
                                 v-on:plot-navigation="handlePlotNavigation"
                                 v-on:plot-updated="handlePlotUpdated"
                                 v-on:touch-start="handlePlotTouchStart"
@@ -89,6 +90,7 @@
                                 :viewRange="viewRange"
                                 v-on:delete-annotation="removeUserEvents"
                                 v-on:edit-annotation="editEvent"
+                                v-on:open-menu="openEventMenu"
                                 v-on:updated="handleEventsUpdated"
                             />
                             <!-- Selected signal segments. Regular montages render one clickable
@@ -129,6 +131,7 @@
                                 :context="contextMenu"
                                 :selectionBound="selectionBound"
                                 v-on:action="handleContextMenuAction"
+                                v-on:close="closeContextMenu"
                             ></context-menu>
                             <annotation-editor v-if="editingEvents.length"
                                 :action="editingEventsMode"
@@ -147,19 +150,13 @@
                                         :focus-next="focusSave"
                                         :group-members="findingGroupMembers(codes)"
                                         :measured-frequency="findingFrequency(annotation)"
+                                        :recorded-groups="recordingFindingGroups(annotation)"
                                         :sensors="findingSensors(annotation)"
                                         :stamp="stamp"
                                         @change="setFindingCode(setCode, $event)"
                                     ></finding-picker>
                                 </template>
                             </annotation-editor>
-                            <div v-if="stamping" class="stamp-bar">
-                                <app-icon name="stamp"></app-icon>
-                                <span>{{ stampInstruction }}</span>
-                                <wa-button appearance="plain" size="s" @click="stopStamping">
-                                    {{ $t('Stop') }}
-                                </wa-button>
-                            </div>
                             <!-- Video must come after the cursor to stay on top -->
                             <div v-if="RESOURCE.videos.length" ref="videoWrapper"
                                 :class="[
@@ -339,6 +336,7 @@ import {
     findingGroupOf,
     groupedFindingCode,
     nextFindingGroup,
+    recordedFindingGroups,
     relocatedFindingCode,
 } from '../findingProperties'
 import { runtime } from '#app/modules/eeg'
@@ -456,7 +454,11 @@ export default defineComponent({
         // switching back to a regular montage.
         const activeMontageVersion = ref(0)
         const cmPerSec = ref(0)
+        // Whether the press on the plot closed an overlay, in which case the annotate tool takes its click no further.
+        const closingPress = ref(false)
         const contextMenu = ref(null as ContextMenuContext | null)
+        // Whether Ctrl is held, during which the annotate tool collects selections for one annotation.
+        const ctrlHeld = ref(false)
         const dataSetupDone = ref(false)
         const dragAction = ref(null as null | {
             /**
@@ -482,7 +484,7 @@ export default defineComponent({
         const editingEventsMode = ref('new' as 'new' | 'edit')
         // The annotation last saved from the editor, which the repeat key copies.
         const lastAnnotation = ref(null as AnnotationCopy | null)
-        // The annotation being stamped, until Escape or the stop button ends stamp mode.
+        // The annotation the annotate tool stamps, until the tool is turned off.
         const stamping = ref(null as AnnotationCopy | null)
         const lastCacheEnd = ref(0)
         const lastVideoTime = ref(0)
@@ -660,6 +662,17 @@ export default defineComponent({
             () => (store.state as any).INTERFACE.app.reservedKeys,
             () => (store.state as any).INTERFACE.app.hotkeyAltOrOpt,
             () => {
+                const collecting = ctrlHeld.value && plotSelections.length > 0
+                if (activeCursorTool.value === 'annotate' && (dragAction.value || collecting)) {
+                    // Escape cancels a drag or a Ctrl collection in progress, and keeps the tool.
+                    pointer.removeAllDragElements(true)
+                    if (activeSelection.value) {
+                        activeSelection.value.canceled = true
+                    }
+                    dragAction.value = null
+                    cursors.value?.enable()
+                    return
+                }
                 store.dispatch('eeg.set-cursor-tool', null)
                 analysis.closeAnalysisWindow()
                 const activeChans = eegCtx.RESOURCE.activeMontage?.channels.filter((c: any) => c?.isActive) || []
@@ -689,8 +702,10 @@ export default defineComponent({
             activeSelection,
             activeMontageVersion,
             channelsChanged,
+            closingPress,
             cmPerSec,
             contextMenu,
+            ctrlHeld,
             dataSetupDone,
             dragAction,
             dragButton,
@@ -773,6 +788,10 @@ export default defineComponent({
         // only on those transitions, so this fires exactly once per real change.
         epochFocusRange () {
             this.emitFocusedEpoch()
+        },
+        // The annotate tool's tooltip names the annotation it stamps.
+        stampName (name: string) {
+            this.$store.dispatch('eeg.set-annotation-stamp', name || null)
         },
         viewerSize (value) {
             if (!this.viewReady && value[0] > 0 && value[1] > 0) {
@@ -857,10 +876,6 @@ export default defineComponent({
                 }
             }
             return CANONICAL_ELECTRODES.electrodes.filter(label => present.has(label))
-        },
-        /** What the stamp bar tells the reader to do. */
-        stampInstruction (): string {
-            return this.$t('{name}: click the signal to stamp one, drag for a span', { name: this.stampName })
         },
         /** The name of the annotation being stamped, as its events are listed. */
         stampName (): string {
@@ -1017,6 +1032,93 @@ export default defineComponent({
             this.timebaseChanged()
         },
         /**
+         * Annotate `targets` with the annotate tool: copy the annotation being stamped there, or add an event of the
+         * default class at each and open the editor on them.
+         * @param targets - Where the annotation goes.
+         */
+        annotateAt (targets: CopyTarget[]) {
+            if (!targets.length) {
+                return
+            }
+            if (this.RESOURCE.annotationsLocked) {
+                Log.warn(
+                    ['Annotations are locked.', 'No events or labels can be added to the recording.'],
+                    this.$options.name!,
+                    { announce: true }
+                )
+                return
+            }
+            if (this.stamping) {
+                this.copyAnnotation(this.stamping, targets)
+            } else {
+                this.createEvents({ targets })
+            }
+        },
+        /**
+         * Handle a click on the plot with the annotate tool. Returns whether the tool took it, which it does with
+         * either button. A click that closed an overlay does nothing more, so closing the editor never adds an event.
+         * The other button turns the tool off, or with Ctrl held cancels the selections being collected.
+         *
+         * A click annotates the clicked channel, or the recording between channels or with Shift held. With Ctrl held
+         * it collects instead: the first click marks an instant, and each one after it adds the clicked channel to
+         * the selections, which are annotated together once Ctrl is released.
+         * @param event - The plot's pointer-up or double-click event.
+         */
+        annotateClick (event: CustomEvent) {
+            const { detail } = event
+            if (this.activeCursorTool !== 'annotate' || detail.pointerType === 'touch') {
+                return false
+            }
+            if (this.closingPress) {
+                return true
+            }
+            if (detail.pointerButton === 2) {
+                if (this.ctrlHeld) {
+                    this.removeAllDragElements()
+                    this.cursors?.enable()
+                } else {
+                    this.$store.dispatch('eeg.set-cursor-tool', null)
+                }
+                return true
+            }
+            if (detail.pointerButton !== 0) {
+                return false
+            }
+            if (this.ctrlHeld) {
+                if (this.plotSelections.length) {
+                    this.handlePlotPointerup(event)
+                } else {
+                    this.createSignalSelection(detail.position, detail.position, detail.channelProps)
+                }
+                return true
+            }
+            this.annotateAt([this.annotateTarget(detail)])
+            return true
+        },
+        /**
+         * Annotate the selections collected with the annotate tool, each span once over all its channels, and clear
+         * them.
+         */
+        annotateSelections () {
+            if (this.activeCursorTool !== 'annotate' || !this.plotSelections.length) {
+                return
+            }
+            const targets = this.selectionTargets()
+            this.plotSelections.splice(0)
+            this.annotateAt(targets)
+        },
+        /**
+         * Where a click annotates: an instant on the clicked channel, or a global one without a channel.
+         * @param detail - The plot pointer event's detail.
+         */
+        annotateTarget (detail: { channelProps: ChannelPositionProperties | null, position: number }): CopyTarget {
+            const channel = detail.channelProps ? this.RESOURCE.visibleChannels[detail.channelProps.index] : null
+            return {
+                channels: eventChannelNames(this.RESOURCE.recordMontage, channel),
+                range: [detail.position, detail.position],
+            }
+        },
+        /**
          * Add a `handler` method for when the pointer leaves the given `element`.
          * @param handler - method to execute in the event of pointer leaving the element
          */
@@ -1100,6 +1202,10 @@ export default defineComponent({
         },
         clearCursorTool () {
             this.$store.dispatch('eeg.set-cursor-tool', null)
+        },
+        /** Forget the context menu once it has closed itself, as it does on a click elsewhere. */
+        closeContextMenu () {
+            this.contextMenu = null
         },
         closeReportWindow () {
             console.log('Closing report window')
@@ -1192,12 +1298,7 @@ export default defineComponent({
          * @param copy - The class and codes to copy.
          */
         copyToSelections (copy: AnnotationCopy) {
-            const targets = groupSelectionsBySpan(this.plotSelections).map(group => ({
-                channels: [...new Set(group.selections.flatMap(
-                    sel => eventChannelNames(this.RESOURCE.recordMontage, sel.channel)
-                ))],
-                range: group.range,
-            }))
+            const targets = this.selectionTargets()
             this.plotSelections.splice(0)
             return this.copyAnnotation(copy, targets)
         },
@@ -1208,6 +1309,8 @@ export default defineComponent({
             name?: string,
             skipEditor?: boolean,
             start?: number,
+            /** Where to create the events, one at each, in place of the selections. */
+            targets?: CopyTarget[],
             text?: string,
         }) {
             if (!this.RESOURCE.activeMontage) {
@@ -1224,24 +1327,23 @@ export default defineComponent({
                 return
             }
             const undoEvents = [] as BiosignalAnnotationEvent[]
-            if (this.plotSelections.length) {
-                // Selections on several channels over the same span are one event on all of them.
-                for (const group of groupSelectionsBySpan(this.plotSelections)) {
-                    const channels = [...new Set(group.selections.flatMap(
-                        sel => eventChannelNames(this.RESOURCE.recordMontage, sel.channel)
-                    ))]
-                    const names = group.selections.map(sel => sel.channel ? sel.channel.name : 'global')
+            if (props?.targets || this.plotSelections.length) {
+                const targets = props?.targets ?? this.selectionTargets()
+                if (!props?.targets) {
+                    this.plotSelections.splice(0)
+                }
+                for (const [idx, target] of targets.entries()) {
                     const newEvent = EegEvent.fromTemplate({
                         annotator: '',
                         background: false,
-                        channels,
+                        channels: target.channels,
                         class: eventClass.name,
                         codes: eventClass.codes || [],
-                        duration: group.range[1] - group.range[0],
-                        id: `annotation_${Date.now()}_${names.join('_')}`,
+                        duration: target.range[1] - target.range[0],
+                        id: `annotation_${Date.now()}_${idx}_${target.channels.join('_') || 'global'}`,
                         label: props?.text || '',
                         priority: 1,
-                        start: group.range[0],
+                        start: target.range[0],
                         text: '',
                         value: null,
                     } as AnnotationEventTemplate)
@@ -1251,7 +1353,6 @@ export default defineComponent({
                         this.editingEvents.push(newEvent)
                     }
                 }
-                this.plotSelections.splice(0)
             } else if (props?.channels?.length) {
                 for (const chan of props.channels) {
                     const newEvent = EegEvent.fromTemplate({
@@ -1393,6 +1494,13 @@ export default defineComponent({
                     this.createEvents(props)
                     break
                 }
+                case ('delete-annotation'): {
+                    const target = this.RESOURCE.events.find(event => event.id === props.value)
+                    if (target && !target.locked && !this.RESOURCE.annotationsLocked) {
+                        this.removeUserEvents(target)
+                    }
+                    break
+                }
                 case ('end-channel-selection'): {
                     if (!this.selectionBound?.channel || !this.contextMenu) {
                         break
@@ -1440,32 +1548,32 @@ export default defineComponent({
             this.contextMenu = null
         },
         /**
-         * Copy the annotation being stamped to where a drag ended, or end the drag as usual when not stamping.
+         * End a drag, and annotate the span it selected when the annotate tool is active and Ctrl is not collecting
+         * selections.
          * @param event - The plot's drag-end event.
          */
-        handleDragEndOrStamp (event: CustomEvent) {
+        handleDragEndOrAnnotate (event: CustomEvent) {
             this.handlePlotPointerDragEnd(event)
-            const stamps = this.stamping && event.detail.pointerButton === 0 && !this.activeCursorTool
-            if (stamps && this.plotSelections.length) {
-                this.copyToSelections(this.stamping!)
+            if (event.detail.pointerButton === 0 && !this.ctrlHeld) {
+                this.annotateSelections()
             }
         },
         /**
-         * Stamp at a second quick click, which the plot reports as a double click, or handle it as usual when not
-         * stamping, so a run of close discharges is stamped at the pace it is clicked.
+         * Annotate at a second quick click, which the plot reports as a double click, or handle it as usual without the
+         * annotate tool, so a run of close discharges is stamped at the pace it is clicked.
          * @param event - The plot's double-click event.
          */
-        handleDoubleClickOrStamp (event: CustomEvent) {
-            if (!this.stampAt(event.detail)) {
+        handleDoubleClickOrAnnotate (event: CustomEvent) {
+            if (!this.annotateClick(event)) {
                 this.handlePlotDoubleClick(event)
             }
         },
         /**
-         * Stamp at a click, or handle it as usual when not stamping.
+         * Annotate at a click, or handle it as usual without the annotate tool.
          * @param event - The plot's pointer-up event.
          */
-        handlePointerupOrStamp (event: CustomEvent) {
-            if (!this.stampAt(event.detail)) {
+        handlePointerupOrAnnotate (event: CustomEvent) {
+            if (!this.annotateClick(event)) {
                 this.handlePlotPointerup(event)
             }
         },
@@ -1473,6 +1581,14 @@ export default defineComponent({
          * Handle keyup events with the viewer visible.
          */
         async handleKeyup (event: KeyboardEvent) {
+            if (event.key === 'Control') {
+                // Releasing Ctrl annotates the selections it collected, unless a drag still adds to them.
+                this.ctrlHeld = false
+                if (!this.dragAction) {
+                    this.annotateSelections()
+                }
+                return
+            }
             if (event.target && (event.target as HTMLElement).tagName.match(/input|textarea/i)) {
                 // Don't handle hotkeys if the user is typing in an input or textarea element.
                 return
@@ -1606,6 +1722,24 @@ export default defineComponent({
             }
         },
         /**
+         * Note whether a press on the plot closes an overlay, the editor, a context menu or the analysis window,
+         * before the plot's handler closes them.
+         * @param event - The plot's pointer-down event.
+         */
+        handlePointerdownOrAnnotate (event: CustomEvent) {
+            this.closingPress = this.editingEvents.length > 0 || this.contextMenu !== null || this.analysisWindow.open
+            this.handlePlotPointerdown(event)
+        },
+        /**
+         * Note Ctrl going down, which makes the annotate tool collect selections until it is released.
+         * @param event - The keydown event.
+         */
+        handleCtrlDown (event: KeyboardEvent) {
+            if (event.key === 'Control') {
+                this.ctrlHeld = true
+            }
+        },
+        /**
          * Hide all elements overlaying the plot, including windows.
          */
         hideAllOverlayElements () {
@@ -1730,6 +1864,28 @@ export default defineComponent({
                 }
             }
         },
+        /**
+         * Forget Ctrl when the window loses focus, which keeps its release from arriving. What it collected stays
+         * selected.
+         */
+        releaseCtrl () {
+            this.ctrlHeld = false
+        },
+        /**
+         * The finding groups of the recording, which the picker offers to `annotation` to join; it is not counted
+         * among their events.
+         * @param annotation - The annotation being edited.
+         */
+        recordingFindingGroups (annotation: BiosignalAnnotationEvent) {
+            return recordedFindingGroups(
+                this.RESOURCE.events.map(event => ({
+                    code: codesOf(event)[HED_STANDARD],
+                    id: event.id,
+                    start: event.start,
+                })),
+                annotation.id,
+            )
+        },
         removeAllHighlights () {
             this.onnxHighlights.splice(0)
         },
@@ -1749,12 +1905,25 @@ export default defineComponent({
             this.saveEventEdits(props)
             this.lastAnnotation = { class: props.class, codes: { ...props.codes }, sources }
             this.stamping = props.stamp ? this.lastAnnotation : null
+            if (props.stamp) {
+                // Copies are stamped with the annotate tool.
+                this.$store.dispatch('eeg.set-cursor-tool', 'annotate')
+            }
             if (props.applyToGroup) {
                 this.applyToFindingGroup(props, sources)
             }
         },
         selectDrawerTab (value: string) {
             this.sidebarTab = value
+        },
+        /** Where the selections go as annotations: one per span, over the channels of every selection with it. */
+        selectionTargets (): CopyTarget[] {
+            return groupSelectionsBySpan(this.plotSelections).map(group => ({
+                channels: [...new Set(group.selections.flatMap(
+                    sel => eventChannelNames(this.RESOURCE.recordMontage, sel.channel)
+                ))],
+                range: group.range,
+            }))
         },
         /**
          * Store the finding the picker emitted under the HED standard, or remove it.
@@ -1775,25 +1944,6 @@ export default defineComponent({
                 }
                 this.dataSetupDone = true
             }
-        },
-        /**
-         * Copy the annotation being stamped to a click: an instant on the clicked channel, or a global one between
-         * channels. Returns whether the click was stamped, which it is only with the main button and no cursor tool.
-         * @param detail - The plot pointer event's detail.
-         */
-        stampAt (detail: { channelProps: ChannelPositionProperties | null, pointerButton: number, position: number }) {
-            if (!this.stamping || detail.pointerButton !== 0 || this.activeCursorTool) {
-                return false
-            }
-            const channel = detail.channelProps ? this.RESOURCE.visibleChannels[detail.channelProps.index] : null
-            this.copyAnnotation(this.stamping, [{
-                channels: eventChannelNames(this.RESOURCE.recordMontage, channel),
-                range: [detail.position, detail.position],
-            }])
-            return true
-        },
-        stopStamping () {
-            this.stamping = null
         },
         handleInterfaceSettingChange (e: Event) {
             const detail = (e as CustomEvent).detail
@@ -1888,13 +2038,45 @@ export default defineComponent({
         handleTrendToggleControls (open: boolean) {
             this.controlsOpen = open
         },
-        /** Follow the module's active cursor tool, restyling the plot surfaces to match. */
+        /**
+         * Follow the module's active cursor tool, restyling the plot surfaces to match. Stamping is done with the
+         * annotate tool and ends with it.
+         */
         cursorToolChanged () {
             const tool = this.getFieldValue(`${this.SCOPE}.cursor-tool`) as string | null
-            const cursor = tool === 'inspect' ? 'zoom-in' : 'initial'
+            const cursor = tool === 'inspect' ? 'zoom-in' : tool === 'annotate' ? 'crosshair' : 'initial'
             this.overlay.style.cursor = cursor
             this.plot.$el.style.cursor = cursor
             this.activeCursorTool = tool
+            if (tool !== 'annotate') {
+                this.stamping = null
+            }
+        },
+        /**
+         * Open the menu of an event at the pointer, closing what else is open on the plot.
+         * @param event - The event.
+         * @param pointer - The pointer event that asked for the menu.
+         */
+        openEventMenu (event: BiosignalAnnotationEvent, pointer: PointerEvent) {
+            this.exitEventEditor()
+            this.closeAnalysisWindow()
+            const area = this.wrapper.getBoundingClientRect()
+            const menu = {
+                channel: null,
+                position: [pointer.clientX - area.left, area.bottom - pointer.clientY],
+                props: {
+                    id: event.id,
+                    locked: event.locked,
+                    name: eventDisplayName(event, this.SETTINGS.annotations.classes, label => this.$t(label)),
+                },
+                target: 'annotation',
+                timestamp: event.start,
+            }
+            // The menu builds its items when it mounts, so one already open is closed first rather than reused.
+            this.contextMenu = null
+            this.$nextTick(() => {
+                this.contextMenu = menu
+            })
         },
         /** Follow which sidebar the module reports as open. */
         openSidebarChanged () {
@@ -2088,8 +2270,10 @@ export default defineComponent({
         this.montagesChanged().then(() => this.signalCacheChanged())
         this.RESOURCE.onPropertyChange('timebase', this.timebaseChanged, this.ID)
         this.RESOURCE.onPropertyChange('viewStart', this.viewStartChanged, this.ID)
-        // keydown and blur are managed by useBiosignalKeyboard; register keyup here.
+        // keydown and blur are managed by useBiosignalKeyboard; register keyup here, and Ctrl's own tracking.
         window.addEventListener('keyup', this.handleKeyup, false)
+        window.addEventListener('keydown', this.handleCtrlDown, false)
+        window.addEventListener('blur', this.releaseCtrl, false)
         // Screen calibration and grid geometry both change how wide a second is drawn.
         this.addPropertyChangeHandler('app.screenPPI', this.screenPpiChanged)
         this.addPropertyChangeHandler(`${this.SCOPE}.grid`, this.gridChanged)
@@ -2190,6 +2374,13 @@ export default defineComponent({
         // Remove property update handlers
         this.RESOURCE?.removeAllEventListeners(this.ID)
         window.removeEventListener('keyup', this.handleKeyup, false)
+        window.removeEventListener('keydown', this.handleCtrlDown, false)
+        window.removeEventListener('blur', this.releaseCtrl, false)
+        // The annotate tool belongs to this view, and leaves with it.
+        if (this.activeCursorTool === 'annotate') {
+            this.$store.dispatch('eeg.set-cursor-tool', null)
+        }
+        this.$store.dispatch('eeg.set-annotation-stamp', null)
         // Remove possible hanging promises
         this.resolvePlotUpdate = null
         // Unsubscribe from store
@@ -2250,36 +2441,12 @@ export default defineComponent({
         }
     .selection-area {
         position: absolute;
+        /* An instant marked out with Ctrl selects no length, and keeps a sliver so it can be seen. */
+        min-width: 2px;
     }
     .highlight-area {
         position: absolute;
         pointer-events: none;
-    }
-    .stamp-bar {
-        position: absolute;
-        bottom: 1rem;
-        left: 50%;
-        transform: translateX(-50%);
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.25rem 0.25rem 0.25rem 0.75rem;
-        font-size: 0.875rem;
-        background-color: var(--epicv-background-hover);
-        border: solid 1px var(--epicv-border);
-        border-radius: 0.25rem;
-        z-index: 3;
-        /* Fades once read, so it covers little of the signal while stamping; pointing at it brings it back. */
-        animation: stamp-bar-fade 0.5s ease 2.5s forwards;
-    }
-        .stamp-bar:hover,
-        .stamp-bar:focus-within {
-            animation: none;
-        }
-    @keyframes stamp-bar-fade {
-        to {
-            opacity: 0.4;
-        }
     }
     .video {
         position: absolute;

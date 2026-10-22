@@ -75,6 +75,11 @@ export default defineComponent({
             type: Array as PropType<number[] | null>,
             default: null,
         },
+        /** Whether a drag that starts between channels selects a global span, as one with Shift held always does. */
+        globalDrag: {
+            type: Boolean,
+            default: false,
+        },
         overlay: {
             type: Object as PropType<PointerEventOverlay>,
             required: true,
@@ -619,8 +624,8 @@ export default defineComponent({
             const threshold = this.pointerDragThreshold
             let overThreshold = false
             const pointerMove = (left: number, top: number, meta?: OverlayPointerEventMeta) => {
-                // Only drag on channels and if shift key is down.
-                if (!channelProps && !initialEvent.shiftKey) {
+                // Only drag on channels, or between them with shift held or a global drag allowed.
+                if (!channelProps && !initialEvent.shiftKey && !this.globalDrag) {
                     return
                 }
                 // Route through getPointerPosition so cascade montages map the pointer's (x, y)
@@ -688,7 +693,12 @@ export default defineComponent({
                     this.$emit('pointer-drag-end', customEv)
                 }
             }
-            this.overlay.trackPointer(event, { move: pointerMove, up: pointerUp })
+            // The other button pressed during a drag cancels it, and a click in progress with it.
+            const pointerChord = () => {
+                this.pointerButton = NO_POINTER_BUTTON_DOWN
+                this.$emit('pointer-drag-cancel')
+            }
+            this.overlay.trackPointer(event, { chord: pointerChord, move: pointerMove, up: pointerUp })
             const customEv = new CustomEvent('plotpointerdown', {
                 detail: {
                     channelProps: channelProps,

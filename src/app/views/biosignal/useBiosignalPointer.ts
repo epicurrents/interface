@@ -368,7 +368,9 @@ export function useBiosignalPointer ({
         const { detail } = event
         onCloseAnalysis()
         onExitEditor()
-        if (!detail.ctrlKey || activeCursorTool.value) {
+        // Ctrl adds to the selections; a cursor tool keeps one at a time, except the annotate tool, which marks out
+        // several for one annotation.
+        if (!detail.ctrlKey || (activeCursorTool.value && activeCursorTool.value !== 'annotate')) {
             removeAllDragElements()
             contextMenu.value = null
         }
@@ -395,6 +397,7 @@ export function useBiosignalPointer ({
     function handlePlotPointerDragCancel () {
         removeActiveSelection()
         dragAction.value = null
+        cursors.value.enable()
     }
 
     function handlePlotPointerDragEnd (event: CustomEvent) {

@@ -48,6 +48,7 @@ const messagesEN = {
     'Send to {label}': 'Send to {label}',
     'Setting up montage {current} of {total}': 'Setting up montage {current} of {total}',
     'Signals are resampled to {rate} Hz, as the destination requires.': 'Signals are resampled to {rate} Hz, as the destination requires.',
+    'Stamping {name}: click for a copy, drag for a span': 'Stamping {name}: click for a copy, drag for a span',
     'Take this event out of group {number}': 'Take this event out of group {number}',
     'The recording is {duration} s long.': 'The recording is {duration} s long.',
     'The server and this viewer have different copies of HED-SCORE {version}.':
@@ -56,7 +57,7 @@ const messagesEN = {
         'The server validates findings against HED-SCORE {server}; this viewer has {viewer}.',
     'Voltage / Δ ({unit})': 'Voltage / Δ ({unit})',
     'uV': 'µV', // Display ASCII-compatible unit uV in the interface as µV.
-    '{name}: click the signal to stamp one, drag for a span': '{name}: click the signal to stamp one, drag for a span',
+    '{count} events': '{count} events',
     welcome: {
         advanced: 'Advanced',
         basic: 'Basic',

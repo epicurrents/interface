@@ -53,6 +53,7 @@ import help from '@material-symbols/svg-400/outlined/help.svg?raw'
 import horizontal_align_left from '@material-symbols/svg-400/outlined/horizontal_align_left.svg?raw'
 import horizontal_align_right from '@material-symbols/svg-400/outlined/horizontal_align_right.svg?raw'
 import info from '@material-symbols/svg-400/outlined/info.svg?raw'
+import ink_highlighter from '@material-symbols/svg-400/outlined/ink_highlighter.svg?raw'
 import keyboard_arrow_down from '@material-symbols/svg-400/outlined/keyboard_arrow_down.svg?raw'
 import keyboard_arrow_up from '@material-symbols/svg-400/outlined/keyboard_arrow_up.svg?raw'
 import keyboard_double_arrow_left from '@material-symbols/svg-400/outlined/keyboard_double_arrow_left.svg?raw'
@@ -127,6 +128,7 @@ export const ICON_SVGS: Record<string, { outlined: string; filled?: string }> = 
     horizontal_align_left:          { outlined: horizontal_align_left },
     horizontal_align_right:         { outlined: horizontal_align_right },
     info:                           { outlined: info },
+    ink_highlighter:                { outlined: ink_highlighter },
     keyboard_arrow_down:            { outlined: keyboard_arrow_down },
     keyboard_arrow_up:              { outlined: keyboard_arrow_up },
     keyboard_double_arrow_left:     { outlined: keyboard_double_arrow_left },
@@ -214,6 +216,7 @@ const FA_TO_MATERIAL: Record<string, string> = {
     'folder-plus':                      'create_new_folder',
     'gear':                             'settings',
     'grip-dots-vertical':               'drag_indicator',
+    'highlighter':                      'ink_highlighter',
     'info-circle':                      'info',
     'input-text':                       'text_fields',
     'link':                             'link',

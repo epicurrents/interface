@@ -22,6 +22,7 @@ import {
     groupsAllowed,
     lateralityOf,
     nextFindingGroup,
+    recordedFindingGroups,
     offeredFields,
     parseFindingCode,
     relationsAllowed,
@@ -185,6 +186,35 @@ describe('finding groups', () => {
         expect(groupedFindingCode(grouped!, null, index, null)).toBe(spike)
         expect(groupedFindingCode('Epileptiform-interictal-activity', 100, index, null))
             .toBe('(Epileptiform-interictal-activity, ID/100)')
+    })
+
+    it('in a recording are listed by number, each with its earliest event and its size', () => {
+        const slow = '(Polymorphic-delta-activity, Sensor-list/T7, ID/101)'
+        const events = [
+            { code: `(Epileptiform-interictal-activity, Spike, Sensor-list/T7, ID/104)`, id: 'b', start: 20 },
+            { code: `(Epileptiform-interictal-activity, Spike, Sensor-list/F7, ID/104)`, id: 'a', start: 10 },
+            { code: slow, id: 'c', start: 30 },
+            { code: '(Epileptiform-interictal-activity, Spike)', id: 'd', start: 5 },
+            { id: 'e', start: 1 },
+            { code: 3, id: 'f', start: 2 },
+        ]
+        expect(recordedFindingGroups(events)).toEqual([
+            { code: slow, members: 1, number: 101 },
+            { code: '(Epileptiform-interictal-activity, Spike, Sensor-list/F7, ID/104)', members: 2, number: 104 },
+        ])
+    })
+
+    it('in a recording leave out the event being edited', () => {
+        const events = [
+            { code: '(Epileptiform-interictal-activity, Sensor-list/F7, ID/104)', id: 'a', start: 10 },
+            { code: '(Epileptiform-interictal-activity, Sensor-list/T7, ID/104)', id: 'b', start: 20 },
+            { code: '(Polymorphic-delta-activity, ID/101)', id: 'c', start: 30 },
+        ]
+        expect(recordedFindingGroups(events, 'a')).toEqual([
+            { code: '(Polymorphic-delta-activity, ID/101)', members: 1, number: 101 },
+            { code: '(Epileptiform-interictal-activity, Sensor-list/T7, ID/104)', members: 1, number: 104 },
+        ])
+        expect(recordedFindingGroups(events, 'c').map(group => group.number)).toEqual([104])
     })
 
     it('stay with a finding that moves', () => {

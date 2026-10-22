@@ -55,6 +55,10 @@
                     <wa-option v-for="findingGroup of groups" :key="`finding-group-${findingGroup.branch}`"
                         :value="findingGroup.branch"
                     >{{ $t(findingGroup.label) }}</wa-option>
+                    <template v-if="recordedEntries.length">
+                        <wa-divider class="browse-divider"></wa-divider>
+                        <wa-option :value="RECORDED_GROUPS">{{ $t('Finding groups') }}</wa-option>
+                    </template>
                 </wa-select>
                 <template v-if="applyToGroup && findingGroup !== null && groupMembers">
                     <wa-button
@@ -303,6 +307,32 @@
                     <span class="group">{{ groupTag(finding) }}</span>
                 </button>
             </div>
+            <div v-else-if="listedGroups.length" ref="list"
+                :aria-activedescendant="`finding-recorded-group-${highlighted}`"
+                class="results"
+                role="listbox"
+                tabindex="0"
+                @keydown="handleListKeydown"
+            >
+                <button v-for="(entry, idx) of listedGroups" :key="`finding-recorded-group-${entry.group.number}`"
+                    :aria-selected="idx === highlighted"
+                    :class="['result', { 'result--active': idx === highlighted }]"
+                    :id="`finding-recorded-group-${idx}`"
+                    role="option"
+                    tabindex="-1"
+                    :title="entry.group.code"
+                    type="button"
+                    @click="pickGroup(entry)"
+                    @mousedown.prevent
+                    @mousemove="highlightResult(idx)"
+                >
+                    <span class="result-label">
+                        <span class="number">{{ entry.group.number }}</span>
+                        {{ entry.label }}
+                    </span>
+                    <span class="group">{{ entry.description }}</span>
+                </button>
+            </div>
             <div v-if="palette.length && !code" class="palette">
                 <button v-for="(finding, idx) of palette" :key="`finding-palette-${finding.term.name}`"
                     class="palette-item"
@@ -325,7 +355,8 @@
 /**
  * Codes an annotation's finding in HED-SCORE: a search field over the offered terms and the abbreviations readers type,
  * a browsable list per group, and the host's quick palette, then the finding's optional properties. Emits the HED
- * string to store under `codes.hed`, or `null` to remove it.
+ * string to store under `codes.hed`, or `null` to remove it. The Browse menu also lists the recording's finding
+ * groups, and joining one copies its finding to the event as a copy of an annotation is made.
  *
  * A pick fills in what the view already knows: the location from the electrodes the annotation is drawn on, the side
  * those electrodes lie on, and a frequency measured within its span. All are the reader's to change. A stored string
@@ -365,12 +396,14 @@ import {
     type Balance,
     type Laterality,
     type OfferedField,
+    type RecordedFindingGroup,
     type ValueField,
     type ValueMode,
     VALUE_MODES,
     balanceOf,
     composeFindingCode,
     electrodesByRegion,
+    groupsAllowed,
     isAcronym,
     offeredFields,
     lateralityOf,
@@ -398,6 +431,20 @@ const FREQUENCY_TAG = 'Feature-frequency'
  * @param hz - Frequency in Hz.
  */
 const roundHz = (hz: number) => Math.round(hz*10)/10
+
+/** The Browse menu's value for the finding groups already in the recording, which no term group's branch can be. */
+const RECORDED_GROUPS = '#recorded-groups'
+
+/** A finding group of the recording as the Browse menu lists it. */
+type RecordedGroupEntry = {
+    /** The finding the group's events code, as the group's earliest event writes it. */
+    code: FindingCode
+    /** The finding's picker group and how many events the group has. */
+    description: string
+    group: RecordedFindingGroup
+    /** The finding's readable name. */
+    label: string
+}
 
 /** A property shown as a removable chip. */
 type PropertyChip = {
@@ -458,6 +505,14 @@ export default defineComponent({
             type: Object as PropType<FrequencyMeasurement | null>,
             default: null,
         },
+        /**
+         * The finding groups already in the recording, which the event can join from the Browse menu. The event being
+         * edited is not counted among their events.
+         */
+        recordedGroups: {
+            type: Array as PropType<RecordedFindingGroup[]>,
+            default: () => [],
+        },
         /** Canonical labels of the electrodes the annotation is drawn on, its location when a finding is picked. */
         sensors: {
             type: Array as PropType<string[]>,
@@ -500,6 +555,7 @@ export default defineComponent({
             offered,
             policy,
             query,
+            RECORDED_GROUPS,
             search,
             state,
             statusMessage,
@@ -694,6 +750,35 @@ export default defineComponent({
         palette (): OfferedFinding[] {
             return paletteFindings(this.offered, runtime.hedScore.palette)
         },
+        /** The recording's finding groups the Browse menu lists, while it is open on them and nothing is typed. */
+        listedGroups (): RecordedGroupEntry[] {
+            return !this.code && this.group === RECORDED_GROUPS && !this.query.trim() ? this.recordedEntries : []
+        },
+        /**
+         * The recording's finding groups an event can join: those whose code the picker reads, where the host's policy
+         * allows groups.
+         */
+        recordedEntries (): RecordedGroupEntry[] {
+            if (!this.index || !groupsAllowed(this.index, this.policy)) {
+                return []
+            }
+            const entries = [] as RecordedGroupEntry[]
+            for (const group of this.recordedGroups) {
+                const code = parseFindingCode(group.code, this.index)
+                if (!code) {
+                    continue
+                }
+                const tag = findingGroupTag(this.index.branchOf(code.finding) ?? '')
+                const count = this.$t('{count} events', { count: group.members })
+                entries.push({
+                    code,
+                    description: tag ? `${this.$t(tag)} · ${count}` : count,
+                    group,
+                    label: findingLabel(code.finding),
+                })
+            }
+            return entries
+        },
         results (): OfferedFinding[] {
             if (this.code) {
                 return []
@@ -709,7 +794,7 @@ export default defineComponent({
                     ),
                 ]
             }
-            if (this.group) {
+            if (this.group && this.group !== RECORDED_GROUPS) {
                 return this.offered.filter(finding => finding.branch === this.group)
             }
             return []
@@ -844,7 +929,7 @@ export default defineComponent({
          * @param event - The key event.
          */
         navigateResults (event: KeyboardEvent) {
-            const count = this.results.length
+            const count = this.listedGroups.length || this.results.length
             if (!count) {
                 return false
             }
@@ -859,7 +944,12 @@ export default defineComponent({
                 next = count - 1
             } else if (event.key === 'Enter') {
                 event.preventDefault()
-                this.pick(this.results[Math.min(this.highlighted, count - 1)])
+                const idx = Math.min(this.highlighted, count - 1)
+                if (this.listedGroups.length) {
+                    this.pickGroup(this.listedGroups[idx])
+                } else {
+                    this.pick(this.results[idx])
+                }
                 return true
             } else {
                 return false
@@ -896,6 +986,31 @@ export default defineComponent({
                     value: roundHz(this.measuredFrequency.mean),
                 }
             }
+            this.chosenModes = {}
+            this.$emit('change', composeFindingCode(code, fields))
+            if (this.focusNext) {
+                this.focusNext()
+                return
+            }
+            this.$nextTick(() => {
+                this.clearbtn?.focus()
+            })
+        },
+        /**
+         * Join a finding group of the recording: the event takes the finding and properties of the group's earliest
+         * event, moved to its own location as a copy is, and the group's number.
+         * @param entry - The group, as the Browse menu lists it.
+         */
+        pickGroup (entry: RecordedGroupEntry) {
+            this.query = ''
+            this.group = ''
+            this.highlighted = 0
+            const code = { ...entry.code, properties: [...entry.code.properties], values: { ...entry.code.values } }
+            const fields = offeredFields(this.index!, this.policy, code.finding)
+            if (this.canLocate) {
+                relocate(code, this.sensors, fields.some(field => field.key === 'side'))
+            }
+            code.group = entry.group.number
             this.chosenModes = {}
             this.$emit('change', composeFindingCode(code, fields))
             if (this.focusNext) {
@@ -1311,6 +1426,10 @@ export default defineComponent({
     align-items: center;
     gap: 0.25rem 0.5rem;
 }
+/* The divider before the recording's finding groups, kept close to the options around it. */
+.browse-divider {
+    --spacing: var(--wa-space-xs);
+}
 .results {
     display: flex;
     flex-direction: column;
@@ -1352,9 +1471,13 @@ export default defineComponent({
         text-overflow: ellipsis;
         white-space: nowrap;
     }
-    .result .abbreviation {
+    .result .abbreviation,
+    .result .number {
         margin-right: 0.25rem;
         font-weight: 600;
+    }
+    .result .number {
+        font-variant-numeric: tabular-nums;
     }
     .result .group,
     .selected .group {

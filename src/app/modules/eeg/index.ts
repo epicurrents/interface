@@ -30,6 +30,7 @@ const SCOPE = 'interface-eeg-module'
 
 enum EegActionTypes {
     SET_ACTIVE_MONTAGE = 'eeg.set-active-montage',
+    SET_ANNOTATION_STAMP = 'eeg.set-annotation-stamp',
     SET_CURSOR_TOOL = 'eeg.set-cursor-tool',
     SET_HIGHPASS_FILTER = 'eeg.set-highpass-filter',
     SET_LOWPASS_FILTER = 'eeg.set-lowpass-filter',
@@ -51,6 +52,7 @@ enum EegActionTypes {
  * reached through the same setter by forwarding.
  */
 export const properties: ModulePropertyRegistry = {
+    'annotation-stamp': { field: 'annotationStamp', type: 'String?' },
     'cursor-tool': { field: 'cursorToolActive', type: 'String?' },
     'open-sidebar': { field: 'openSidebar', type: 'String?' },
     'report-open': { field: 'isReportOpen', type: 'Boolean' },
@@ -61,6 +63,9 @@ export const properties: ModulePropertyRegistry = {
 export const actions = {
     [EegActionTypes.SET_ACTIVE_MONTAGE] (_injectee: ActionContext<State, State>, payload: number | string | null) {
         runtime.setPropertyValue('active-montage', payload)
+    },
+    [EegActionTypes.SET_ANNOTATION_STAMP] (_injectee: ActionContext<State, State>, payload: string | null) {
+        runtime.setPropertyValue('annotation-stamp', payload)
     },
     [EegActionTypes.SET_CURSOR_TOOL] (_injectee: ActionContext<State, State>, payload: string | null) {
         runtime.setPropertyValue('cursor-tool', payload)
@@ -135,6 +140,7 @@ export const runtime = {
         full: 'Electroencephalography',
         short: 'EEG',
     },
+    annotationStamp: null as string | null,
     cursorToolActive: null as string | null,
     hedScore: {
         palette: [] as string[],
@@ -365,6 +371,8 @@ export const runtime = {
      */
     setPropertyValue: createPropertySetter('eeg', () => runtime as unknown as Record<string, unknown>, properties),
 } as InterfaceResourceModule & {
+    /** Name of the annotation the annotate tool stamps, as the events list shows it, null when it stamps none. */
+    annotationStamp: string | null
     /** Name of the cursor tool that is active in the interface, null if no tool is active. */
     cursorToolActive: string | null
     /** The finding picker's configured palette and the host's policy source, null when the host supplied none. */

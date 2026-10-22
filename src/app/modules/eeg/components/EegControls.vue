@@ -132,16 +132,16 @@ export default defineComponent({
                 value: false,
                 version: 0,
             },
-            // Report window toggle.
+            // Annotate tool toggle.
             {
-                id: 'report',
+                id: 'annotate',
                 align: 'right',
-                iconName: 'file-lines',
+                iconName: 'highlighter',
                 joinLeft: true,
                 joinRight: true,
-                label: T('Open report window', 'EegControls'),
-                onclick: ['eeg.set-report-open', true],
-                reloadOn: ['property:eeg.report-open'],
+                label: T('Annotate the signal', 'EegControls'),
+                onclick: ['eeg.set-cursor-tool', 'annotate'],
+                reloadOn: ['property:eeg.annotation-stamp', 'property:eeg.cursor-tool', 'resource:annotationsLocked'],
                 type: 'on-off',
                 value: false,
                 version: 0,
@@ -156,6 +156,20 @@ export default defineComponent({
                 label: T('Toggle annotation tools', 'EegControls'),
                 onclick: ['eeg.set-open-sidebar', 'annotations'],
                 reloadOn: ['property:eeg.open-sidebar'],
+                type: 'on-off',
+                value: false,
+                version: 0,
+            },
+            // Report window toggle.
+            {
+                id: 'report',
+                align: 'right',
+                iconName: 'file-lines',
+                joinLeft: true,
+                joinRight: true,
+                label: T('Open report window', 'EegControls'),
+                onclick: ['eeg.set-report-open', true],
+                reloadOn: ['property:eeg.report-open'],
                 type: 'on-off',
                 value: false,
                 version: 0,
@@ -399,6 +413,24 @@ export default defineComponent({
                     ]
                     c.value = isActive
                 }
+                c.version++
+            }
+            if (wants('annotate')) {
+                const c = control('annotate')
+                const module = this.$interface.store.modules.get('eeg')!
+                const isActive = module.cursorToolActive === 'annotate'
+                // The tooltip says what a click does, and names the annotation stamped while there is one.
+                c.enabled = !this.RESOURCE.annotationsLocked
+                c.value = isActive
+                c.onclick = [
+                    'eeg.set-cursor-tool',
+                    isActive ? null : 'annotate',
+                ]
+                c.label = !isActive
+                    ? this.$t('Annotate the signal')
+                    : module.annotationStamp
+                    ? this.$t('Stamping {name}: click for a copy, drag for a span', { name: module.annotationStamp })
+                    : this.$t('Annotating: click for an event, drag for a span, hold Shift for a global one')
                 c.version++
             }
             if (wants('inspect')) {

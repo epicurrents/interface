@@ -52,12 +52,20 @@ export type OverlayTouchEventMeta = {
 }
 /**
  * Handlers for pointer move events.
+ * @property chord - Handler for a second button pressed during tracking, optional.
  * @property move - Handler for pointer move event.
  * @property down - Handler for pointer down event, optional.
  * @property leave - Handler for pointer leave event, optional.
  * @property up - Handler for pointer up event, optional.
  */
 export type OverlayMoveHandlers = {
+    /**
+     * Handler for a second button pressed while the tracked one is held, optional. The browser reports such a press
+     * as a pointer move rather than a pointer down, so it never reaches the element the tracking started on. Tracking
+     * ends there and `up` is not called, which lets a press of the other button cancel a drag.
+     * @param event - Pointer event reporting the press.
+     */
+    chord?: (event: PointerEvent) => void
     /**
      * Handler for pointer move event.
      * @param left - New left position of the element.
@@ -261,8 +269,23 @@ const OverlayComponent = defineComponent({
                 // Execute the down handler if defined.
                 handlers.down(left, top, { initialX, initialY, relX, relY, event })
             }
+            /** Stop tracking the pointer and give the overlay back to the elements under it. */
+            const stop = () => {
+                this.component.removeEventListener('pointermove', pointerMove)
+                this.component.removeEventListener('pointerup', pointerUp)
+                elements.forEach(el => el.style.pointerEvents = 'auto')
+                this.component.style.pointerEvents = 'none'
+                this.component.style.cursor = ''
+                this.removePointerLeaveHandler(pointerUp)
+            }
             /** Handle pointer moving over the overlay. */
             const pointerMove = (ev: PointerEvent) => {
+                // A button other than the tracked one changing state is a chorded press, which arrives as a move.
+                if (handlers.chord && ev.button !== -1 && ev.button !== event.button) {
+                    stop()
+                    handlers.chord(ev)
+                    return
+                }
                 const newLeft = ev.clientX - left
                 const newTop = ev.clientY - top
                 const [relX, relY] = [newLeft/this.getOffsetWidth(), newTop/this.getOffsetHeight()]
@@ -270,11 +293,7 @@ const OverlayComponent = defineComponent({
             }
             /** Handle pointer up event to stop tracking pointer movement. */
             const pointerUp = (ev?: PointerEvent) => {
-                this.component.removeEventListener('pointermove', pointerMove)
-                this.component.removeEventListener('pointerup', pointerUp)
-                elements.forEach(el => el.style.pointerEvents = 'auto')
-                this.component.style.pointerEvents = 'none'
-                this.component.style.cursor = ''
+                stop()
                 if (handlers.up && ev) {
                     // Execute the up handler if defined and the event is valid (the mouseleave
                     // handler will not pass an event).
@@ -283,7 +302,6 @@ const OverlayComponent = defineComponent({
                     const [relX, relY] = [upLeft/this.getOffsetWidth(), upTop/this.getOffsetHeight()]
                     handlers.up(upLeft, upTop, { initialX, initialY, relX, relY, event: ev })
                 }
-                this.removePointerLeaveHandler(pointerUp)
             }
             this.component.addEventListener('pointermove', pointerMove)
             this.component.addEventListener('pointerup', pointerUp)
