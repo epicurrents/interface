@@ -23,9 +23,10 @@
                 {{ $t('Save annotations to database') }}
             </template>
         </div>
-        <!-- Owns its keys, so the tabs' arrow-key navigation and the lists inside never reach the hotkeys. -->
+        <!-- Owns the keys that move through the tabs and scroll the lists, so they never page the signal; every other
+             key, such as the one closing the sidebar, still reaches the hotkeys. Its fields own their typing anyway. -->
         <wa-tab-group ref="tabs"
-            data-owns-keys
+            data-owns-keys="ArrowDown ArrowLeft ArrowRight ArrowUp End Enter Home PageDown PageUp Space"
         >
             <wa-tab v-if="availableTabs.includes('events')" panel="events">
                 {{ $t('Events') }}
@@ -60,7 +61,7 @@
                                     'epicv-oneliner',
                                     'time',
                                 ]"
-                                :title="timePartsToShortString(secondsToTimeString(event.start, true) as number[])"
+                                :title="timeTitle(event.start)"
                             >
                                 <span v-if="timeLabel(event.start).days">{{ timeLabel(event.start).days }}</span>
                                 <span v-if="timeLabel(event.start).days" class="day">d</span>
@@ -167,21 +168,26 @@ import { useBiosignalContext } from "#config"
 // Reimport these to use as types.
 import type { default as WaTabGroup } from "@awesome.me/webawesome/dist/components/tab-group/tab-group.js"
 import type { default as WaTextarea } from "@awesome.me/webawesome/dist/components/textarea/textarea.js"
-import {
-    padTime,
-    secondsToTimeString,
-    settingsColorToRgba,
-    timePartsToShortString,
-} from "@epicurrents/core/util"
+import { settingsColorToRgba } from "@epicurrents/core/util"
 import type { BiosignalAnnotationEvent } from '@epicurrents/core/types'
 import { PlotSelection } from '#app/views/biosignal/types'
 import { eventDisplayName } from '#app/views/biosignal/eventNames'
+import { eventTimeLabel, eventTimeTitle, eventTimeWidth } from '#app/views/biosignal/eventTime'
 import { Log } from "scoped-event-log"
 import { ResourceLabel } from '@epicurrents/core'
 
 import SidebarLabel from "./SidebarLabel.vue"
 
 type AnnotationExportFormat = 'epicurrents' | 'mne'
+
+/**
+ * Whether the module's navigator shows time elapsed from the start; `false` for a module whose navigator has no such
+ * setting, which then lists the recording's clock time.
+ * @param settings - The module's settings.
+ */
+function navigatorRelativeTime (settings: unknown) {
+    return (settings as { navigator?: { relativeTime?: boolean } }).navigator?.relativeTime ?? false
+}
 
 export default defineComponent({
     name: 'BiosignalAnnotationSidebar',
@@ -232,17 +238,8 @@ export default defineComponent({
         const drawer = ref<HTMLDivElement>() as Ref<HTMLDivElement>
         const exportFormat = ref('epicurrents' as AnnotationExportFormat)
         const isAnnotationsSubmitted = ref(context.RESOURCE.labels.some(l => l.name === 'submit' && l.value === true))
-        const isOverADay = typeof context.RESOURCE.getAbsoluteTimeAt !== 'undefined'
-            ? context.RESOURCE.getAbsoluteTimeAt(0).day !== context.RESOURCE.getAbsoluteTimeAt(
-                    context.RESOURCE.totalDuration
-                ).day
-            : false
-        const isOverAnHour = typeof context.RESOURCE.getAbsoluteTimeAt !== 'undefined'
-            ? context.RESOURCE.totalDuration >= 60*60 ||
-              context.RESOURCE.getAbsoluteTimeAt(0).hour !== context.RESOURCE.getAbsoluteTimeAt(
-                  context.RESOURCE.totalDuration
-              ).hour
-            : false
+        // List times elapsed from the start, as the navigator shows them, rather than by the recording's clock.
+        const relativeTime = ref(navigatorRelativeTime(context.SETTINGS))
         const tabs = ref<WaTabGroup>() as Ref<WaTabGroup>
         const newText = ref<WaTextarea>() as Ref<WaTextarea>
         const newClass = ref(context.SETTINGS.annotations.classes?.default.quickCode ?? -1)
@@ -252,15 +249,11 @@ export default defineComponent({
             drawer,
             exportFormat,
             isAnnotationsSubmitted,
-            isOverADay,
-            isOverAnHour,
+            relativeTime,
             // DOM refs
             tabs,
             newText,
             newClass,
-            // Methods
-            secondsToTimeString,
-            timePartsToShortString,
             ...context,
         }
     },
@@ -279,15 +272,7 @@ export default defineComponent({
             return !!dataset?.hasOutputSource
         },
         timeWidth (): string {
-            if (!this.isOverADay && !this.isOverAnHour) {
-                // If the recording is less than an hour, we only need to show minutes and seconds.
-                return '3.5rem'
-            } else if (!this.isOverADay) {
-                // If the recording is less than 24 hours, HH:MM:SS is enough.
-                return '4.5rem'
-            }
-            // If the recording is longer than 24 hours, we need to show days as well.
-            return '5.25rem'
+            return eventTimeWidth(this.RESOURCE, this.relativeTime)
         },
     },
     methods: {
@@ -431,6 +416,9 @@ export default defineComponent({
             const viewStart = Math.max(0, annoRange - annoRange%this.viewStep)
             this.RESOURCE.viewStart = viewStart
         },
+        relativeTimeChanged () {
+            this.relativeTime = navigatorRelativeTime(this.SETTINGS)
+        },
         removeEvent (event: MouseEvent, id: string) {
             // Prevent click from activating navigation (row click action) to removed event.
             event.stopPropagation()
@@ -467,27 +455,10 @@ export default defineComponent({
             this.isAnnotationsSubmitted = true
         },
         timeLabel (time: number) {
-            const timeParts = this.RESOURCE.getAbsoluteTimeAt(time)
-            if (!this.isOverADay) {
-                // Less than a day.
-                if (!this.isOverAnHour) {
-                    // Less than an hour.
-                    return {
-                        main: `${padTime(timeParts.minute)}:${padTime(timeParts.second)}`
-                    }
-                }
-                return {
-                    main: `${padTime(timeParts.hour)}:${padTime(timeParts.minute)}`,
-                    secs: padTime(timeParts.second),
-                }
-            } else {
-                // More than a day.
-                return {
-                    days: timeParts.day.toString(),
-                    main: `${padTime(timeParts.hour)}:${padTime(timeParts.minute)}`,
-                    secs: padTime(timeParts.second),
-                }
-            }
+            return eventTimeLabel(this.RESOURCE, time, this.relativeTime)
+        },
+        timeTitle (time: number) {
+            return eventTimeTitle(this.RESOURCE, time, this.relativeTime)
         },
         undoRemove () {
             this.$emit('undo-remove')
@@ -506,6 +477,7 @@ export default defineComponent({
             `${this.RESOURCE.modality}.annotations.saveToDataset`,
             this.annotationsUpdated,
         )
+        this.addPropertyChangeHandler(`${this.RESOURCE.modality}.navigator.relativeTime`, this.relativeTimeChanged)
         requestAnimationFrame(() => {
             if (this.drawer) {
                 this.drawer.style.width = `${this.width}px`

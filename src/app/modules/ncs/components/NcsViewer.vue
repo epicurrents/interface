@@ -119,6 +119,7 @@ import NcsPlot from './NcsPlot.vue'
 import SplitPanelView from '#app/views/SplitPanelView.vue'
 import VerticalCursors from '#app/views/biosignal/overlays/VerticalCursors.vue'
 import ViewerOverlay, { type PointerEventOverlay } from '#app/overlays/PointerEventOverlay.vue'
+import { groupSelectionsBySpan } from '#app/views/biosignal/eventChannels'
 import type { PlotSelection } from '#app/views/biosignal/types'
 import type { AnnotationEventTemplate, BiosignalAnnotationEvent } from "@epicurrents/core/types"
 import { type DragAction } from '#app/views/biosignal/useBiosignalPointer'
@@ -358,18 +359,23 @@ export default defineComponent({
                                        )[0][1]
             const undoEvents = [] as BiosignalAnnotationEvent[]
             if (this.plotSelections.length) {
-                for (const selection of this.plotSelections) {
+                // Selections on several channels over the same span are one event on all of them.
+                for (const group of groupSelectionsBySpan(this.plotSelections)) {
+                    const channels = [...new Set(group.selections.flatMap(
+                        sel => sel.channel ? [sel.channel.name] : []
+                    ))]
+                    const names = group.selections.map(sel => sel.channel ? sel.channel.name : 'global')
                     const newEvent = NcsEvent.fromTemplate({
                         annotator: '',
                         background: false,
-                        channels: selection.channel ? [selection.channel.name] : [],
+                        channels,
                         class: eventClass.name,
                         codes: eventClass.codes || [],
-                        duration: selection.range[1] - selection.range[0],
-                        id: `annotation_${Date.now()}_${selection.channel ? selection.channel.name : 'global'}`,
+                        duration: group.range[1] - group.range[0],
+                        id: `annotation_${Date.now()}_${names.join('_')}`,
                         label: props?.text || '',
                         priority: 1,
-                        start: selection.range[0],
+                        start: group.range[0],
                         text: '',
                         value: null,
                     } as AnnotationEventTemplate)

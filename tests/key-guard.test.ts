@@ -83,6 +83,25 @@ describe('keyEventOwnedByControl', () => {
         panel.appendChild(button)
         expect(press(panel, button)).toBe(true)
     })
+
+    it('gives a control marked with a list of keys those keys only', () => {
+        const panel = document.createElement('div')
+        panel.setAttribute(OWNS_KEYS_ATTRIBUTE, 'ArrowDown ArrowUp Space')
+        const button = document.createElement('button')
+        panel.appendChild(button)
+        expect(press(panel, button, 'ArrowUp')).toBe(true)
+        expect(press(panel, button, ' ')).toBe(true)
+        expect(press(panel, button, 'a')).toBe(false)
+        expect(press(panel, button, 'ArrowLeft')).toBe(false)
+    })
+
+    it('still gives a field inside a control with a list of keys all its typing', () => {
+        const panel = document.createElement('div')
+        panel.setAttribute(OWNS_KEYS_ATTRIBUTE, 'ArrowDown')
+        const field = input()
+        panel.appendChild(field)
+        expect(press(panel, field, 'a')).toBe(true)
+    })
 })
 
 describe('installKeyGuard', () => {

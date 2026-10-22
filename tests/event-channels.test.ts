@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest'
 import type { BiosignalMontage, BiosignalResource } from '@epicurrents/core/types'
-import { eventChannelNames, resolveEventChannelIndices } from '../src/app/views/biosignal/eventChannels'
+import { eventChannelNames, groupSelectionsBySpan, resolveEventChannelIndices } from '../src/app/views/biosignal/eventChannels'
 
 /** Source signals, by index: 0 Fp1, 1 F7, 2 Fp2, 3 F8. */
 const montage = (channels: { name: string, active: number, reference: number[] }[]) =>
@@ -88,5 +88,23 @@ describe('resolving a named event back to the active montage', () => {
     it('returns nothing for a general event', () => {
         expect(resolveEventChannelIndices(resource(BIPOLAR), [])).toEqual([])
         expect(resolveEventChannelIndices(resource(BIPOLAR), undefined)).toEqual([])
+    })
+})
+
+describe('selections grouped by span', () => {
+    const sel = (channel: string | null, start: number, end: number) => ({ channel, range: [start, end] })
+
+    it('makes one event of channel selections sharing start and end, and one of each other', () => {
+        const groups = groupSelectionsBySpan([
+            sel('fp1', 1, 2), sel('f7', 3, 4), sel('f3', 1, 2), sel('t7', 1, 2.5), sel(null, 1, 2), sel('c3', 3, 4),
+        ])
+        expect(groups.map(group => group.selections.map(selection => selection.channel))).toEqual([
+            ['fp1', 'f3'], ['f7', 'c3'], ['t7'], [null],
+        ])
+        expect(groups[0].range).toEqual([1, 2])
+    })
+
+    it('never merges selections on no channel', () => {
+        expect(groupSelectionsBySpan([sel(null, 1, 2), sel(null, 1, 2)]).length).toBe(2)
     })
 })

@@ -300,7 +300,7 @@ import ViewerOverlay, { type PointerEventOverlay } from '#app/overlays/PointerEv
 import WindowDialog from '#app/overlays/WindowDialog.vue'
 import AccAnalysisTools from './overlays/AccAnalysisTools.vue'
 import AccChannelProperties from './overlays/AccChannelProperties.vue'
-import { eventChannelNames } from '#app/views/biosignal/eventChannels'
+import { eventChannelNames, groupSelectionsBySpan } from '#app/views/biosignal/eventChannels'
 import type { default as WaSplitPanel } from '@awesome.me/webawesome/dist/components/split-panel/split-panel.js'
 
 const NAVIGATOR_MIN_HEIGHT = 75   // natural navigator strip height (px)
@@ -1042,18 +1042,23 @@ export default defineComponent({
             }
             const undoEvents = [] as BiosignalAnnotationEvent[]
             if (this.plotSelections.length) {
-                for (const selection of this.plotSelections) {
+                // Selections on several channels over the same span are one event on all of them.
+                for (const group of groupSelectionsBySpan(this.plotSelections)) {
+                    const channels = [...new Set(group.selections.flatMap(
+                        sel => eventChannelNames(this.RESOURCE.recordMontage, sel.channel)
+                    ))]
+                    const names = group.selections.map(sel => sel.channel ? sel.channel.name : 'global')
                     const newEvent = AccEvent.fromTemplate({
                         annotator: '',
                         background: false,
-                        channels: eventChannelNames(this.RESOURCE.recordMontage, selection.channel),
+                        channels,
                         class: eventClass.name,
                         codes: eventClass.codes || [],
-                        duration: selection.range[1] - selection.range[0],
-                        id: `annotation_${Date.now()}_${selection.channel ? selection.channel.name : 'global'}`,
+                        duration: group.range[1] - group.range[0],
+                        id: `annotation_${Date.now()}_${names.join('_')}`,
                         label: props?.text || '',
                         priority: 1,
-                        start: selection.range[0],
+                        start: group.range[0],
                         text: '',
                         value: null,
                     } as AnnotationEventTemplate)
@@ -1225,7 +1230,22 @@ export default defineComponent({
                         }
                     }
                 } else if (this.isHotkeyMatch('annotation', event)) {
-                    this.toggleSidebar('annotations')
+                    // Alone, the key annotates what is selected with the default class, and toggles the sidebar when
+                    // nothing is; a number pressed with it picks the class instead (above).
+                    if (!this.plotSelections.length) {
+                        this.toggleSidebar('annotations')
+                    } else if (this.RESOURCE.annotationsLocked) {
+                        Log.warn(
+                            [
+                                'Annotations are locked.',
+                                'No events or labels can be added to the recording.'
+                            ],
+                            this.$options.name!,
+                            { announce: true }
+                        )
+                    } else {
+                        this.createEvents()
+                    }
                     this.hotkeyEvents.annotation = false
                 } else if (this.isHotkeyMatch('examine', event)) {
                     this.analysisWindow.nr++

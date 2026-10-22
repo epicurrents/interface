@@ -16,7 +16,9 @@
 
 /**
  * The attribute marking an element whose key events are its own wherever they come from inside it, for a composite
- * control that holds buttons or tabs the rules below do not cover.
+ * control that holds buttons or tabs the rules below do not cover. Without a value the element owns every key; a value
+ * lists the `KeyboardEvent.key` values it owns, separated by spaces, and leaves the rest to the hotkeys. `Space` stands
+ * for the space bar, whose key value is a space.
  */
 export const OWNS_KEYS_ATTRIBUTE = 'data-owns-keys'
 
@@ -38,10 +40,10 @@ const OPEN_CONTROL_TAGS = new Set(['WA-DIALOG', 'WA-DROPDOWN', 'WA-SELECT'])
 const KEY_EVENTS = ['keydown', 'keypress', 'keyup'] as const
 
 /**
- * Does `event` belong to a control on its path rather than to the hotkeys: a field that takes typing, a native select,
- * an open WebAwesome select, menu or dialog, or an element marked with {@link OWNS_KEYS_ATTRIBUTE}. Escape never does,
- * so it still closes what the application closes on Escape wherever it is pressed. The path is read through shadow
- * roots, so a field inside a WebAwesome control is found.
+ * Whether `event` belongs to a control on its path rather than to the hotkeys: a field that takes typing, a native
+ * select, an open WebAwesome select, menu or dialog, or an element marked with {@link OWNS_KEYS_ATTRIBUTE}. Escape
+ * never does, so it still closes what the application closes on Escape wherever it is pressed. The path is read through
+ * shadow roots, so a field inside a WebAwesome control is found.
  * @param event - The key event.
  */
 export const keyEventOwnedByControl = (event: KeyboardEvent): boolean => {
@@ -52,7 +54,10 @@ export const keyEventOwnedByControl = (event: KeyboardEvent): boolean => {
         if (!(node instanceof Element)) {
             continue
         }
-        if (node.hasAttribute(OWNS_KEYS_ATTRIBUTE) || (node as HTMLElement).isContentEditable) {
+        if (node.hasAttribute(OWNS_KEYS_ATTRIBUTE) && ownsKey(node.getAttribute(OWNS_KEYS_ATTRIBUTE)!, event.key)) {
+            return true
+        }
+        if ((node as HTMLElement).isContentEditable) {
             return true
         }
         if (node.tagName === 'INPUT') {
@@ -71,6 +76,16 @@ export const keyEventOwnedByControl = (event: KeyboardEvent): boolean => {
         }
     }
     return false
+}
+
+/**
+ * Whether an element whose {@link OWNS_KEYS_ATTRIBUTE} has `value` owns `key`.
+ * @param value - The attribute's value.
+ * @param key - The event's key value.
+ */
+const ownsKey = (value: string, key: string) => {
+    const keys = value.trim().split(/\s+/).filter(owned => owned)
+    return !keys.length || keys.includes(key === ' ' ? 'Space' : key)
 }
 
 /**

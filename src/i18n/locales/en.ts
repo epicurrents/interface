@@ -39,6 +39,7 @@ const messagesEN = {
     'Negative maximum near {electrode}': 'Negative maximum near {electrode}',
     'Number {n}': 'Number {n}',
     'Peak at {t} ms': 'Peak at {t} ms',
+    'Remove {property}': 'Remove {property}',
     'Samples are clipped to {min} … {max} {unit} with {resolution} {unit} resolution.': 'Samples are clipped to {min} … {max} {unit} with {resolution} {unit} resolution.',
     'Send to {label}': 'Send to {label}',
     'Setting up montage {current} of {total}': 'Setting up montage {current} of {total}',

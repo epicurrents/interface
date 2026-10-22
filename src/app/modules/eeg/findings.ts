@@ -24,10 +24,14 @@ export type FindingGroup = {
 
 /** A term the picker offers, with the name it is shown by. */
 export type OfferedFinding = {
+    /** The abbreviation the term was found by, when it was found by one. */
+    abbreviation?: string
     /** Index branch the term sits under. */
     branch: string
     /** Readable name: the tag with its hyphens as spaces. */
     label: string
+    /** Properties the abbreviation stands for with the term, such as the frontal rhythm of `FIRDA`. */
+    properties?: string[]
     term: HedScoreTerm
 }
 

@@ -166,3 +166,31 @@ export function resolveEventChannelIndices (
     })
     return matched
 }
+
+/**
+ * Group selections into the events they create: selections on channels that share both their start and their end
+ * make one event on all of those channels, and every other selection makes one of its own. A selection on no channel
+ * is a general event and is never merged. Groups come in the order of their first selection.
+ *
+ * The spans are compared exactly. A selection copied onto another channel copies its range, so equal spans are
+ * equal numbers; two spans drawn by hand to look alike are two events.
+ * @param selections - The plot selections.
+ */
+export function groupSelectionsBySpan<T extends { channel: unknown | null, range: number[] }> (selections: T[]) {
+    const groups = [] as { range: number[], selections: T[] }[]
+    const bySpan = new Map<string, { range: number[], selections: T[] }>()
+    for (const selection of selections) {
+        const key = `${selection.range[0]}|${selection.range[1]}`
+        const group = selection.channel ? bySpan.get(key) : undefined
+        if (group) {
+            group.selections.push(selection)
+            continue
+        }
+        const created = { range: selection.range, selections: [selection] }
+        groups.push(created)
+        if (selection.channel) {
+            bySpan.set(key, created)
+        }
+    }
+    return groups
+}

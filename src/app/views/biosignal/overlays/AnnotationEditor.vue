@@ -33,6 +33,7 @@
             <!-- Before the save button in the tab order, after it on screen: a row of its own below. -->
             <div v-if="$slots.codes" class="codes">
                 <slot name="codes"
+                    :annotation="annotation"
                     :codes="annotationCodes"
                     :disabled="isLocked"
                     :focusSave="focusSave"
@@ -59,10 +60,13 @@
 /**
  * Editor overlay for an annotation's text and class, shared by the biosignal viewers.
  *
- * A viewer that codes annotations in a standard puts its own control in the `codes` slot, which receives the codes
- * being edited, `setCode(standard, value)` to change one, whether the annotation is locked, and `focusSave()` to hand
- * focus to the save button once a code is chosen. The editor saves the
- * codes with the text and class, so the slot's control needs no save path of its own.
+ * A viewer that codes annotations in a standard puts its own control in the `codes` slot, which receives the
+ * annotation, the codes being edited, `setCode(standard, value)` to change one, whether the annotation is locked, and
+ * `focusSave()` to hand focus to the save button once a code is chosen. The editor saves the codes with the text and
+ * class, so the slot's control needs no save path of its own.
+ *
+ * Edits left unsaved when the editor closes are kept as a draft and restored when it next opens on the same
+ * annotation; opening it on another drops them ({@link keepAnnotationDraft}).
  */
 import { Ref, defineComponent, ref } from "vue"
 import { T } from "#i18n"
@@ -71,9 +75,28 @@ import { Annotation } from "@epicurrents/core/types"
 import { useStore } from "vuex"
 import { useBiosignalContext } from "#config"
 import { eventDisplayName } from "#app/views/biosignal/eventNames"
+import {
+    type AnnotationDraft,
+    clearAnnotationDraft,
+    keepAnnotationDraft,
+    takeAnnotationDraft,
+} from "#app/views/biosignal/annotationDraft"
 import { PropType } from "vue"
 import type { default as WaInput } from "@awesome.me/webawesome/dist/components/input/input.js"
 import type { default as WaButton } from "@awesome.me/webawesome/dist/components/button/button.js"
+
+/**
+ * What `annotation` holds of what the editor edits.
+ * @param annotation - The annotation.
+ */
+function storedValues (annotation: Annotation): AnnotationDraft {
+    return {
+        class: annotation.class,
+        // An event created from a class template may carry its codes as an empty array.
+        codes: Array.isArray(annotation.codes) ? {} : { ...annotation.codes },
+        label: annotation.label,
+    }
+}
 
 export default defineComponent({
     name: 'EegAnnotationEditor',
@@ -94,6 +117,7 @@ export default defineComponent({
         const annotationLabel = ref('')
         const closeTimeout = ref(0)
         const input = ref<WaInput>() as Ref<WaInput>
+        const saved = ref(false)
         const savebtn = ref<WaButton>() as Ref<WaButton>
         return {
             annotationClass,
@@ -101,9 +125,19 @@ export default defineComponent({
             annotationLabel,
             closeTimeout,
             input,
+            saved,
             savebtn,
             ...useBiosignalContext(store),
         }
+    },
+    watch: {
+        annotation (next: Annotation, prev: Annotation) {
+            // The editor stays open when another annotation takes its place, so the first one's edits are kept here.
+            if (next.id !== prev.id) {
+                this.keepDraft(prev)
+                this.loadAnnotation(next)
+            }
+        },
     },
     computed: {
         isLocked (): boolean {
@@ -175,14 +209,40 @@ export default defineComponent({
                 this.input.focus()
             }
         },
+        /**
+         * Keep the unsaved edits of `annotation` as a draft, unless they were saved.
+         * @param annotation - The annotation the editor was open on.
+         */
+        keepDraft (annotation: Annotation) {
+            if (this.saved || (this.action === 'edit' && annotation.locked)) {
+                return
+            }
+            keepAnnotationDraft(
+                annotation.id,
+                { class: this.annotationClass, codes: this.annotationCodes, label: this.annotationLabel },
+                storedValues(annotation),
+            )
+        },
+        /**
+         * Show `annotation`, with its draft when one is kept for it.
+         * @param annotation - The annotation to edit.
+         */
+        loadAnnotation (annotation: Annotation) {
+            const values = takeAnnotationDraft(annotation.id) ?? storedValues(annotation)
+            this.annotationClass = values.class
+            this.annotationCodes = values.codes
+            this.annotationLabel = values.label
+            this.saved = false
+        },
         lostFocus () {
-            return
             // Not the most elegant solution, but it handles accessibility nicely.
             this.closeTimeout = window.setTimeout(() => {
                 this.$emit('exit')
             }, 100)
         },
         save () {
+            this.saved = true
+            clearAnnotationDraft()
             this.$emit('save', {
                 class: this.annotationClass,
                 codes: { ...this.annotationCodes },
@@ -211,15 +271,15 @@ export default defineComponent({
         }
     },
     beforeMount () {
-        this.annotationClass = this.annotation.class
-        // An event created from a class template may carry its codes as an empty array.
-        this.annotationCodes = Array.isArray(this.annotation.codes) ? {} : { ...this.annotation.codes }
-        this.annotationLabel = this.annotation.label
+        this.loadAnnotation(this.annotation)
         // Add component styles to shadow root
         this.$store.dispatch(
             'add-component-styles',
             { component: this.$options.name, styles: this.$options.__scopeId }
         )
+    },
+    beforeUnmount () {
+        this.keepDraft(this.annotation)
     },
     mounted () {
         this.input?.updateComplete.then(() => {
@@ -258,6 +318,9 @@ export default defineComponent({
         outline: none;
     }
     .editor .icon {
+        /* The width a viewer's code control indents its own rows by, so their fields line up with this one. */
+        flex: 0 0 1.25rem;
+        width: 1.25rem;
         font-size: 1rem;
         margin: auto 0.5rem auto 0.25rem;
         color: var(--epicv-icon-default);

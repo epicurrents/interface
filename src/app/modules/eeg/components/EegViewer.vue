@@ -136,11 +136,14 @@
                                 v-on:exit="exitEventEditor"
                                 v-on:save="saveEventEdits"
                             >
-                                <template #codes="{ codes, disabled, focusSave, setCode }">
+                                <template #codes="{ annotation, codes, disabled, focusSave, setCode }">
                                     <finding-picker
+                                        :available-sensors="recordingSensors"
                                         :code="findingCode(codes)"
                                         :disabled="disabled"
                                         :focus-next="focusSave"
+                                        :measured-frequency="findingFrequency(annotation)"
+                                        :sensors="findingSensors(annotation)"
                                         @change="setFindingCode(setCode, $event)"
                                     ></finding-picker>
                                 </template>
@@ -316,6 +319,9 @@ import { EegEvent, HED_STANDARD } from '@epicurrents/eeg-module'
 import type { PlotSelection } from '#app/views/biosignal/types'
 import { registerCodeNamer } from '#app/views/biosignal/eventNames'
 import { hedFindingName } from '../findings'
+import { canonicalElectrode } from '../findingProperties'
+import CANONICAL_ELECTRODES from '../canonical-electrodes.json'
+import { frequencyMeasurementWithin } from '#app/views/biosignal/measurements'
 
 // A coded finding names its event when the reader types no label.
 registerCodeNamer(HED_STANDARD, hedFindingName)
@@ -348,7 +354,7 @@ import TimescaleGrid from '#app/views/biosignal/overlays/TimescaleGrid.vue'
 import VerticalCursors from '#app/views/biosignal/overlays/VerticalCursors.vue'
 import ViewerOverlay, { type PointerEventOverlay } from '#app/overlays/PointerEventOverlay.vue'
 import WindowDialog from '#app/overlays/WindowDialog.vue'
-import { eventChannelNames } from '#app/views/biosignal/eventChannels'
+import { eventChannelNames, groupSelectionsBySpan } from '#app/views/biosignal/eventChannels'
 import type { default as WaSplitPanel } from '@awesome.me/webawesome/dist/components/split-panel/split-panel.js'
 import { SchemaManager } from '#root/src/components/report'
 
@@ -783,6 +789,20 @@ export default defineComponent({
             // Require at least 5 mm (~0.2 inches) of pointer movement to register a drag event
             return this.$store.state.INTERFACE.app.screenPPI/5
         },
+        /**
+         * The canonical labels of the scalp electrodes the recording has, in the standard's order: the locations a
+         * finding can be given.
+         */
+        recordingSensors (): string[] {
+            const present = new Set<string>()
+            for (const channel of this.RESOURCE.recordMontage?.channels ?? []) {
+                const label = canonicalElectrode(channel?.label ?? '') ?? canonicalElectrode(channel?.name ?? '')
+                if (label) {
+                    present.add(label)
+                }
+            }
+            return CANONICAL_ELECTRODES.electrodes.filter(label => present.has(label))
+        },
         sidebarTabs (): string[] {
             return this.RESOURCE.annotationsLocked
                 ? ['events']
@@ -1015,18 +1035,23 @@ export default defineComponent({
             }
             const undoEvents = [] as BiosignalAnnotationEvent[]
             if (this.plotSelections.length) {
-                for (const selection of this.plotSelections) {
+                // Selections on several channels over the same span are one event on all of them.
+                for (const group of groupSelectionsBySpan(this.plotSelections)) {
+                    const channels = [...new Set(group.selections.flatMap(
+                        sel => eventChannelNames(this.RESOURCE.recordMontage, sel.channel)
+                    ))]
+                    const names = group.selections.map(sel => sel.channel ? sel.channel.name : 'global')
                     const newEvent = EegEvent.fromTemplate({
                         annotator: '',
                         background: false,
-                        channels: eventChannelNames(this.RESOURCE.recordMontage, selection.channel),
+                        channels,
                         class: eventClass.name,
                         codes: eventClass.codes || [],
-                        duration: selection.range[1] - selection.range[0],
-                        id: `annotation_${Date.now()}_${selection.channel ? selection.channel.name : 'global'}`,
+                        duration: group.range[1] - group.range[0],
+                        id: `annotation_${Date.now()}_${names.join('_')}`,
                         label: props?.text || '',
                         priority: 1,
-                        start: selection.range[0],
+                        start: group.range[0],
                         text: '',
                         value: null,
                     } as AnnotationEventTemplate)
@@ -1094,6 +1119,33 @@ export default defineComponent({
         findingCode (codes: Record<string, number | string>) {
             const code = codes[HED_STANDARD]
             return code === undefined ? '' : String(code)
+        },
+        /**
+         * The latest frequency measured within an annotation's span, which a picked finding takes as its frequency.
+         * @param annotation - The annotation being edited.
+         */
+        findingFrequency (annotation: BiosignalAnnotationEvent) {
+            return frequencyMeasurementWithin(annotation.start, annotation.start + annotation.duration)
+        },
+        /**
+         * The canonical labels of the electrodes an annotation is drawn on, which a picked finding takes as its
+         * location. A channel that is no scalp electrode, or whose label is not a standard one, is left out.
+         * @param annotation - The annotation being edited.
+         */
+        findingSensors (annotation: BiosignalAnnotationEvent) {
+            const recordChannels = this.RESOURCE.recordMontage?.channels ?? []
+            const sensors = [] as string[]
+            for (const reference of annotation.channels ?? []) {
+                const channel = typeof reference === 'number'
+                    ? recordChannels[reference]
+                    : recordChannels.find(chan => chan?.name?.toLowerCase() === reference.toLowerCase())
+                const label = canonicalElectrode(channel?.label ?? '')
+                              ?? canonicalElectrode(String(channel?.name ?? reference))
+                if (label && !sensors.includes(label)) {
+                    sensors.push(label)
+                }
+            }
+            return sensors
         },
         getHighlightProperties (channel: BiosignalChannel, range: number[]) {
             const overlayW = this.overlay.getOffsetWidth()
@@ -1229,7 +1281,22 @@ export default defineComponent({
                     this.toggleReport()
                     this.hotkeyEvents.annotation = false
                 } else if (this.isHotkeyMatch('annotation', event)) {
-                    this.toggleSidebar('annotations')
+                    // Alone, the key annotates what is selected with the default class, and toggles the sidebar when
+                    // nothing is; a number pressed with it picks the class instead (above).
+                    if (!this.plotSelections.length) {
+                        this.toggleSidebar('annotations')
+                    } else if (this.RESOURCE.annotationsLocked) {
+                        Log.warn(
+                            [
+                                'Annotations are locked.',
+                                'No events or labels can be added to the recording.'
+                            ],
+                            this.$options.name!,
+                            { announce: true }
+                        )
+                    } else {
+                        this.createEvents()
+                    }
                     this.hotkeyEvents.annotation = false
                 } else if (this.isHotkeyMatch('examine', event)) {
                     this.analysisWindow.nr++

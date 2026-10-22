@@ -167,6 +167,7 @@ import { PlotTraceSelection, SignalPoI } from "#types/plot"
 import { useBiosignalContext } from "#config"
 import { NO_POINTER_BUTTON_DOWN, resolveDisplayPolarity } from "#util"
 import { useStore } from "vuex"
+import { recordFrequencyMeasurement } from "#app/views/biosignal/measurements"
 
 type SignalProperties = {
     baseline: number
@@ -253,6 +254,13 @@ export default defineComponent({
                 this.svg.style.cursor = 'pointer'
             } else {
                 this.updateSvgCursorStyle()
+            }
+        },
+        markerFrequency (frequency: { mean: number, min: number, max: number } | null) {
+            // Kept for an annotation later made over this selection, which can then take the frequency as measured.
+            const range = this.activeSelection?.range
+            if (frequency && range?.length === 2) {
+                recordFrequencyMeasurement({ ...frequency, range: [range[0], range[1]] })
             }
         },
         selected (value: number) {
