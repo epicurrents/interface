@@ -932,6 +932,9 @@ export default defineComponent({
         },
         /** Take the event out of its finding group; the rest of the group stays as it is. */
         leaveGroup () {
+            // The button goes with the group, and the focus it holds would fall to the document, which the editor
+            // takes for the user leaving it. The clear button stays, so the focus moves there first.
+            this.clearbtn?.focus()
             this.keptGroup = null
             this.update(code => {
                 delete code.group
