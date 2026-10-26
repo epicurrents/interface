@@ -174,11 +174,15 @@
                                 :viewerHeight="viewerSize[1]"
                                 v-on:close="closeChannelMenu"
                             />
-                            <window-dialog v-if="overlay && analysisWindow.open && plotSelections.length"
-                                :key="`eeg-tools-window-${analysisWindow.nr}`"
+                            <detached-window v-if="overlay && analysisWindow.open && plotSelections.length"
+                                :close-label="$t('Close')"
+                                :context-class="windowContextClass"
+                                :detach-label="$t('Open in a separate window')"
                                 :height="analysisWindow.height"
                                 :left="analysisWindow.left"
+                                name="eeg-analysis-tools"
                                 :open="true"
+                                :return-label="$t('Return to the page')"
                                 title="Signal properties"
                                 :top="analysisWindow.top"
                                 :width="analysisWindow.width"
@@ -186,7 +190,7 @@
                                 v-on:update:left="analysisWindow.left = $event"
                                 v-on:update:top="analysisWindow.top = $event"
                             >
-                                <eeg-analysis-tools
+                                <eeg-analysis-tools :key="`eeg-tools-${analysisWindow.nr}`"
                                     :cmPerSec="cmPerSec"
                                     :cursorPos="cursors?.mainCursorPos || 0"
                                     :selectedIdx="selectedIndex"
@@ -195,26 +199,33 @@
                                     :viewRange="viewRange"
                                     v-on:set-cursor-pos="cursors.setCursorPos"
                                 />
-                            </window-dialog>
-                            <window-dialog v-if="overlay && reportWindow.category && reportWindow.open"
-                                :key="`eeg-report-window-${reportWindow.nr}`"
+                            </detached-window>
+                            <detached-window v-if="overlay && reportWindow.category && reportWindow.open"
+                                :close-label="$t('Close')"
+                                :context-class="windowContextClass"
+                                :detach-label="$t('Open in a separate window')"
                                 :height="reportWindow.height"
                                 :left="reportWindow.left"
+                                name="eeg-report"
                                 :open="true"
+                                resizable
+                                :return-label="$t('Return to the page')"
                                 title="Report"
                                 :top="reportWindow.top"
                                 :width="reportWindow.width"
                                 v-on:close="toggleReport(false)"
+                                v-on:update:height="reportWindow.height = $event"
                                 v-on:update:left="reportWindow.left = $event"
                                 v-on:update:top="reportWindow.top = $event"
+                                v-on:update:width="reportWindow.width = $event"
                             >
-                                <dynamic-report-form
+                                <dynamic-report-form :key="`eeg-report-${reportWindow.nr}`"
                                     :allow-freetext="false"
                                     :category="reportWindow.category"
                                     :manager="reportSchemaManager"
                                     :tab="reportWindow.tab"
                                 />
-                            </window-dialog>
+                            </detached-window>
                             <div v-if="!montageSetupDone && RESOURCE.state !== 'error'"
                                 class="setup"
                             >
@@ -362,6 +373,7 @@ const trendVisibilityByResource = new Map<string, boolean>()
 import type { SignalHighlight } from '#types/plot'
 
 // Child components
+import { appContextClass } from '#app/appContextClass'
 import AnnotationLabels from '#app/views/biosignal/overlays/AnnotationLabels.vue'
 import AnnotationEditor from '#app/views/biosignal/overlays/AnnotationEditor.vue'
 import AnnotationSidebar from '#app/views/biosignal/sidebars/AnnotationSidebar.vue'
@@ -370,6 +382,7 @@ import CascadeOverlay from '#app/views/biosignal/overlays/CascadeOverlay.vue'
 import CascadeSelections from '#app/views/biosignal/overlays/CascadeSelections.vue'
 import ChannelHighlights from '#app/views/biosignal/overlays/ChannelHighlights.vue'
 import ContextMenu from '#app/views/biosignal/overlays/ContextMenu.vue'
+import DetachedWindow from '#app/windows/DetachedWindow.vue'
 import DynamicReportForm from '#components/report/components/DynamicReportForm.vue'
 import EegAnalysisTools from './overlays/EegAnalysisTools.vue'
 import EegChannelProperties from './overlays/EegChannelProperties.vue'
@@ -382,7 +395,6 @@ import SplitPanelView from '#root/src/app/views/SplitPanelView.vue'
 import TimescaleGrid from '#app/views/biosignal/overlays/TimescaleGrid.vue'
 import VerticalCursors from '#app/views/biosignal/overlays/VerticalCursors.vue'
 import ViewerOverlay, { type PointerEventOverlay } from '#app/overlays/PointerEventOverlay.vue'
-import WindowDialog from '#app/overlays/WindowDialog.vue'
 import { eventChannelNames, groupSelectionsBySpan } from '#app/views/biosignal/eventChannels'
 import type { default as WaSplitPanel } from '@awesome.me/webawesome/dist/components/split-panel/split-panel.js'
 import { SchemaManager } from '#root/src/components/report'
@@ -426,6 +438,7 @@ export default defineComponent({
         CascadeSelections,
         ChannelHighlights,
         ContextMenu,
+        DetachedWindow,
         DynamicReportForm,
         EegAnalysisTools,
         EegChannelProperties,
@@ -438,7 +451,6 @@ export default defineComponent({
         TimescaleGrid,
         VerticalCursors,
         ViewerOverlay,
-        WindowDialog,
     },
     setup (props) {
         const store = useStore()
@@ -520,7 +532,7 @@ export default defineComponent({
         const reportSchemaManager = new SchemaManager()
         const reportWindow = reactive({
             category: null as string | null,
-            height: window.innerHeight*0.9,
+            height: window.innerHeight*0.85,
             left: window.innerWidth / 2 - 400,
             /** Update the number each time the analysis window is opened to discard any cached data. */
             nr: 0,
@@ -918,6 +930,10 @@ export default defineComponent({
          *  the trend takes the rest. */
         actualNavigatorHeight (): number {
             return this.effectiveTrendVisible ? NAVIGATOR_MIN_HEIGHT : this.navigatorHeight
+        },
+        /** The application root's classes, which the content of a detached window keeps. */
+        windowContextClass (): string[] {
+            return appContextClass(this.$store.state.APP.view)
         },
     },
     methods: {

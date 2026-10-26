@@ -22,14 +22,15 @@ export function useBiosignalAnalysis (
     scope: string,
 ) {
     const analysisWindow = reactive({
-        height: 600,
+        /** Height of the window's content area, which the tools' fixed layout fills. */
+        height: 525,
         left: window.innerWidth / 2 - 350,
         /** Incremented each time the window opens to discard any cached data. */
         nr: 0,
         open: false,
         tab: 'fft',
         top: window.innerHeight / 2 - 300,
-        width: 700,
+        width: 670,
     })
 
     function closeAnalysisWindow () {

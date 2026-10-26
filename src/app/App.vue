@@ -35,9 +35,7 @@
     <div v-if="browserValid"
         ref="app"
         :class="[
-            'epicv-app',
-            applicationTheme,
-            `wa-${$store.state.APP.view.theme || $store.state.APP.view.defaultTheme}`,
+            ...appClass,
             { 'epicv-hidden': loading },
         ]"
         @pointerleave="pointerLeftApp"
@@ -246,6 +244,7 @@ type StudyContext = {
 }
 
 // Child components
+import { appContextClass } from '#app/appContextClass'
 import AppIcon from '#app/AppIcon.vue'
 import AppInstructions from '#app/AppInstructions.vue'
 import AppMenubar from '#app/AppMenubar.vue'
@@ -368,6 +367,9 @@ export default defineComponent({
         }
     },
     computed: {
+        appClass (): string[] {
+            return appContextClass(this.$store.state.APP.view)
+        },
         applicationTheme (): string {
             return `epicv-${this.$store.state.APP.view.theme || this.$store.state.APP.view.defaultTheme}-theme`
         },

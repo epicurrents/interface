@@ -35,6 +35,8 @@ createEpicurrentsApp(config, async ({ app, registerInterfaceModule }: SetupConte
 
 Per-modality UI is exposed as subpath exports (`@epicurrents/interface/modules/<name>`) so a consumer's bundler pulls in only what it imports. The all-in reference setup that wires every module together is `src/setups/full.example.ts`, which the standalone dev and app builds use.
 
+The detachable window the viewer shows its analysis tools in is exported as `@epicurrents/interface/window`, so a host page can show its own panels in the same window: `DetachedWindow`, and `getWindowHost` beneath it. There is one such window per document, whichever application opens it, and opening one closes the other. [AGENTS.md → The detachable window](AGENTS.md#the-detachable-window) has the contract.
+
 ### Types
 
 Each subpath ships declarations, so a consumer can name `SetupContext`, `ApplicationInterfaceConfig`, `LeadFieldProvider` and the rest without reaching into a file path. They are emitted by [scripts/build-types.mjs](scripts/build-types.mjs) as part of `npm run build`, and two things about that are worth knowing before changing it.

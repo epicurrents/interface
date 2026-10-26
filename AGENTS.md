@@ -30,7 +30,8 @@ src/
       radiology/          # RadiologyInterface (OHIF wrapper)
       default/            # DefaultInterface fallback
     navigator/            # DatasetNavigator, DatasetSelector
-    overlays/             # ConnectorDialog, DatasetDialog, WelcomeDialog, WindowDialog, etc.
+    overlays/             # ConnectorDialog, DatasetDialog, WelcomeDialog, etc.
+    windows/              # DetachedWindow and the document's window host (the `./window` subpath)
     settings/             # SettingsDialog + individual control components
     footers/              # AppFooter, SystemFooter, FooterMenu
     controls/             # ButtonControl, DropdownControl, OnOffControl (toolbar)
@@ -165,7 +166,7 @@ App.vue
   - **Inner** (horizontal split): plot+overlays (left) + annotation sidebar (right)
 - Tracks: `visibleRange`, `viewRange`, `secPerPage`, `pxPerSecond`, `plotDimensions`
 - `useEegContext(store)` provides reactive access to `RESOURCE`, `SETTINGS`, `MONTAGE` from the EEG module's Vuex context
-- Analysis windows (`EegAnalysisTools`) are floating `WindowDialog` components opened on signal selection (right-click drag)
+- The analysis tools (`EegAnalysisTools`), opened on signal selection (right-click drag), and the report are shown in a `DetachedWindow` (see [The detachable window](#the-detachable-window))
 
 ### `EegPlot.vue` — Signal → WebGL rendering
 
@@ -556,6 +557,24 @@ outer (orientation=vertical, primary-slot=end)
 - Trend on: `['75px', '40%']` (allow room for the trend strip)
 
 ---
+
+## The detachable window
+
+[src/app/windows/](src/app/windows/) holds the window that the viewer and its host page both open their floating panels in, published as the `./window` subpath. `DetachedWindow` teleports its slot into the window while `open` is set. With `inline` the content is shown in place while the window is closed and moves in and out without remounting, so its state survives; without it the content exists only while the window is open. `width` and `height` are the content area's, inside the window's padding, so a window is the same size around its content in the page and in Picture-in-Picture. `resizable` is off by default: a fixed layout keeps its size, and in Picture-in-Picture, which the user can always resize, stays centred at it.
+
+**One window per document.** The host, `getWindowHost` in [windowHost.ts](src/app/windows/windowHost.ts), is kept on `globalThis` under `Symbol.for('epicurrents.window-host')` and installed by the first bundle that asks, because the viewer and its host page are separate bundles with separate Vue applications that would otherwise each hold a slot of their own. Opening a window first closes the open one through its owner's `close`, whichever application owns it. This is also why the component uses no store and only relative imports: the platform SPA compiles it from source, where a `#` specifier resolves into the SPA's own tree.
+
+**Picture-in-Picture, or a window over the page.** Document Picture-in-Picture is used where the browser offers it and the request comes within a user activation, which in practice means Chromium; otherwise the window is a non-modal frame over the content's own root, inside the viewer's shadow root for viewer content so the viewer's styles still reach it. Either way the content leaves its ancestors behind, so `context-class` puts their classes on an element around it that generates no box (`display: contents`): descendant rules and inherited values reach the content, while a rule styling the class's own element, as `.epicv-app` lays out the application root as a grid, has no box to act on; viewer content passes `appContextClass(view)` from [appContextClass.ts](src/app/appContextClass.ts), the classes of the application root. While a Picture-in-Picture window is open the page's stylesheets, those of the content's root and the document element's class are mirrored into it, the viewer's shadow-root style element included as it is rewritten. It works under cross-origin isolation.
+
+**Switching and remembering.** The in-page window carries a detach button where Picture-in-Picture is offered, and a Picture-in-Picture window a return button in its top-right corner; Chrome's own return button is hidden with `disallowReturnToOpener`, because the page cannot tell it from the window's close button and both would close. A switch opens the other window first and hands its handle to the request's `onMoveTo`, which moves the content straight across before the old window is removed, so the content never unmounts. A window opens the way the user last switched it, kept in `localStorage` under its `name`, and one without a choice of its own follows the last switch made in any window. The corner button covers the top right of the body, and the window publishes its width to the content as `--epicurrents-window-actions-width`; content that puts something there, like the analysis tools' legend, keeps clear by that much.
+
+Three things fail silently once content is in another document, and each is handled here rather than left to the content:
+
+- **Constructed stylesheets.** Chromium clears a shadow root's `adoptedStyleSheets` when its element moves to another document and refuses sheets constructed by another document, so a Web Awesome component moved in renders unstyled, one created there renders empty, and one moved back stays unstyled. [styleBridge.ts](src/app/windows/styleBridge.ts) patches the setter once so sheets are applied as copies built by the shadow root's own window, and re-applies the remembered sheets after a move. `DetachedWindow` calls the host's `prepareMove` and `finishMove` around every teleport; anything else that moves a styled subtree between documents has to do the same.
+- **`instanceof`.** The Picture-in-Picture document is another realm, so its nodes fail `instanceof` against this window's classes. The window code tells nodes apart by `nodeType` and `localName`.
+- **Window listeners.** Key and pointer events in the Picture-in-Picture window never reach the main `window`. Content that listens on the window listens on its own element's `ownerDocument.defaultView`, as [SignalCursorTool.vue](src/app/modules/eeg/components/tools/SignalCursorTool.vue) does. The viewer's own hotkeys do not fire while the window has focus.
+
+jsdom has neither Picture-in-Picture nor constructed stylesheets, so the tests stand an iframe's window in for the one `requestWindow` returns and give each window a stand-in sheet class: [window-host.test.ts](tests/window-host.test.ts), [style-bridge.test.ts](tests/style-bridge.test.ts) and [detached-window.test.ts](tests/detached-window.test.ts).
 
 ## Gotchas
 

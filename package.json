@@ -49,6 +49,11 @@
       "import": "./dist/modules/pdf.js",
       "default": "./dist/modules/pdf.js"
     },
+    "./window": {
+      "types": "./dist/app/windows/index.d.ts",
+      "import": "./dist/window.js",
+      "default": "./dist/window.js"
+    },
     "./style.css": "./dist/style.css",
     "./types": "./dist/types/index.d.ts",
     "./package.json": "./package.json",

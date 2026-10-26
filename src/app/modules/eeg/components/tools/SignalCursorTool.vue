@@ -62,7 +62,7 @@
 /**
  * Tool for basig signal selection properties.
  */
-import { defineComponent, reactive, ref, Ref, PropType } from "vue"
+import { defineComponent, reactive, ref, Ref, PropType, shallowRef } from "vue"
 import { T } from "#i18n"
 import { settingsColorToRgba, settingsDashArrayToSvgStrokeDasharray } from "@epicurrents/core/util"
 import type { PlotTraceSelection } from "#types/plot"
@@ -135,6 +135,8 @@ export default defineComponent({
         const activeSelection = props.data[props.selected] as PlotTraceSelection
         const cursorX = ref(NUMERIC_ERROR_VALUE)
         const dragging = ref(false)
+        /** The window the key listener is on: that of the document the tool is shown in. */
+        const keyTarget = shallowRef<Window | null>(null)
         const pointerButton = ref(NO_POINTER_BUTTON_DOWN)
         const pointerEventHandlers = reactive({
             drag: []
@@ -148,6 +150,7 @@ export default defineComponent({
             activeSelection,
             cursorX,
             dragging,
+            keyTarget,
             pointerButton,
             pointerEventHandlers,
             overlay,
@@ -427,14 +430,16 @@ export default defineComponent({
             'add-component-styles',
             { component: this.$options.name, styles: this.$options.__scopeId }
         )
-        // Capture event to allow for preventing triggering additional effects in the viewer component.
-        window.addEventListener('keydown', this.handleKeydown, true)
     },
     mounted () {
+        // The tool may be shown in a detached window, whose key events never reach the main window.
+        this.keyTarget = this.wrapper.ownerDocument.defaultView ?? window
+        // Capture event to allow for preventing triggering additional effects in the viewer component.
+        this.keyTarget.addEventListener('keydown', this.handleKeydown, true)
         this.resize()
     },
     beforeUnmount () {
-        window.removeEventListener('keydown', this.handleKeydown, true)
+        this.keyTarget?.removeEventListener('keydown', this.handleKeydown, true)
     },
 })
 </script>

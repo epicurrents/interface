@@ -429,8 +429,9 @@ export default defineComponent({
         }
     .legend {
         position: absolute;
-        top: 0.25rem;
-        right: 0;
+        top: 0;
+        /* Clear of the detached window's corner button, where it has one. */
+        right: var(--epicurrents-window-actions-width, 0);
         height: 2rem;
         margin-left: 1rem;
         font-size: 0.9rem;

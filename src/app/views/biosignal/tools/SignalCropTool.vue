@@ -326,12 +326,7 @@ export default defineComponent({
                     const up = () => {
                         this.dragging = false
                     }
-                    const dialogEl = document
-                        .querySelector('[data-component="window-dialog"]')
-                        ?.shadowRoot?.querySelector('.dialog') as HTMLElement | null
-                    this.overlay.trackPointer(event, { move, up },
-                        ...(dialogEl ? [dialogEl] : [])
-                    )
+                    this.overlay.trackPointer(event, { move, up })
                     return
                 }
             }

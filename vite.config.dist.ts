@@ -58,6 +58,8 @@ export default defineConfig({
                 'modules/doc': fileURLToPath(new URL('./src/app/modules/doc/index.ts', import.meta.url)),
                 'modules/emg': fileURLToPath(new URL('./src/app/modules/emg/index.ts', import.meta.url)),
                 'modules/pdf': fileURLToPath(new URL('./src/app/modules/pdf/index.ts', import.meta.url)),
+                // The detachable window — './window'.
+                'window': fileURLToPath(new URL('./src/app/windows/index.ts', import.meta.url)),
             },
             external: (id) => {
                 // Bundle internal code: relative paths, path aliases (#…, @/…) and

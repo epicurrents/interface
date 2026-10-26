@@ -132,11 +132,15 @@
                                 :viewerHeight="viewerSize[1]"
                                 v-on:close="closeChannelMenu"
                             />
-                            <window-dialog v-if="overlay && analysisWindow.open && plotSelections.length"
-                                :key="`acc-tools-window-${analysisWindow.nr}`"
+                            <detached-window v-if="overlay && analysisWindow.open && plotSelections.length"
+                                :close-label="$t('Close')"
+                                :context-class="windowContextClass"
+                                :detach-label="$t('Open in a separate window')"
                                 :height="analysisWindow.height"
                                 :left="analysisWindow.left"
+                                name="acc-analysis-tools"
                                 :open="true"
+                                :return-label="$t('Return to the page')"
                                 title="Signal properties"
                                 :top="analysisWindow.top"
                                 :width="analysisWindow.width"
@@ -144,14 +148,14 @@
                                 v-on:update:left="analysisWindow.left = $event"
                                 v-on:update:top="analysisWindow.top = $event"
                             >
-                                <acc-analysis-tools
+                                <acc-analysis-tools :key="`acc-tools-${analysisWindow.nr}`"
                                     :cmPerSec="0"
                                     :cursorPos="cursors?.mainCursorPos || 0"
                                     :selectedIdx="selectedIndex"
                                     :selections="plotSelections"
                                     :tab="analysisWindow.tab"
                                 />
-                            </window-dialog>
+                            </detached-window>
                             <context-menu v-if="contextMenu"
                                 :context="contextMenu"
                                 :selectionBound="selectionBound"
@@ -282,6 +286,7 @@ import type { SignalHighlight } from '#types/plot'
 import { AccEvent } from '@epicurrents/acc-module'
 
 // Child components
+import { appContextClass } from '#app/appContextClass'
 import AccNavigator from './AccNavigator.vue'
 import AccPlot from './AccPlot.vue'
 import AnnotationLabels from '#app/views/biosignal/overlays/AnnotationLabels.vue'
@@ -292,12 +297,12 @@ import CascadeOverlay from '#app/views/biosignal/overlays/CascadeOverlay.vue'
 import CascadeSelections from '#app/views/biosignal/overlays/CascadeSelections.vue'
 import ChannelHighlights from '#app/views/biosignal/overlays/ChannelHighlights.vue'
 import ContextMenu from '#app/views/biosignal/overlays/ContextMenu.vue'
+import DetachedWindow from '#app/windows/DetachedWindow.vue'
 import PlotYAxis from '#app/views/biosignal/plots/PlotYAxis.vue'
 import SplitPanelView from '#root/src/app/views/SplitPanelView.vue'
 import TimescaleGrid from '#app/views/biosignal/overlays/TimescaleGrid.vue'
 import VerticalCursors from '#app/views/biosignal/overlays/VerticalCursors.vue'
 import ViewerOverlay, { type PointerEventOverlay } from '#app/overlays/PointerEventOverlay.vue'
-import WindowDialog from '#app/overlays/WindowDialog.vue'
 import AccAnalysisTools from './overlays/AccAnalysisTools.vue'
 import AccChannelProperties from './overlays/AccChannelProperties.vue'
 import { eventChannelNames, groupSelectionsBySpan } from '#app/views/biosignal/eventChannels'
@@ -326,12 +331,12 @@ export default defineComponent({
         CascadeSelections,
         ChannelHighlights,
         ContextMenu,
+        DetachedWindow,
         PlotYAxis,
         SplitPanelView,
         TimescaleGrid,
         VerticalCursors,
         ViewerOverlay,
-        WindowDialog,
     },
     setup (props) {
         const store = useStore()
@@ -673,6 +678,10 @@ export default defineComponent({
                 right: 'auto',
                 top: `${this.videoPos.top}px`,
             }
+        },
+        /** The application root's classes, which the content of a detached window keeps. */
+        windowContextClass (): string[] {
+            return appContextClass(this.$store.state.APP.view)
         },
     },
     methods: {
