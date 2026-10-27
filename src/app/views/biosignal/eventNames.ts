@@ -5,7 +5,8 @@
  * An event coded in a standard needs no typed label, and keeping it blank keeps free text out of what is saved. A
  * module names the codes of the standards it knows by registering a namer here; the viewer core knows none of them.
  * The primary code is that of the first registered standard the event carries a code in. It is a display convention
- * and ranks nothing: what the codes mean does not depend on it.
+ * and ranks nothing: what the codes mean does not depend on it. A namer may come with a describer, which lists what
+ * the primary code says for a reader who wants more than its name.
  * @package    epicurrents/interface
  * @copyright  2026 Sampsa Lohi
  * @license    Apache-2.0
@@ -13,6 +14,9 @@
 
 /** Readable name of a code's value, or `null` when the value cannot be named. */
 export type CodeNamer = (value: number | string) => string | null
+
+/** Readable account of everything a code's value says, or the empty list when nothing in it can be read. */
+export type CodeDescriber = (value: number | string) => string[]
 
 /** An annotation event, as far as naming needs it. */
 export type NamedEvent = {
@@ -24,8 +28,20 @@ export type NamedEvent = {
 /** The annotation classes of a module's settings, as far as naming needs them. */
 export type NamedEventClasses = Record<string, { label: string, name: string }>
 
+/** Describers by standard. */
+const _describers = new Map<string, CodeDescriber>()
 /** Namers by standard, in registration order. */
 const _namers = new Map<string, CodeNamer>()
+
+/**
+ * What `event`'s primary code says, as its describer lists it; the empty list when the code's standard has no
+ * describer or the event carries no code.
+ * @param event - The event.
+ */
+export function codedEventDescription (event: Pick<NamedEvent, 'codes'>) {
+    const primary = primaryEventCode(event)
+    return primary ? (_describers.get(primary.standard)?.(primary.value) ?? []) : []
+}
 
 /**
  * The name of `event`'s primary code, or the empty string when it carries none a namer can name.
@@ -84,17 +100,25 @@ export function primaryEventCode (event: Pick<NamedEvent, 'codes'>) {
 }
 
 /**
- * Name the codes of `standard` with `namer`. A standard registered again keeps its place in the order.
+ * Name the codes of `standard` with `namer`, and optionally describe them with `describer`. A standard registered
+ * again keeps its place in the order, and loses a describer it is not given again.
  * @param standard - The standard, by the identifier its codes are stored under (`hed`).
  * @param namer - Returns the readable name of a code's value.
+ * @param describer - Returns the readable account of everything a code's value says.
  */
-export function registerCodeNamer (standard: string, namer: CodeNamer) {
+export function registerCodeNamer (standard: string, namer: CodeNamer, describer?: CodeDescriber) {
     _namers.set(standard, namer)
+    if (describer) {
+        _describers.set(standard, describer)
+    } else {
+        _describers.delete(standard)
+    }
 }
 
 /**
  * Forget every registered namer. For tests.
  */
 export function resetCodeNamers () {
+    _describers.clear()
     _namers.clear()
 }

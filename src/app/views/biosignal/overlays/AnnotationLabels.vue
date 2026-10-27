@@ -25,13 +25,14 @@
                         class="resize"
                         @pointerdown.prevent="handleStartPointerDown(id, $event)"
                     ></div>
-                    <button id="label"
+                    <button
                         :class="[
                             `epicv-oneliner`,
                             'label',
                             { 'active': context.event.isActive }
                         ]"
-                        :title="eventName(context.event) + (context.event.text ? '\n' + context.event.text : '')"
+                        :id="labelId(id)"
+                        :title="eventDescription(context.event).length ? undefined : eventTitle(context.event)"
                         @focusin="activateAnnotation(context.event)"
                         @focusout="deactivateAnnotation(context.event)"
                     >
@@ -44,6 +45,14 @@
                     ></div>
                 </div>
             </div>
+            <!-- A coded event lists what its code says in place of the native title, which cannot be styled. -->
+            <wa-tooltip v-if="!context.event.background && eventDescription(context.event).length"
+                class="description"
+                :for="labelId(id)"
+            >
+                <div>{{ eventDescription(context.event).join('; ') }}</div>
+                <div v-if="context.event.text" class="text">{{ context.event.text }}</div>
+            </wa-tooltip>
         </template>
     </div>
 </template>
@@ -59,7 +68,7 @@ import {
 } from "@epicurrents/core/util"
 import { resolveEventChannelIndices } from "#app/views/biosignal/eventChannels"
 import { eventGroupFocus, eventGroupKey, focusedEventIds } from "#app/views/biosignal/eventGroups"
-import { eventDisplayName } from "#app/views/biosignal/eventNames"
+import { codedEventDescription, eventDisplayName } from "#app/views/biosignal/eventNames"
 import { useStore } from "vuex"
 import { useBiosignalContext } from "#config"
 import { NO_POINTER_BUTTON_DOWN } from "#util"
@@ -239,7 +248,7 @@ export default defineComponent({
             for (const context of this.annotationContexts.values()) {
                 if (context.event.isActive) {
                     // We need to unfocus the button label in order to register an immediate focusin event.
-                    const annoLbl = context.el?.querySelector('#label') as HTMLButtonElement
+                    const annoLbl = context.el?.querySelector('.label') as HTMLButtonElement
                     annoLbl?.blur()
                 }
             }
@@ -260,8 +269,22 @@ export default defineComponent({
          * The name an annotation is shown by on the plot.
          * @param event - The annotation event.
          */
+        /**
+         * What the primary code of `event` says, as its standard's describer lists it; empty for an uncoded event.
+         * @param event - The annotation event.
+         */
+        eventDescription (event: BiosignalAnnotationEvent) {
+            return codedEventDescription(event)
+        },
         eventName (event: BiosignalAnnotationEvent) {
             return eventDisplayName(event, this.SETTINGS.annotations.classes, label => this.$t(label)) || this.$t('Event')
+        },
+        /**
+         * The native title of an event's label: its name and, on a line of its own, its text.
+         * @param event - The annotation event.
+         */
+        eventTitle (event: BiosignalAnnotationEvent) {
+            return this.eventName(event) + (event.text ? '\n' + event.text : '')
         },
         /**
          * Point at the group of the annotation under the pointer, so its other members are marked with it.
@@ -269,6 +292,13 @@ export default defineComponent({
          */
         focusGroup (event: BiosignalAnnotationEvent) {
             eventGroupFocus.hovered = eventGroupKey(event)
+        },
+        /**
+         * The element id of an annotation's label, which its tooltip is anchored to.
+         * @param id - The annotation's id.
+         */
+        labelId (id: string) {
+            return `annotation-label-${id}`
         },
         getAnnotationProperties (event: BiosignalAnnotationEvent) {
             const properties = {
@@ -335,9 +365,8 @@ export default defineComponent({
                 // Check if annotation and button match the last click event.
                 if (this.lastClicked.id === id && this.lastClicked.button === event.button) {
                     if (timestamp - this.lastClicked.timestamp < DBLCLICK_THRESHOLD) {
-                        if (!context.event.locked) {
-                            this.editingAnnotation = context.event
-                        }
+                        // A locked event opens in the editor too, which shows it read-only.
+                        this.editingAnnotation = context.event
                         this.lastClicked.timestamp = timestamp
                         return
                     } else {
@@ -418,7 +447,6 @@ export default defineComponent({
                 this.editingAnnotation = null
             } else if (context.event.locked) {
                 // Locked annotations cannot be dragged, so a single click safely activates them.
-                // The editor opens in read-only mode; the platform panel handles review interaction.
                 this.activateAnnotation(context.event)
             }
         },
@@ -492,7 +520,7 @@ export default defineComponent({
                             this.draggingAnnotation.context = null
                         }
                         // We need to unfocus the button label or it will remain focused if the deletion is undo'ed.
-                        const annoLbl = context.el?.querySelector('#label') as HTMLButtonElement
+                        const annoLbl = context.el?.querySelector('.label') as HTMLButtonElement
                         annoLbl?.blur()
                         this.$emit('delete-annotation', context.event)
                     }
@@ -762,7 +790,7 @@ export default defineComponent({
             }
             //const annoDiv = this.annotationDivs[index]
             const lblWrapper = context.el.querySelector('#wrapper') as HTMLButtonElement
-            const annoLabel = context.el.querySelector('#label') as HTMLButtonElement
+            const annoLabel = context.el.querySelector('.label') as HTMLButtonElement
             const annoStart = context.el.querySelector('#start') as HTMLDivElement
             const annoEnd = context.el.querySelector('#end') as HTMLDivElement
             if (!lblWrapper || !annoLabel) {
@@ -941,6 +969,10 @@ export default defineComponent({
     position: absolute;
     inset: 0;
     pointer-events: none;
+}
+.description .text {
+    margin-top: 0.25rem;
+    white-space: pre-line;
 }
     [data-component="annotation-labels"] button {
         /* First reset all button styles */

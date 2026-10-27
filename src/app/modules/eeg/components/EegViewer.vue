@@ -346,6 +346,7 @@ import {
     canonicalElectrode,
     findingGroupOf,
     groupedFindingCode,
+    hedTagLabels,
     nextFindingGroup,
     recordedFindingGroups,
     relocatedFindingCode,
@@ -354,9 +355,9 @@ import { runtime } from '#app/modules/eeg'
 import CANONICAL_ELECTRODES from '../canonical-electrodes.json'
 import { frequencyMeasurementWithin } from '#app/views/biosignal/measurements'
 
-// A coded finding names its event when the reader types no label, and groups it with the other occurrences of its
-// finding.
-registerCodeNamer(HED_STANDARD, hedFindingName)
+// A coded finding names its event when the reader types no label, lists its tags for the event's tooltip, and groups
+// it with the other occurrences of its finding.
+registerCodeNamer(HED_STANDARD, hedFindingName, hedTagLabels)
 registerCodeGrouper(HED_STANDARD, findingGroupOf)
 
 /**

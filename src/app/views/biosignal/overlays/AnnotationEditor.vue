@@ -5,12 +5,13 @@
              padding, focuses the panel instead of the page, so the editor does not read it as leaving and close. -->
         <div class="editor"
             data-owns-keys
+            ref="panel"
             tabindex="-1"
             @focusout="lostFocus"
             @focusin="gotFocus"
             @keydown="handlePanelKeydown"
         >
-            <app-icon class="icon" :name="action === 'new' ? `bookmark-plus` : `pencil`"></app-icon>
+            <app-icon class="icon" :name="icon"></app-icon>
             <wa-input ref="input"
                 :disabled="isLocked"
                 :placeholder="labelPlaceholder"
@@ -42,9 +43,8 @@
                     :stamp="stamp"
                 ></slot>
             </div>
-            <wa-button ref="savebtn"
+            <wa-button v-if="!isLocked" ref="savebtn"
                 appearance="filled-outlined"
-                :disabled="isLocked"
                 id="annotation-editor-save-button"
                 size="s"
                 variant="brand"
@@ -53,7 +53,7 @@
             >
                 <app-icon name="floppy-disk" variant="light"></app-icon>
             </wa-button>
-            <wa-tooltip for="annotation-editor-save-button">{{ $t('Save') }}</wa-tooltip>
+            <wa-tooltip v-if="!isLocked" for="annotation-editor-save-button">{{ $t('Save') }}</wa-tooltip>
         </div>
     </div>
 </template>
@@ -121,6 +121,7 @@ export default defineComponent({
         const annotationLabel = ref('')
         const closeTimeout = ref(0)
         const input = ref<WaInput>() as Ref<WaInput>
+        const panel = ref<HTMLDivElement>() as Ref<HTMLDivElement>
         const saved = ref(false)
         const savebtn = ref<WaButton>() as Ref<WaButton>
         return {
@@ -129,6 +130,7 @@ export default defineComponent({
             annotationLabel,
             closeTimeout,
             input,
+            panel,
             saved,
             savebtn,
             ...useBiosignalContext(store),
@@ -144,6 +146,9 @@ export default defineComponent({
         },
     },
     computed: {
+        icon (): string {
+            return this.isLocked ? 'lock' : this.action === 'new' ? 'bookmark-plus' : 'pencil'
+        },
         isLocked (): boolean {
             return this.action === 'edit' && this.annotation.locked
         },
@@ -195,7 +200,7 @@ export default defineComponent({
             if (event.key === 'Tab' && event.shiftKey) {
                 // Same as with the button, but now we jump to the last element.
                 event.preventDefault()
-                this.savebtn.focus()
+                this.savebtn?.focus()
             }
         },
         handleLabelKeyup (event: KeyboardEvent) {
@@ -212,7 +217,7 @@ export default defineComponent({
             }
             event.preventDefault()
             if (event.shiftKey) {
-                this.savebtn.focus()
+                this.savebtn?.focus()
             } else {
                 this.input.focus()
             }
@@ -304,6 +309,11 @@ export default defineComponent({
         this.keepDraft(this.annotation)
     },
     mounted () {
+        if (this.isLocked) {
+            // Every field is disabled and takes no focus, so the panel holds it, and closes once it moves elsewhere.
+            this.panel?.focus()
+            return
+        }
         this.input?.updateComplete.then(() => {
             // Give the annotation text field focus after loading this element.
             this.input?.focus()

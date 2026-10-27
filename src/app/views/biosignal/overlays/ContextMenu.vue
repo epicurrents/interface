@@ -58,7 +58,14 @@ import { T } from "#i18n"
 import { ContextMenuContext } from "#types/interface"
 import { useStore } from "vuex"
 import { useBiosignalContext } from "#config"
-import { SettingsColor } from "@epicurrents/core/types"
+import { HOST_ACTION, hostActionItems, runHostAction } from "#app/views/biosignal/hostActions"
+import type {
+    ContextMenuAction,
+    ContextMenuActionContext,
+    ContextMenuTarget,
+    EpicurrentsApp,
+    SettingsColor,
+} from "@epicurrents/core/types"
 import { SignalSelectionLimit } from "#types/interface"
 import type { default as WaDropdown } from "@awesome.me/webawesome/dist/components/dropdown/dropdown.js"
 
@@ -101,10 +108,6 @@ export default defineComponent({
             type: Object as PropType<ContextMenuContext>,
             required: true,
         },
-        extraItems: {
-            type: Array as PropType<ItemProps[]>,
-            default: [],
-        },
         selectionBound: {
             type: Object as PropType<SignalSelectionLimit | null>,
             default: null,
@@ -136,6 +139,33 @@ export default defineComponent({
             return T(key, this.$options.name, params, capitalized)
         },
         /**
+         * The context a host action is given, or null when the menu is on nothing an action can be offered for.
+         */
+        actionContext (): ContextMenuActionContext | null {
+            const target = this.context.target as ContextMenuTarget
+            if ((target !== 'annotation' && target !== 'plot') || !this.RESOURCE) {
+                return null
+            }
+            const annotation = target === 'annotation'
+                ? this.RESOURCE.events.find(e => e.id === (this.context.props as AnnotationProps).id) ?? null
+                : null
+            if (target === 'annotation' && !annotation) {
+                return null
+            }
+            return {
+                annotation: annotation,
+                channel: this.context.channel?.name ?? null,
+                resource: this.RESOURCE,
+                target: target,
+                timestamp: this.context.timestamp,
+            }
+        },
+        /** The actions hosts registered on the application. */
+        hostActions (): Map<string, ContextMenuAction> {
+            const app = window.__EPICURRENTS__?.APP as EpicurrentsApp | null
+            return app?.getContextMenuActions() ?? new Map()
+        },
+        /**
          * Report the menu closed, which it does by itself on a click outside it. A submenu closing reports the same
          * event, and leaves the menu open.
          * @param event - The hide event.
@@ -149,7 +179,15 @@ export default defineComponent({
             if (!action) {
                 return
             }
-            if (action === 'create-channel-annotation') {
+            if (action.startsWith(HOST_ACTION)) {
+                // The menu closes before the action runs, so an action that opens something of its own is not
+                // covered by the menu.
+                const context = this.actionContext()
+                this.$emit('close')
+                if (context) {
+                    runHostAction(this.hostActions(), action.slice(HOST_ACTION.length), context)
+                }
+            } else if (action === 'create-channel-annotation') {
                 this.$emit(
                     'action',
                     {
@@ -275,6 +313,11 @@ export default defineComponent({
                 })
             }
             this.contextOptions.push(...plotOptions)
+        }
+        const context = this.actionContext()
+        const hostItems = context ? hostActionItems(this.hostActions(), context) : []
+        if (hostItems.length) {
+            this.contextOptions.push({ label: '', type: 'divider' }, ...hostItems)
         }
         requestAnimationFrame(() => {
             const parent = this.component.parentElement

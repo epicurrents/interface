@@ -587,6 +587,25 @@ export function findingGroupOf (value: number | string) {
 }
 
 /**
+ * The readable names of the tags of a HED string, in the order written, without its finding group number. Read from
+ * the string without the term index; a tag's value follows its name, and the electrodes of a `Sensor-list` are
+ * separated by commas, so a list of names can itself be joined with semicolons.
+ * @param value - HED string.
+ */
+export function hedTagLabels (value: number | string) {
+    const labels = [] as string[]
+    for (const written of String(value).replace(/[()]/g, ',').split(',')) {
+        const [tag, ...tagValue] = written.trim().split('/')
+        if (!tag || tag === FINDING_GROUP) {
+            continue
+        }
+        const valueText = tagValue.join('/').split(';').map(part => part.trim()).filter(part => part).join(', ')
+        labels.push(valueText ? `${findingLabel(tag)} ${valueText}` : findingLabel(tag))
+    }
+    return labels
+}
+
+/**
  * `value` made an occurrence of the finding group `group`, or taken out of its group with `null`; `null` in turn when
  * the string cannot carry a group: one the picker did not write, or a policy that does not allow the tag.
  * @param value - HED string.

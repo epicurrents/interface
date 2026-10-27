@@ -19,6 +19,7 @@ import {
     confineNumber,
     electrodesByRegion,
     findingGroupOf,
+    hedTagLabels,
     groupedFindingCode,
     groupsAllowed,
     lateralityOf,
@@ -253,6 +254,34 @@ describe('finding groups', () => {
         expect(groupsAllowed(index, policyFor(['Interictal-activity', 'Property']))).toBe(true)
         expect(groupedFindingCode(spike, 104, index, policyFor(['Interictal-activity']))).toBeNull()
         expect(groupedFindingCode('Not a finding', 104, index, null)).toBeNull()
+    })
+})
+
+describe('tag labels', () => {
+    it('names every tag in order, without the finding group number', () => {
+        expect(hedTagLabels('Eye-blink-artifact')).toEqual(['Eye blink artifact'])
+        expect(hedTagLabels(
+            '(Epileptiform-interictal-activity, ID/104, (Left, (Greater-than, Right)), Sensor-list/F7;T7)'
+        )).toEqual([
+            'Epileptiform interictal activity',
+            'Left',
+            'Greater than',
+            'Right',
+            'Sensor list F7, T7',
+        ])
+    })
+
+    it('keeps a value after its tag', () => {
+        expect(hedTagLabels('(Line-noise-artifact, (Greater-than-or-equal-to, Feature-frequency/2 Hz))')).toEqual([
+            'Line noise artifact',
+            'Greater than or equal to',
+            'Feature frequency 2 Hz',
+        ])
+    })
+
+    it('lists nothing for a string with no tag', () => {
+        expect(hedTagLabels('')).toEqual([])
+        expect(hedTagLabels('(ID/100)')).toEqual([])
     })
 })
 

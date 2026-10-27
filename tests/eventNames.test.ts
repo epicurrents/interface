@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { EegEvent } from '@epicurrents/eeg-module'
 import type { AnnotationEventTemplate } from '@epicurrents/core/types'
 import {
+    codedEventDescription,
     codedEventName,
     eventDisplayName,
     primaryEventCode,
@@ -13,6 +14,7 @@ import {
     resetCodeNamers,
 } from '#app/views/biosignal/eventNames'
 import { hedFindingName } from '#app/modules/eeg/findings'
+import { hedTagLabels } from '#app/modules/eeg/findingProperties'
 
 const CLASSES = {
     default: { label: 'Event', name: 'event' },
@@ -85,5 +87,20 @@ describe('a new event', () => {
         expect(event.label).toBe('')
         expect(event.start).toBe(2)
         expect(event.duration).toBe(1)
+    })
+})
+
+describe('coded event description', () => {
+    it('lists what the primary code says through its describer', () => {
+        registerCodeNamer('hed', hedFindingName, hedTagLabels)
+        const coded = { codes: { hed: '(Eye-blink-artifact, ID/100, Left)' } }
+        expect(codedEventDescription(coded)).toEqual(['Eye blink artifact', 'Left'])
+        expect(codedEventDescription({ codes: {} })).toEqual([])
+    })
+
+    it('lists nothing for a standard registered without a describer', () => {
+        registerCodeNamer('hed', hedFindingName, hedTagLabels)
+        registerCodeNamer('hed', hedFindingName)
+        expect(codedEventDescription({ codes: { hed: 'Eye-blink-artifact' } })).toEqual([])
     })
 })

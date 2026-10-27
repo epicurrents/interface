@@ -61,6 +61,7 @@ import keyboard_double_arrow_right from '@material-symbols/svg-400/outlined/keyb
 import library_add from '@material-symbols/svg-400/outlined/library_add.svg?raw'
 import link from '@material-symbols/svg-400/outlined/link.svg?raw'
 import link_off from '@material-symbols/svg-400/outlined/link_off.svg?raw'
+import lock from '@material-symbols/svg-400/outlined/lock.svg?raw'
 import manage_search from '@material-symbols/svg-400/outlined/manage_search.svg?raw'
 import memory from '@material-symbols/svg-400/outlined/memory.svg?raw'
 import menu from '@material-symbols/svg-400/outlined/menu.svg?raw'
@@ -136,6 +137,7 @@ export const ICON_SVGS: Record<string, { outlined: string; filled?: string }> = 
     library_add:                    { outlined: library_add },
     link:                           { outlined: link },
     link_off:                       { outlined: link_off },
+    lock:                           { outlined: lock },
     manage_search:                  { outlined: manage_search },
     memory:                         { outlined: memory },
     menu:                           { outlined: menu },

@@ -1,5 +1,6 @@
 <template>
-    <div v-if="state !== 'hidden'" data-component="finding-picker">
+    <!-- Read-only, an event without a finding is a plain event and has nothing to show here. -->
+    <div v-if="state !== 'hidden' && (code || !disabled)" data-component="finding-picker">
         <div v-if="state === 'loading'" class="status">
             <wa-spinner></wa-spinner>
         </div>
@@ -7,34 +8,38 @@
         <template v-else>
             <div class="row">
                 <app-icon class="icon" name="wave-pulse"></app-icon>
-                <div v-if="code" class="selected" :title="selectedDescription">
+                <div v-if="code"
+                    class="selected"
+                    :class="{ 'selected--readonly': disabled }"
+                    :title="selectedDescription"
+                >
                     <span class="label">{{ selectedLabel }}</span>
                     <span v-if="selectedGroup" class="group">{{ $t(selectedGroup) }}</span>
                     <template v-if="findingGroup !== null">
                         <span class="finding-group">{{ $t('Group {number}', { number: findingGroup }) }}</span>
-                        <wa-button
+                        <wa-button v-if="!disabled"
                             appearance="plain"
-                            :disabled="disabled"
                             id="finding-picker-ungroup-button"
                             size="s"
                             @click="leaveGroup"
                         >
                             <app-icon name="link-slash"></app-icon>
                         </wa-button>
-                        <wa-tooltip for="finding-picker-ungroup-button">
+                        <wa-tooltip v-if="!disabled" for="finding-picker-ungroup-button">
                             {{ $t('Take this event out of group {number}', { number: findingGroup }) }}
                         </wa-tooltip>
                     </template>
-                    <wa-button ref="clearbtn"
+                    <wa-button v-if="!disabled" ref="clearbtn"
                         appearance="plain"
-                        :disabled="disabled"
                         id="finding-picker-clear-button"
                         size="s"
                         @click="clear"
                     >
                         <app-icon name="xmark"></app-icon>
                     </wa-button>
-                    <wa-tooltip for="finding-picker-clear-button">{{ $t('Remove finding') }}</wa-tooltip>
+                    <wa-tooltip v-if="!disabled" for="finding-picker-clear-button">
+                        {{ $t('Remove finding') }}
+                    </wa-tooltip>
                 </div>
                 <wa-input v-else ref="search"
                     :disabled="disabled"
@@ -44,8 +49,7 @@
                     @input="updateQuery($event.target.value)"
                     @keydown="handleSearchKeydown"
                 ></wa-input>
-                <wa-select v-if="!code"
-                    :disabled="disabled"
+                <wa-select v-if="!code && !disabled"
                     :placeholder="$t('Browse')"
                     size="s"
                     :value="group"
@@ -60,11 +64,10 @@
                         <wa-option :value="RECORDED_GROUPS">{{ $t('Finding groups') }}</wa-option>
                     </template>
                 </wa-select>
-                <template v-if="applyToGroup && findingGroup !== null && groupMembers">
+                <template v-if="applyToGroup && findingGroup !== null && groupMembers && !disabled">
                     <wa-button
                         appearance="plain"
                         class="apply"
-                        :disabled="disabled"
                         id="finding-picker-apply-button"
                         size="s"
                         @click="applyToGroup"
@@ -78,11 +81,10 @@
                         ) }}
                     </wa-tooltip>
                 </template>
-                <template v-if="stamp">
+                <template v-if="stamp && !disabled">
                     <wa-button
                         appearance="plain"
                         class="stamp"
-                        :disabled="disabled"
                         id="finding-picker-stamp-button"
                         size="s"
                         @click="stamp"
@@ -94,14 +96,13 @@
                     </wa-tooltip>
                 </template>
             </div>
-            <div v-if="parsed && (fields.length || canLocate)" class="properties">
+            <div v-if="parsed && (disabled ? chips.length : fields.length || canLocate)" class="properties">
                 <div class="chips">
                     <span v-for="chip of chips" :key="`finding-chip-${chip.key}`" class="chip">
                         {{ chip.label }}
-                        <button
+                        <button v-if="!disabled"
                             :aria-label="removeLabel(chip)"
                             class="chip-remove"
-                            :disabled="disabled"
                             :id="`finding-chip-remove-${chip.key}`"
                             type="button"
                             @click="removeChip(chip)"
@@ -109,12 +110,13 @@
                         >
                             <app-icon name="xmark"></app-icon>
                         </button>
-                        <wa-tooltip :for="`finding-chip-remove-${chip.key}`">{{ removeLabel(chip) }}</wa-tooltip>
+                        <wa-tooltip v-if="!disabled" :for="`finding-chip-remove-${chip.key}`">
+                            {{ removeLabel(chip) }}
+                        </wa-tooltip>
                     </span>
-                    <button ref="toggle"
+                    <button v-if="!disabled" ref="toggle"
                         :aria-expanded="expanded"
                         class="toggle"
-                        :disabled="disabled"
                         type="button"
                         @click="toggleProperties"
                     >
@@ -122,7 +124,7 @@
                         {{ $t('Properties') }}
                     </button>
                 </div>
-                <div v-if="expanded" class="fields">
+                <div v-if="expanded && !disabled" class="fields">
                     <template v-for="{ field, heading, key } of rows" :key="`finding-row-${key}`">
                         <div v-if="heading" class="heading">{{ $t(heading) }}</div>
                         <template v-if="!field">
@@ -335,10 +337,9 @@
                     <span class="group">{{ entry.description }}</span>
                 </button>
             </div>
-            <div v-if="palette.length && !code" class="palette">
+            <div v-if="palette.length && !code && !disabled" class="palette">
                 <button v-for="(finding, idx) of palette" :key="`finding-palette-${finding.term.name}`"
                     class="palette-item"
-                    :disabled="disabled"
                     :title="paletteTitle(finding)"
                     type="button"
                     @click="pick(finding)"
@@ -1343,6 +1344,9 @@ export default defineComponent({
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+    }
+    .selected--readonly {
+        padding-right: 0.5rem;
     }
 .properties {
     display: flex;
