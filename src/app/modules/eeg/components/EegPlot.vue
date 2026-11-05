@@ -311,14 +311,16 @@ export default defineComponent({
                     continue
                 }
                 const chanType = chan.modality
-                const [r, g, b, a] = !useRaw && chanType
+                // A modality with no colour of its own (`sao2`, `misc` and any a montage introduces) is drawn in the
+                // default colour; without the fallback the destructuring below throws and no trace is drawn at all.
+                const [r, g, b, a] = (!useRaw && chanType
                                     ? this.SETTINGS.trace.colorSides && chanType === 'eeg'
                                       ? chan.laterality === 's' ? this.SETTINGS.trace.color.sin
                                         : chan.laterality === 'd' ? this.SETTINGS.trace.color.dex
                                         : chan.laterality === 'z' ? this.SETTINGS.trace.color.mid
                                         : this.SETTINGS.trace.color[chanType]
                                       : this.SETTINGS.trace.color[chanType as "eeg"/* Trick to avoid TS lint errors */]
-                                    : this.SETTINGS.trace.color.default
+                                    : undefined) ?? this.SETTINGS.trace.color.default
                 const color = new PlotColor(r, g, b, a)
                 const dispPol = resolveDisplayPolarity(chan.displayPolarity, this.SETTINGS.displayPolarity, 'up')
                 const sensitivity = chan.sensitivity || this.RESOURCE.sensitivity

@@ -128,7 +128,8 @@ const SETUP: Required<ApplicationInterfaceConfig> = mergeConfig(
         user: null,
         useSAB: true,
     } as Required<ApplicationInterfaceConfig>),
-    __EPICURRENTS__?.SETUP,
+    // Read through `window`: optional chaining does not guard an undeclared global, so a bare
+    // `__EPICURRENTS__` throws on a page that loads the lib without defining it first.
     window.__EPICURRENTS__?.SETUP
 )
 // Create the global Epicurrents object if not available.

@@ -1819,7 +1819,15 @@ export default defineComponent({
                 const totalMontages = this.SETTINGS.skipDefaultSetups
                                     ? nExtraMontages
                                     : nDefaultMontages + nExtraMontages
-                if (!this.SETTINGS.skipDefaultSetups && this.RESOURCE.montages.length < nDefaultMontages) {
+                // A recording that reports its own readiness is asked, because which montages it makes is its own
+                // decision: a polysomnography replaces the EEG defaults with one montage of its own, and counting
+                // against the settings would wait for montages that never come. The count serves a resource without
+                // the flag.
+                const montagesPending = typeof this.RESOURCE.montagesReady === 'boolean'
+                                        ? !this.RESOURCE.montagesReady
+                                        : !this.SETTINGS.skipDefaultSetups
+                                          && this.RESOURCE.montages.length < nDefaultMontages
+                if (montagesPending) {
                     this.setupMessage = this.$t('Setting up montage {current} of {total}', {
                         current: this.RESOURCE.montages.length + 1,
                         total: totalMontages,
@@ -2266,6 +2274,7 @@ export default defineComponent({
             }
         }, this.ID, 'before')
         this.RESOURCE.onPropertyChange('montages', this.montagesChanged, this.ID)
+        this.RESOURCE.onPropertyChange('montagesReady', this.montagesChanged, this.ID)
         this.RESOURCE.onPropertyChange('signalCacheStatus', this.signalCacheChanged, this.ID)
         // The handlers above only see changes made from here on, and a resource may arrive with its
         // setup already behind it: `preload` runs the same montage and caching work while nothing
