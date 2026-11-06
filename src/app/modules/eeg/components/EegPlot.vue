@@ -900,6 +900,28 @@ export default defineComponent({
             this.wglPlot?.update()
         },
         /**
+         * Whether `range` is still the range the current view would request. A read settles after the view may have
+         * moved on: the cache commission a montage update awaits first settles only when the fill it started ends, and
+         * on a recording cached whole that is the end of the whole file. Drawing such a response paints the traces of
+         * a view the reader has left, and the newer update the move issued draws in its place.
+         * @param range - Range the read was issued for, as built by `viewTraceRange`.
+         */
+        isCurrentView (range: number[]) {
+            const current = this.viewTraceRange()
+            return range[0] === current[0] && range[1] === current[1]
+        },
+        /**
+         * Range to request for the current view: one sample period of the slowest visible channel past the view end
+         * so every trace has a datapoint at or beyond the edge (see `edgePadding`). Samples outside the view are
+         * positioned by time and clipped by the renderer.
+         */
+        viewTraceRange () {
+            return [
+                this.RESOURCE.viewStart,
+                this.RESOURCE.viewStart + this.viewRange + this.edgePadding(),
+            ]
+        },
+        /**
          * Refresh trace data in an already existing WebGL plot.
          */
         updateTraces () {
@@ -911,13 +933,7 @@ export default defineComponent({
             }
             // Y-axis values for each channel
             // TODO: ampScale and sensitivity into trace properties?
-            // Request one sample period of the slowest visible channel past the view end so every
-            // trace has a datapoint at or beyond the edge (see `edgePadding`). Samples outside the
-            // view are positioned by time and clipped by the renderer.
-            const range = [
-                this.RESOURCE.viewStart,
-                this.RESOURCE.viewStart + this.viewRange + this.edgePadding(),
-            ]
+            const range = this.viewTraceRange()
             this.updatingPlot = true
             if (!this.RESOURCE.activeMontage) {
                 // Raw mode runs on the view-anchored request protocol: the request either returns
@@ -937,7 +953,7 @@ export default defineComponent({
          */
         async requestAndDrawMontageTraces (range: number[]) {
             const covered = await this.RESOURCE.cacheSignals()
-            if (this.destroyed || !this.wglPlot) {
+            if (this.destroyed || !this.wglPlot || !this.isCurrentView(range)) {
                 return
             }
             if (!covered) {
@@ -945,7 +961,7 @@ export default defineComponent({
                 return
             }
             const response = await this.RESOURCE.getAllSignals(range)
-            if (this.destroyed || !this.wglPlot) {
+            if (this.destroyed || !this.wglPlot || !this.isCurrentView(range)) {
                 return
             }
             if (!response || !response.signals.some((s) => (s?.data?.length ?? 0) > 0)) {
@@ -963,7 +979,7 @@ export default defineComponent({
          */
         async requestAndDrawTraces (range: number[]) {
             const request = await this.RESOURCE.requestSignals(range)
-            if (this.destroyed || !this.wglPlot) {
+            if (this.destroyed || !this.wglPlot || !this.isCurrentView(range)) {
                 return
             }
             if (request.status === 'partial') {
@@ -972,7 +988,7 @@ export default defineComponent({
             const outcome = request.status === 'pending' || request.status === 'partial'
                             ? await request.ready
                             : request
-            if (this.destroyed || !this.wglPlot) {
+            if (this.destroyed || !this.wglPlot || !this.isCurrentView(range)) {
                 return
             }
             if (outcome.status === 'ready') {
