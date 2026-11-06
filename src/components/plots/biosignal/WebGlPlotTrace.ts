@@ -7,6 +7,7 @@
 
 import type {
     BiosignalPlot,
+    BiosignalTraceRange,
     WebGlCompatibleColor,
     WebGlTrace,
     WebGlTraceColorSegment
@@ -26,6 +27,7 @@ export default class WebGlPlotTrace implements WebGlTrace {
     protected _parent: BiosignalPlot
     protected _pointCount = 0
     protected _polarity: 1 | -1
+    protected _range: BiosignalTraceRange | null = null
     protected _render = true
     protected _samplesPerPx: number
     protected _samplingRate: number
@@ -85,6 +87,12 @@ export default class WebGlPlotTrace implements WebGlTrace {
     }
     set polarity (value: 1 | -1) {
         this._polarity = value
+    }
+    get range () {
+        return this._range
+    }
+    set range (value: BiosignalTraceRange | null) {
+        this._range = value
     }
     get render () {
         return this._render

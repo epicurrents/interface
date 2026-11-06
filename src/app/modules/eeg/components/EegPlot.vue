@@ -36,7 +36,7 @@ import { NUMERIC_ERROR_VALUE } from "@epicurrents/core/util"
 import { PointerInteraction } from "#types/interface"
 import { useEegContext } from "#app/modules/eeg"
 import { EegNavigationKey } from "../types"
-import { NO_POINTER_BUTTON_DOWN, resolveDisplayPolarity } from "#util"
+import { NO_POINTER_BUTTON_DOWN, resolveDisplayPolarity, traceRange } from "#util"
 import type {
     OverlayPointerEventMeta,
     PointerEventOverlay,
@@ -344,6 +344,7 @@ export default defineComponent({
                     chan.offset?.baseline || 0,
                     this.viewRange
                 )
+                line.range = traceRange(chan)
                 if (chan.isOriginal) {
                     // Use reduced opacity only when the primary (corrected) channel is also
                     // visible — if only the original signal is shown, use full opacity.
@@ -1028,6 +1029,7 @@ export default defineComponent({
                 if (line.scale !== scale) {
                     line.scale = scale
                 }
+                line.range = traceRange(chan)
                 const sensitivity = (chan as MontageChannel).sensitivity || this.RESOURCE.sensitivity
                 if (line.sensitivity !== sensitivity) {
                     line.sensitivity = sensitivity

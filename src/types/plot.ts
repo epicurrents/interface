@@ -96,6 +96,15 @@ export type BiosignalPlotConfig = {
 /**
  * Plot trace for biosignals.
  */
+/** The band a range-mode trace fills and the values that span it. */
+export type BiosignalTraceRange = {
+    /** Bottom of the band as a fraction of the plot height, from the plot bottom. */
+    bottom: number
+    /** Top of the band as a fraction of the plot height, from the plot bottom. */
+    top: number
+    /** The values at the bottom and the top of the band, in the unit of the trace data. */
+    values: [number, number]
+}
 export type BiosignalTrace = {
     /** Trace base color, used for any vertex range not covered by a colour segment. */
     color: WebGlCompatibleColor
@@ -116,8 +125,13 @@ export type BiosignalTrace = {
      * Traces with opacity < 1 are drawn first so they appear behind fully opaque traces.
      */
     opacity?: number
-    /** Display polarity of this channel. */
+    /** Display polarity of this channel. Range mode ignores it, since the range names its bottom and top. */
     polarity: -1 | 1
+    /**
+     * Range mode: the values `values` span the band from `bottom` to `top` (fractions of the plot height from its
+     * bottom), lower value at the bottom, in place of the sensitivity and scale. Null draws by sensitivity.
+     */
+    range: BiosignalTraceRange | null
     /** Should this line be rendered. */
     render: boolean
     /** Sampling rate of the signal. */

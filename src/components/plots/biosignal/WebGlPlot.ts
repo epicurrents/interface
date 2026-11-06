@@ -9,6 +9,7 @@
 
 import type {
     BiosignalPlot,
+    BiosignalTraceRange,
     WebGlCompatibleColor,
     WebGlPlotConfig,
     WebGlTrace,
@@ -29,6 +30,21 @@ const defaultConfig = {
 } as WebGlPlotConfig
 
 export default class WebGlPlot implements BiosignalPlot {
+    /**
+     * The vertical scale and offset, in clip space, that draw a range-mode trace: the lower value of `range` at the
+     * bottom of its band and the upper at the top, so a channel read against a fixed scale (SpO2 between 50 and 100 %)
+     * or one not centred on its isoelectric line (an ECG) fills its band. Polarity does not apply; the range names its
+     * bottom and top.
+     * @param range - The band and the values that span it.
+     * @returns `[scale, offset]` such that a value `v` is drawn at `scale*v + offset`.
+     */
+    static rangeTransform (range: BiosignalTraceRange): [number, number] {
+        const [low, high] = range.values
+        // Clip space runs from -1 at the bottom to 1 at the top.
+        const scale = 2*(range.top - range.bottom)/(high - low)
+        return [scale, (2*range.bottom - 1) - scale*low]
+    }
+
     protected _background: WebGlCompatibleColor
     protected _canvas: HTMLCanvasElement
     protected _context: WebGLRenderingContext | null = null
@@ -176,19 +192,22 @@ export default class WebGlPlot implements BiosignalPlot {
         for (const line of sorted) {
             // Set up matrix.
             const uScale = gl.getUniformLocation(this._program, 'uScale')
-            const scale = 10**line.scale
+            const uOffset = gl.getUniformLocation(this._program, 'uOffset')
             // WebGL native canvas scale is from -1 to 1 = 2.
-            const ampScale = 2*scale/(this.heightInSensRefUnits*line.sensitivity)
+            const [yScale, yOffset] = line.range
+                                    ? WebGlPlot.rangeTransform(line.range)
+                                    : [
+                                        2*10**line.scale/(this.heightInSensRefUnits*line.sensitivity)*line.polarity,
+                                        line.offset*2 - 1,
+                                    ]
             gl.uniformMatrix2fv(
                 uScale,
                 false,
-                [1,0, 0,ampScale*line.polarity]
+                [1,0, 0,yScale]
             )
-            // Set up line offset.
-            const uOffset = gl.getUniformLocation(this._program, 'uOffset')
             gl.uniform2fv(
                 uOffset,
-                new Float32Array([0, line.offset*2 - 1])
+                new Float32Array([0, yOffset])
             )
             // Set up the blend mode once for the whole trace.
             // Background traces use standard alpha blending so opacity is honoured;
