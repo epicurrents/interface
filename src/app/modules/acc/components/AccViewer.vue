@@ -1219,7 +1219,7 @@ export default defineComponent({
                                     'No events or labels can be added to the recording.'
                                 ],
                                 this.$options.name!,
-                                { announce: true }
+                                { announce: this.RESOURCE.annotationsHold ?? true }
                             )
                             this.hotkeyEvents.annotation = false
                             return
@@ -1250,7 +1250,7 @@ export default defineComponent({
                                 'No events or labels can be added to the recording.'
                             ],
                             this.$options.name!,
-                            { announce: true }
+                            { announce: this.RESOURCE.annotationsHold ?? true }
                         )
                     } else {
                         this.createEvents()

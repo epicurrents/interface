@@ -1061,7 +1061,7 @@ export default defineComponent({
                 Log.warn(
                     ['Annotations are locked.', 'No events or labels can be added to the recording.'],
                     this.$options.name!,
-                    { announce: true }
+                    { announce: this.RESOURCE.annotationsHold ?? true }
                 )
                 return
             }
@@ -1273,7 +1273,7 @@ export default defineComponent({
                 Log.warn(
                     ['Annotations are locked.', 'No events or labels can be added to the recording.'],
                     this.$options.name!,
-                    { announce: true }
+                    { announce: this.RESOURCE.annotationsHold ?? true }
                 )
                 return
             }
@@ -1330,6 +1330,16 @@ export default defineComponent({
             targets?: CopyTarget[],
             text?: string,
         }) {
+            // Checked here as well as by the callers that pick targets first, since the sidebar and the context menu
+            // reach this directly and can be open from before the annotations were locked.
+            if (this.RESOURCE.annotationsLocked) {
+                Log.warn(
+                    ['Annotations are locked.', 'No events or labels can be added to the recording.'],
+                    this.$options.name!,
+                    { announce: this.RESOURCE.annotationsHold ?? true }
+                )
+                return
+            }
             if (!this.RESOURCE.activeMontage) {
                 Log.debug(`Cannot create annotations for raw input signals.`, this.$options.name!)
                 return
@@ -1624,7 +1634,7 @@ export default defineComponent({
                                     'No events or labels can be added to the recording.'
                                 ],
                                 this.$options.name!,
-                                { announce: true }
+                                { announce: this.RESOURCE.annotationsHold ?? true }
                             )
                             this.hotkeyEvents.annotation = false
                             return
@@ -1689,7 +1699,7 @@ export default defineComponent({
                                 'No events or labels can be added to the recording.'
                             ],
                             this.$options.name!,
-                            { announce: true }
+                            { announce: this.RESOURCE.annotationsHold ?? true }
                         )
                     } else {
                         this.createEvents()

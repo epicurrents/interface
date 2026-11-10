@@ -523,7 +523,8 @@ export default defineComponent({
                                     'Annotations are locked.',
                                     'No events or labels can be added to the recording.'
                                 ],
-                                this.$options.name!
+                                this.$options.name!,
+                                { announce: this.RESOURCE.annotationsHold ?? false }
                             )
                             this.hotkeyEvents.annotation = false
                             return
