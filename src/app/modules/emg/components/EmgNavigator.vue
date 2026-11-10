@@ -240,8 +240,13 @@ export default defineComponent({
                     context.fill()
                 }
             }
-            // Draw signal.
-            this.RESOURCE.getAllSignals(this.RESOURCE.signalCacheStatus).then((response) => {
+            // Draw signal. Nothing is cached before the first progress report, and the reader refuses an empty range;
+            // the cache status change that follows redraws the navigator.
+            const cached = this.RESOURCE.signalCacheStatus
+            const signalRequest = cached[1] > cached[0]
+                ? this.RESOURCE.getAllSignals([...cached])
+                : Promise.resolve(null)
+            signalRequest.then((response) => {
                 if (!response) {
                     return
                 }
