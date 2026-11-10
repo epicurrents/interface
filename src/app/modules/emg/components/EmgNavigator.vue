@@ -68,6 +68,13 @@ import { SignalSelectionLimit } from "#types/interface"
 // Child components
 import NavigatorTimeline from './EmgNavigatorTimeline.vue'
 
+/**
+ * Widths in pixels of the fixed columns either side of the timeline. The canvas is sized from them and the stylesheet
+ * binds them, so the canvas spans exactly the column the layout leaves it.
+ */
+const CONTROLS_WIDTH = 175
+const TIME_WIDTH = 60
+
 export default defineComponent({
     name: 'EmgNavigator',
     components: {
@@ -106,8 +113,10 @@ export default defineComponent({
         const viewbox = ref<HTMLCanvasElement>() as Ref<HTMLCanvasElement>
         return {
             audioPlaying,
+            controlsColumnWidth: `${CONTROLS_WIDTH}px`,
             highlights,
             startPosition,
+            timeColumnWidth: `${TIME_WIDTH}px`,
             timeValue,
             navigator,
             viewbox,
@@ -123,7 +132,7 @@ export default defineComponent({
         },
         /** Width available for the timeline in pixels. */
         canvasWidth (): number {
-            return this.width - 250
+            return this.width - TIME_WIDTH - CONTROLS_WIDTH
         },
         /** A reasonable step size for timeline ticks. */
         timelineStepSize (): number {
@@ -566,7 +575,7 @@ div[data-component="emg-navigator"] {
 }
     .time {
         display: flex;
-        flex: 0 0 60px;
+        flex: 0 0 v-bind(timeColumnWidth);
         flex-direction: column;
         padding: 1.25rem 0.5rem;
         text-align: right;
@@ -590,8 +599,8 @@ div[data-component="emg-navigator"] {
     }
 .controls {
     display: flex;
-    flex: 0 0 175px;
-    max-width: 175px;
+    flex: 0 0 v-bind(controlsColumnWidth);
+    max-width: v-bind(controlsColumnWidth);
     padding-top: 10px;
 }
     .controls > wa-button {
