@@ -604,6 +604,7 @@ div[data-component="emg-navigator"] {
     position: relative;
     flex: 1;
     min-width: 0;
+    margin-right: 1rem;
     overflow: hidden;
 }
     .timeline > canvas {
@@ -612,13 +613,12 @@ div[data-component="emg-navigator"] {
     }
 .controls {
     display: flex;
-    flex: 0 0 175px;
-    max-width: 175px;
-    padding-top: 10px;
+    flex: 0 0 auto;
+    padding: 10px 0.75rem 0 0;
 }
     .controls > wa-button {
-        flex: 0 0 calc(25% - 5px);
-        min-width: calc(25% - 5px);
+        flex: 0 0 39px;
+        min-width: 39px;
         padding: 0;
         margin-right: 5px;
         font-size: 1.25rem;
@@ -633,9 +633,12 @@ div[data-component="emg-navigator"] {
         .controls > wa-button wa-icon {
             color: var(--epicv-text-emphasis);
         }
+    .controls > wa-button:last-child {
+        margin-right: 0;
+    }
     .controls > wa-button[appearance=plain] {
-        flex: 0 0 calc(20% - 5px);
-        min-width: calc(20% - 5px);
+        flex: 0 0 30px;
+        min-width: 30px;
         font-size: 1rem;
         height: 32px;
     }
