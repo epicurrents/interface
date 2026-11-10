@@ -4,7 +4,7 @@
             <div class="seconds">{{ timeValue[0] }}.</div>
             <div class="fraction">{{ timeValue[1] }}</div>
         </div>
-        <div class="timeline">
+        <div ref="timeline" class="timeline">
             <canvas ref="navigator"
                 :height="canvasHeight"
                 :width="canvasWidth"
@@ -68,13 +68,6 @@ import { SignalSelectionLimit } from "#types/interface"
 // Child components
 import NavigatorTimeline from './EmgNavigatorTimeline.vue'
 
-/**
- * Widths in pixels of the fixed columns either side of the timeline. The canvas is sized from them and the stylesheet
- * binds them, so the canvas spans exactly the column the layout leaves it.
- */
-const CONTROLS_WIDTH = 175
-const TIME_WIDTH = 60
-
 export default defineComponent({
     name: 'EmgNavigator',
     components: {
@@ -104,21 +97,27 @@ export default defineComponent({
     },
     setup () {
         const audioPlaying = ref(false)
+        /** Observer keeping `timelineWidth` in step with the timeline column. */
+        const rso = null as ResizeObserver | null
         const highlights = ref([] as { color: SettingsColor, highlights: [number, number][], interval: number }[])
         const startPosition = null as number | null
         const timeValue = reactive([] as string[])
+        /** Measured width of the timeline column in pixels. */
+        const timelineWidth = ref(0)
         const unsubscribe = ref(null as (() => void) | null)
         // Template refs.
         const navigator = ref<HTMLCanvasElement>() as Ref<HTMLCanvasElement>
+        const timeline = ref<HTMLDivElement>() as Ref<HTMLDivElement>
         const viewbox = ref<HTMLCanvasElement>() as Ref<HTMLCanvasElement>
         return {
             audioPlaying,
-            controlsColumnWidth: `${CONTROLS_WIDTH}px`,
             highlights,
+            rso,
             startPosition,
-            timeColumnWidth: `${TIME_WIDTH}px`,
+            timelineWidth,
             timeValue,
             navigator,
+            timeline,
             viewbox,
             // Unsubscribers.
             unsubscribe,
@@ -130,9 +129,12 @@ export default defineComponent({
         canvasHeight (): number {
             return this.height - 30
         },
-        /** Width available for the timeline in pixels. */
+        /**
+         * Width available for the timeline in pixels. It is measured from the timeline column rather than derived from
+         * the `width` prop, which is the width of the whole viewer and need not be the width of the row this sits in.
+         */
         canvasWidth (): number {
-            return this.width - TIME_WIDTH - CONTROLS_WIDTH
+            return this.timelineWidth
         },
         /** A reasonable step size for timeline ticks. */
         timelineStepSize (): number {
@@ -153,6 +155,12 @@ export default defineComponent({
         },
     },
     watch: {
+        canvasWidth () {
+            // Resizing a canvas clears it, so redraw once the new size has reached the DOM.
+            this.$nextTick(() => {
+                this.drawNavigator()
+            })
+        },
         cursorPos () {
             this.parseCursorTime()
         },
@@ -166,11 +174,6 @@ export default defineComponent({
         },
         visibleRange () {
             this.drawViewbox()
-        },
-        width () {
-            this.$nextTick(() => {
-                this.drawNavigator()
-            })
         },
     },
     methods: {
@@ -450,6 +453,10 @@ export default defineComponent({
             const recPos = this.RESOURCE.totalDuration*xPos/this.canvasWidth
             this.$emit('navigation', recPos)
         },
+        /** Take the timeline column's current width as the canvas width. */
+        measureTimeline () {
+            this.timelineWidth = Math.floor(this.timeline.clientWidth)
+        },
         parseCursorTime () {
             const cursorTime = this.cursorPos.toFixed(3).split('.')
             this.timeValue.splice(0)
@@ -549,6 +556,9 @@ export default defineComponent({
         }, this.ID)
         // ONNX watchers
         //this.$store.state.SERVICES.get('ONNX')?.onPropertyChange('results', this.drawNavigator, this.ID)
+        this.measureTimeline()
+        this.rso = new ResizeObserver(this.measureTimeline)
+        this.rso.observe(this.timeline)
         // Trigger element resize in parent component once this component is done loading
         this.$emit('loaded')
         // Trigger first navigator draw
@@ -558,6 +568,7 @@ export default defineComponent({
         })
     },
     beforeUnmount () {
+        this.rso?.disconnect()
         // Remove property update handlers
         this.RESOURCE.removeAllEventListeners(this.ID)
         this.RESOURCE.activeMontage?.removeAllEventListeners(this.ID)
@@ -575,7 +586,7 @@ div[data-component="emg-navigator"] {
 }
     .time {
         display: flex;
-        flex: 0 0 v-bind(timeColumnWidth);
+        flex: 0 0 60px;
         flex-direction: column;
         padding: 1.25rem 0.5rem;
         text-align: right;
@@ -592,6 +603,8 @@ div[data-component="emg-navigator"] {
 .timeline {
     position: relative;
     flex: 1;
+    min-width: 0;
+    overflow: hidden;
 }
     .timeline > canvas {
         position: absolute;
@@ -599,8 +612,8 @@ div[data-component="emg-navigator"] {
     }
 .controls {
     display: flex;
-    flex: 0 0 v-bind(controlsColumnWidth);
-    max-width: v-bind(controlsColumnWidth);
+    flex: 0 0 175px;
+    max-width: 175px;
     padding-top: 10px;
 }
     .controls > wa-button {
