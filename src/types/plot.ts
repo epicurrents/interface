@@ -395,6 +395,12 @@ export type WebGlTrace = BiosignalTrace & {
      * single strip in `color`.
      */
     colorSegments: WebGlTraceColorSegment[] | null
+    /**
+     * Vertices to draw, as `[first, end)` with `end` exclusive, clamped to `pointCount`. Null draws every vertex up
+     * to `pointCount`. A span that leaves fewer than two vertices draws nothing. Applies to a trace drawn in a single
+     * colour; a trace with colour segments is drawn in full.
+     */
+    drawSpan: [number, number] | null
     /** An array buffer holding the line x,y -coordinates. */
     xy: Float32Array
 }

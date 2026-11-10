@@ -35,7 +35,7 @@
                                 :verticalDivs="nVerticalDivs"
                                 :secPerPage="secPerPage"
                                 :visibleRange="visibleRange"
-                                v-on:double-click="handlePlotDoubleClick"
+                                v-on:double-click="handleDoubleClick"
                                 v-on:go-backward="goBackward"
                                 v-on:go-forward="goForward"
                                 v-on:go-to="goTo"
@@ -50,8 +50,13 @@
                                 v-on:plot-updated="handlePlotUpdated"
                                 v-on:touch-start="handlePlotTouchStart"
                             />
-                            <!-- Annotations-->
-                            <annotation-labels v-if="overlay"
+                            <!-- Annotations: a cascade draws them per row, read-only. -->
+                            <cascade-annotations v-if="cascadeMontage"
+                                :montage="cascadeMontage"
+                                :plotDimensions="plotDimensions"
+                                :pxPerSecond="pxPerSecond"
+                            />
+                            <annotation-labels v-if="!cascadeMontage && overlay"
                                 :overlay="overlay"
                                 :pxPerSecond="pxPerSecond"
                                 :secPerPage="secPerPage"
@@ -61,14 +66,24 @@
                                 v-on:edit-annotation="editEvent"
                                 v-on:updated="handleEventsUpdated"
                             />
-                            <!-- Selected signal segments -->
-                            <div v-for="(_selection, idx) in plotSelections" :key="`drag-selection-${idx}`"
-                                :id="`signal-selection-${idx}`"
-                                class="selection-area"
-                                :style="selectionStyles"
-                                @click="handleSelectionClick(idx)"
-                                @contextmenu.prevent=""
-                            ></div>
+                            <!-- Selected signal segments: a cascade draws one bar per row a selection crosses. -->
+                            <template v-if="!cascadeMontage">
+                                <div v-for="(_selection, idx) in plotSelections" :key="`drag-selection-${idx}`"
+                                    :id="`signal-selection-${idx}`"
+                                    class="selection-area"
+                                    :style="selectionStyles"
+                                    @click="handleSelectionClick(idx)"
+                                    @contextmenu.prevent=""
+                                ></div>
+                            </template>
+                            <cascade-selections v-if="cascadeMontage"
+                                :activeSelectionIdx="cascadeActiveSelectionIdx"
+                                :montage="cascadeMontage"
+                                :plotDimensions="plotDimensions"
+                                :plotSelections="plotSelections"
+                                :pxPerSecond="pxPerSecond"
+                                v-on:selection-click="handleSelectionClick"
+                            />
                             <div v-if="selectionBound"
                                 class="selection-bound"
                                 :style="selectionBoundStyles"
@@ -110,7 +125,7 @@
                 :cursorPos="cursors?.mainCursorPos || 0"
                 :height="navigatorHeight"
                 :selectionBound="selectionBound"
-                :visibleRange="visibleRange"
+                :visibleRange="navigatorRange"
                 :width="viewerSize[0]"
                 v-on:loaded="resizeElements"
                 v-on:backward="goBackward"
@@ -142,6 +157,8 @@ import { Log } from 'scoped-event-log'
 
 import AnnotationSidebar from '#app/views/biosignal/sidebars/AnnotationSidebar.vue'
 import AnnotationLabels from '#app/views/biosignal/overlays/AnnotationLabels.vue'
+import CascadeAnnotations from '#app/views/biosignal/overlays/CascadeAnnotations.vue'
+import CascadeSelections from '#app/views/biosignal/overlays/CascadeSelections.vue'
 import AnnotationEditor from '#app/views/biosignal/overlays/AnnotationEditor.vue'
 import ChannelHighlights from '#app/views/biosignal/overlays/ChannelHighlights.vue'
 import DivisionGrid from '#app/views/biosignal/overlays/DivisionGrid.vue'
@@ -151,8 +168,13 @@ import SplitPanelView from '#app/views/SplitPanelView.vue'
 import VerticalCursors from '#app/views/biosignal/overlays/VerticalCursors.vue'
 import ViewerOverlay, { type PointerEventOverlay } from '#app/overlays/PointerEventOverlay.vue'
 import { groupSelectionsBySpan } from '#app/views/biosignal/eventChannels'
+import { stackStart } from '../sweep'
 import type { PlotSelection } from '#app/views/biosignal/types'
-import type { AnnotationEventTemplate, BiosignalAnnotationEvent } from "@epicurrents/core/types"
+import type {
+    AnnotationEventTemplate,
+    BiosignalAnnotationEvent,
+    BiosignalCascadeMontage,
+} from "@epicurrents/core/types"
 import { type DragAction } from '#app/views/biosignal/useBiosignalPointer'
 
 
@@ -168,6 +190,8 @@ export default defineComponent({
         AnnotationLabels,
         AnnotationEditor,
         AnnotationSidebar,
+        CascadeAnnotations,
+        CascadeSelections,
         ChannelHighlights,
         DivisionGrid,
         EmgNavigator,
@@ -182,6 +206,7 @@ export default defineComponent({
         const viewerSize = toRef(props, 'viewerSize') as Ref<number[]>
         const annotations = useBiosignalAnnotations(context.RESOURCE)
         const activeCursorTool = ref(null as string | null)
+        const activeMontageVersion = ref(0)
         const activeSelection = ref(null as PlotSelection | null)
         const contextMenu = ref(null as ContextMenuContext | null)
         const dataSetupDone = ref(false)
@@ -233,7 +258,8 @@ export default defineComponent({
             context.SETTINGS,
             visibleRange,
             (position, goTo) => {
-                goTo(position - position%secPerPage.value)
+                // A page, or in a cascade the whole stack, so the target lands where page turns would put it.
+                goTo(stackStart(position, context.RESOURCE.activeMontage?.pageStep || secPerPage.value))
             }
         )
 
@@ -283,6 +309,8 @@ export default defineComponent({
 
         return {
             activeCursorTool,
+            /** Bumped on a montage switch, so the computeds that read the plain montage getter re-evaluate. */
+            activeMontageVersion,
             activeSelection,
             contextMenu,
             dataSetupDone,
@@ -326,6 +354,9 @@ export default defineComponent({
         }
     },
     watch: {
+        secPerPage () {
+            this.syncCascadePageLength()
+        },
         viewerSize (value) {
             if (!value || !value[0] || !value[1]) {
                 return
@@ -337,6 +368,21 @@ export default defineComponent({
         },
     },
     computed: {
+        cascadeActiveSelectionIdx (): number {
+            return this.activeSelection ? this.plotSelections.indexOf(this.activeSelection) : -1
+        },
+        /** The active montage when it is a cascade, otherwise null. */
+        cascadeMontage (): BiosignalCascadeMontage | null {
+            void this.activeMontageVersion
+            const active = this.RESOURCE.activeMontage
+            return active?.isCascade ? active as BiosignalCascadeMontage : null
+        },
+        /** Seconds on screen, which in a cascade is the whole stack. */
+        navigatorRange (): number {
+            void this.activeMontageVersion
+            const step = this.cascadeMontage?.pageStep
+            return step ? step : this.visibleRange
+        },
         nHorizontalDivs (): number {
             return this.SETTINGS.viewport.mainAxis === 'y' && this.SETTINGS.viewport.verticalDivs
             ? this.SETTINGS.viewport.verticalDivs*this.viewerSize[0]/this.viewerSize[1]
@@ -349,6 +395,27 @@ export default defineComponent({
         },
     },
     methods: {
+        activeMontageChanged () {
+            this.hideAllOverlayElements()
+            this.activeMontageVersion++
+            const cascade = this.cascadeMontage
+            if (cascade) {
+                this.syncCascadePageLength()
+                // Stacks sit on a grid of whole stacks, where playback and page turns put them.
+                const aligned = stackStart(this.RESOURCE.viewStart, cascade.pageStep || 0)
+                if (Math.abs(aligned - this.RESOURCE.viewStart) > 1e-9) {
+                    this.goTo(aligned)
+                }
+            }
+        },
+        /** Follow a changed row count on the cascade the recording already has. */
+        cascadeRowCountChanged () {
+            const cascade = this.RESOURCE.montages.find(m => m.isCascade) as BiosignalCascadeMontage | undefined
+            if (cascade) {
+                (cascade as { rowCount: number }).rowCount = this.SETTINGS.cascade.rowCount
+                this.activeMontageVersion++
+            }
+        },
         /** Follow the module's active cursor tool, restyling the plot surfaces to match. */
         cursorToolChanged () {
             const tool = this.getFieldValue(`${this.SCOPE}.cursor-tool`) as string | null
@@ -626,6 +693,20 @@ export default defineComponent({
             this.contextMenu = null
             this.hideAllDragElements()
         },
+        /**
+         * Double-click: in a cascade, leave it for the page holding the clicked time; otherwise the shared handling.
+         */
+        handleDoubleClick (event: CustomEvent) {
+            if (!this.cascadeMontage) {
+                this.handlePlotDoubleClick(event)
+                return
+            }
+            const position = Math.max(0, event.detail.startPos as number)
+            this.setCascade(false)
+            this.$nextTick(() => {
+                this.goTo(stackStart(position, this.secPerPage))
+            })
+        },
         hideSideDrawer () {
             this.$store.dispatch('emg.set-open-sidebar', null)
         },
@@ -637,9 +718,38 @@ export default defineComponent({
         selectDrawerTab (value: string) {
             this.sidebarTab = value
         },
+        /**
+         * Show the cascade of the first channel, building it on first use, or return to the raw signals. A cascade
+         * needs the signal buffer, so it is refused until the cache has data.
+         */
+        async setCascade (on: boolean) {
+            if (!on) {
+                this.$store.dispatch('emg.set-active-montage', null)
+                return
+            }
+            if (!this.dataSetupDone || !this.RESOURCE.channels.length) {
+                return
+            }
+            const names = await this.RESOURCE.addCascadeMontages(this.SETTINGS.cascade.rowCount, this.secPerPage)
+            const name = `cascade:${this.RESOURCE.channels[0].name}`
+            if (!names.includes(name)) {
+                Log.error(`The cascade of '${this.RESOURCE.channels[0].label}' could not be built.`, this.$options.name!)
+                return
+            }
+            this.cascadeRowCountChanged()
+            this.$store.dispatch('emg.set-active-montage', name)
+        },
         signalCacheChanged () {
             if (this.RESOURCE.signalCacheStatus[1] > 0) {
                 this.dataSetupDone = true
+            }
+        },
+        /** A cascade row is one page, so its length follows the page the viewer draws. */
+        syncCascadePageLength () {
+            const cascade = this.RESOURCE.activeMontage
+            if (cascade?.isCascade && this.secPerPage > 0 && cascade.pageLength !== this.secPerPage) {
+                cascade.pageLength = this.secPerPage
+                this.activeMontageVersion++
             }
         },
         timebaseChanged () {
@@ -709,6 +819,7 @@ export default defineComponent({
     },
     mounted () {
         // Add property update handlers.
+        this.RESOURCE.onPropertyChange('activeMontage', this.activeMontageChanged, this.ID)
         this.RESOURCE.onPropertyChange('displayViewStart', this.viewStartUpdated, this.ID)
         this.RESOURCE.onPropertyChange('isActive', () => {
             if (!this.RESOURCE.isActive) {
@@ -719,9 +830,13 @@ export default defineComponent({
         this.RESOURCE.onPropertyChange('signalCacheStatus', this.signalCacheChanged, this.ID)
         this.RESOURCE.onPropertyChange('timebase', this.timebaseChanged, this.ID)
         this.RESOURCE.onPropertyChange('viewStart', this.viewStartChanged, this.ID)
-        // Rewind recording on having reached the end.
+        // Rewind recording on having reached the end. A cascade keeps its final stack in view, drawn whole once the
+        // stop ends the sweep; the normal view returns to the start.
         this.RESOURCE.addEventListener(EmgRecording.EVENTS.AUDIO_PLAYBACK_ENDED, () => {
             this.RESOURCE.rewindAudio()
+            if (this.cascadeMontage) {
+                return
+            }
             if (this.isInEpochMode) {
                 this.goTo(0)
             } else {
@@ -732,7 +847,9 @@ export default defineComponent({
         window.addEventListener('keyup', this.handleKeyup, false)
         // Subscribe to actions.
         this.unsubscribeActions = this.$store.subscribeAction((action) => {
-            if (action.type === 'redo-action') {
+            if (action.type === 'emg.set-cascade') {
+                this.setCascade(action.payload as boolean)
+            } else if (action.type === 'redo-action') {
                 this.redoAction()
             } else if (action.type === 'undo-action') {
                 this.undoAction()
@@ -742,6 +859,7 @@ export default defineComponent({
         // action that happened to set it.
         this.addPropertyChangeHandler(`${this.SCOPE}.cursor-tool`, this.cursorToolChanged)
         this.addPropertyChangeHandler(`${this.SCOPE}.open-sidebar`, this.openSidebarChanged)
+        this.addPropertyChangeHandler(`${this.SCOPE}.cascade.rowCount`, this.cascadeRowCountChanged)
         // Init signal cache monitoring.
         this.signalCacheChanged()
     },

@@ -17,6 +17,18 @@ import type {
 export type EmgInterfaceSchemas = InterfaceSchema
 
 export type EmgInterfaceSettings = CommonBiosignalInterfaceSettings & {
+    /** The cascade view, which stacks consecutive pages of one channel as rows. */
+    cascade: {
+        /** Width of the blank drawn ahead of the signal in `overwrite` sweep, in percent of a row. */
+        eraseWidth: number
+        /** Number of stacked rows. */
+        rowCount: number
+        /**
+         * What playback does once the last row is drawn: `clear` empties every row and starts again from the top,
+         * `overwrite` draws the next stack over the previous one, blanking `eraseWidth` ahead of the new signal.
+         */
+        sweep: 'clear' | 'overwrite'
+    }
     /** Delay in milliseconds before starting continuous browsing. */
     continuousBrowseDelay: number
     /** Interval in milliseconds between updates when continuously browsing. */

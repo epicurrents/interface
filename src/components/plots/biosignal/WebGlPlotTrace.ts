@@ -22,6 +22,7 @@ export default class WebGlPlotTrace implements WebGlTrace {
     protected _colorSegments: WebGlTraceColorSegment[] | null = null
     protected _coordinates = 0
     protected _downsampleFactor = 0
+    protected _drawSpan: [number, number] | null = null
     protected _offset: number
     protected _opacity: number | undefined = undefined
     protected _parent: BiosignalPlot
@@ -66,6 +67,12 @@ export default class WebGlPlotTrace implements WebGlTrace {
     }
     set coordinates (coords: number) {
         this._coordinates = coords
+    }
+    get drawSpan () {
+        return this._drawSpan
+    }
+    set drawSpan (value: [number, number] | null) {
+        this._drawSpan = value
     }
     get length () {
         return this._xyPairs.length/2

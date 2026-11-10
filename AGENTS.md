@@ -226,10 +226,11 @@ clipSpaceStep = 2*(downsampleFactor/samplingRate)/viewRange   // one sample peri
 
 Normalising over the datapoint count instead (`2/length`) is *equivalent* only when the points exactly span the view, and the residual is one sample period — 0.04 % of the width at 256 Hz over a 10 s view (invisible), but **10 % at 1 Hz**. A recording that mixes 256 Hz EEG with 1 Hz aEEG/CFM trends in one plot makes the low-rate case real: with count-normalisation a 1 Hz trend pins its last point at a fixed fraction of the width and *stretches* as the view widens, instead of gaining a sample. The trace falls back to count-normalisation when `viewRange` is not passed — `EmgPlot` / `NcsPlot` / `AccPlot` still do this, which is harmless only because their channels are uniformly high-rate. Pass `viewRange` if a low-rate channel can ever appear in those plots.
 
-Two invariants ride along:
+Three invariants ride along:
 
 - **Allocate `ceil(viewRange*rate/downsampleFactor) + 1` points**, not `floor(...)`. A range `[t, t+d]` contains up to `floor(d*rate)+1` samples; rounding down silently truncates the last in-range sample. The `+1` holds the datapoint past the view edge — `initData` gives it its true x (> 1) and WebGL clips it, which is what lets a line reach the right edge.
 - **`pointCount`, not `length`, is what gets drawn.** `setData` records how many datapoints actually hold data; `_updateLines` / `_drawSegmentedLine` draw only those. Drawing `length` would trail a filler line from the last real sample whenever the data is short (recording end, partial cache).
+- **`drawSpan` narrows what is drawn without touching the data.** A trace drawn in one colour draws only the vertices `[first, end)` of its span, clamped to `pointCount`; null draws them all. It is how the EMG cascade draws a row in as playback reaches it ([src/app/modules/emg/sweep.ts](src/app/modules/emg/sweep.ts)): a frame changes a span, not a buffer, so a sweep costs no data copy. `_drawSegmentedLine` ignores it, so colour segments and a span do not combine.
 
 `EegPlot.edgePadding()` requests **one** sample period of the *slowest visible* channel past the view end. A half-open view holds no datapoint at its end, so reading one beyond it is what lets a line reach the right edge — legitimate renderer lookahead, not a workaround. The trace's own `ceil(...)+1` allocation drops the surplus, so it costs nothing. It is a method, not a computed — the visible channel set changes with the active montage, and `RESOURCE.channels` is not reliably reactive, so a computed would cache a stale value.
 

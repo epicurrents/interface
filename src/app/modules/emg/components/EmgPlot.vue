@@ -23,13 +23,21 @@
  */
 import { defineComponent, PropType, reactive, Ref, ref } from "vue"
 import { T } from "#i18n"
-import type { BiosignalChannel, MontageChannel, SettingsColor } from "@epicurrents/core/types"
+import type {
+    BiosignalCascadeMontage,
+    BiosignalChannel,
+    MontageChannel,
+    SettingsColor,
+} from "@epicurrents/core/types"
+import { EmgRecording } from "@epicurrents/emg-module"
+import { Log } from "scoped-event-log"
 import { useStore } from "vuex"
 import { settingsColorToRgba, shouldDisplayChannel } from "@epicurrents/core/util"
 import { NUMERIC_ERROR_VALUE } from "@epicurrents/core/util"
 import { PointerInteraction } from "#types/interface"
 import { useEmgContext } from "#app/modules/emg"
 import { EmgNavigationKey } from "../types"
+import { rowSpans, stackStart, sweepRange } from "../sweep"
 import { NO_POINTER_BUTTON_DOWN, resolveDisplayPolarity } from "#util"
 import type {
     OverlayPointerEventMeta,
@@ -47,6 +55,17 @@ const DOUBLE_CLICK_THRESHOLD = 250
 const SWIPE_RANGE_THRESHOLD = 100
 const SWIPE_TIME_THRESHOLD = 500
 const WHEEL_TRIGGER_THRESHOLD = 150
+
+/**
+ * One set of cascade row traces and the stack its data was read from. The start is the recording time of the stack's
+ * first row, or NaN while the set holds no data. Keeping the start with the data is what lets the sweep draw a set
+ * correctly in the frames between a page turn and the arrival of the new stack: a set is drawn by where its data lies,
+ * not by the role it was filled for.
+ */
+type CascadeTraceSet = {
+    start: number
+    traces: WebGlPlotTrace[]
+}
 
 export default defineComponent({
     name: 'EmgPlot',
@@ -83,6 +102,12 @@ export default defineComponent({
     setup () {
         const store = useStore()
         const cacheHasData = ref(false)
+        const cascadeReveal = ref('')
+        const cascadeSets = {
+            current: { start: NaN, traces: [] } as CascadeTraceSet,
+            previous: { start: NaN, traces: [] } as CascadeTraceSet,
+        }
+        const cascadeSweepActive = ref(false)
         const canvas = ref<HTMLCanvasElement>() as Ref<HTMLCanvasElement>
         const clickCountResetTimer = 0
         const consecutiveClickCount = ref(0)
@@ -128,6 +153,12 @@ export default defineComponent({
         const wrapper = ref<HTMLDivElement>() as Ref<HTMLDivElement>
         return {
             cacheHasData,
+            /** The sweep state last drawn, so a frame that changes nothing draws nothing. */
+            cascadeReveal,
+            /** Row traces of the stack in view, and in overwrite sweep of the stack before it. */
+            cascadeSets,
+            /** True from playback start to its stop or end, through any pause: while true the sweep draws the rows. */
+            cascadeSweepActive,
             canvas,
             clickCountResetTimer,
             consecutiveClickCount,
@@ -232,6 +263,14 @@ export default defineComponent({
         $t: function (key: string, params = {}, capitalized = false) {
             return T(key, this.$options.name, params, capitalized)
         },
+        /**
+         * The active montage when it is a cascade, otherwise null. Read on demand, since the montage is no reactive
+         * value.
+         */
+        activeCascade (): BiosignalCascadeMontage | null {
+            const active = this.RESOURCE.activeMontage
+            return active?.isCascade ? active as BiosignalCascadeMontage : null
+        },
         addPointerEventHandler (operation: PointerInteraction, handler: (event?: PointerEvent) => void) {
             this.pointerEventHandlers[operation].push(handler)
         },
@@ -258,10 +297,55 @@ export default defineComponent({
                 this.addTraces()
             })
         },
+        /**
+         * Create the row traces of a cascade: one per row for the stack in view and, in overwrite sweep, one more per
+         * row for the stack before it.
+         */
+        addCascadeTraces (cascade: BiosignalCascadeMontage) {
+            if (!this.wglPlot) {
+                return
+            }
+            this.wglPlot.clearAll()
+            this.visibleChannels = 0
+            const makeRows = () => cascade.channels.map((chan) => {
+                const [r, g, b, a] = this.SETTINGS.trace.color as SettingsColor
+                const dispPol = resolveDisplayPolarity(chan.displayPolarity, this.SETTINGS.displayPolarity, 'up')
+                const sigLen = this.viewRange*chan.samplingRate/this.downSampleFactor
+                const samplesPerPx = Math.floor(sigLen)/this.plot.offsetWidth
+                const line = new WebGlPlotTrace(
+                    this.wglPlot!,
+                    new PlotColor(r, g, b, a),
+                    sigLen,
+                    chan.sensitivity || this.RESOURCE.sensitivity,
+                    chan.samplingRate,
+                    samplesPerPx,
+                    this.downSampleFactor,
+                    dispPol,
+                    chan.scale || 0,
+                    chan.offset?.baseline || 0
+                )
+                this.wglPlot!.addChannel(line)
+                return line
+            })
+            this.cascadeSets.current = { start: NaN, traces: makeRows() }
+            this.cascadeSets.previous = {
+                start: NaN,
+                traces: this.SETTINGS.cascade.sweep === 'overwrite' ? makeRows() : [],
+            }
+            this.cascadeReveal = ''
+            this.updateTraces()
+        },
         addTraces () {
             if (!this.wglPlot) {
                 return
             }
+            const cascade = this.activeCascade()
+            if (cascade) {
+                this.addCascadeTraces(cascade)
+                return
+            }
+            this.cascadeSets.current = { start: NaN, traces: [] }
+            this.cascadeSets.previous = { start: NaN, traces: [] }
             // Clear possible pre-existing traces
             this.wglPlot.clearAll()
             this.visibleChannels = 0
@@ -351,7 +435,12 @@ export default defineComponent({
             const relY = yPos/containerH
             const contLeft = this.plot.getBoundingClientRect().left
             const pointerLeft = event.clientX - contLeft
-            const position = pointerLeft/this.pxPerSecond + this.RESOURCE.viewStart
+            // In a cascade each row is its own slice of the recording, so the pointer's offset into the row is added
+            // to the start of the row it is on.
+            const cascade = this.activeCascade()
+            const position = cascade
+                ? cascade.getTimeAtRowPosition(cascade.getRowAtY(relY), pointerLeft/this.pxPerSecond)
+                : pointerLeft/this.pxPerSecond + this.RESOURCE.viewStart
             return {
                 /** Pointer position in seconds from recording start. */
                 position,
@@ -408,7 +497,7 @@ export default defineComponent({
             // Never move more than the number of full seconds visible on page to avoid skipping data.
             if (key === 'PageUp' || key === 'ArrowLeft') {
                 // Step of zero will perform the distance calculation in parent component.
-                const step = this.secPerPage
+                const step = this.pageStep()
                 this.keydownTimeouts[key] = window.setTimeout(() => {
                     this.keydownTimeouts[key] = 0
                     this.goBackward(step)
@@ -418,7 +507,7 @@ export default defineComponent({
                 }, this.SETTINGS.continuousBrowseDelay)
                 this.goBackward(step)
             } else if (key === 'PageDown' || key === 'ArrowRight') {
-                const step = this.secPerPage
+                const step = this.pageStep()
                 this.keydownTimeouts[key] = window.setTimeout(() => {
                     this.keydownTimeouts[key] = 0
                     this.goForward(step)
@@ -556,8 +645,11 @@ export default defineComponent({
             this.pointerButton = initialEvent.button
             const threshold = this.pointerDragThreshold
             let overThreshold = false
-            const pointerMove = (left: number, top: number, _meta?: OverlayPointerEventMeta) => {
-                const pointerPos = left/this.pxPerSecond + this.RESOURCE.viewStart
+            const pointerMove = (left: number, top: number, meta?: OverlayPointerEventMeta) => {
+                // Through `getPointerPosition`, so a drag in a cascade lands on the row the pointer is on.
+                const pointerPos = meta?.event
+                                   ? this.getPointerPosition(meta.event).position
+                                   : left/this.pxPerSecond + this.RESOURCE.viewStart
                 // Allow drag in both directions
                 const dif = left - initialLeft
                 // Wait for dif to exceed threshold at least once before considering this a drag action.
@@ -583,14 +675,13 @@ export default defineComponent({
                 })
                 this.$emit('pointer-drag', customEv)
             }
-            const pointerUp = (left: number, _top: number, meta: OverlayPointerEventMeta) => {
+            const pointerUp = (_left: number, _top: number, meta: OverlayPointerEventMeta) => {
                 // Only end drag event if the original button is released.
                 if (event.button !== this.pointerButton) {
                     return
                 }
                 this.pointerButton = NO_POINTER_BUTTON_DOWN
-                const timePos = left/this.pxPerSecond + this.RESOURCE.viewStart
-                const { x, y } = this.getPointerPosition(meta.event!)
+                const { x, y, position: timePos } = this.getPointerPosition(meta.event!)
                 const customEv = new CustomEvent('plotpointerup', {
                     detail: {
                         channelProps: channelProps,
@@ -701,7 +792,7 @@ export default defineComponent({
                     // Long-press without swipe.
                     const { relY, position, x, y } = this.getPointerPosition(event.changedTouches[0])
                     const channelProps = this.RESOURCE.getChannelAtYPosition(relY)
-                    const timePos = x/this.pxPerSecond + this.RESOURCE.viewStart
+                    const timePos = position
                     const customEv = new CustomEvent('plotpointerup', {
                         detail: {
                             channelProps: channelProps,
@@ -747,7 +838,7 @@ export default defineComponent({
         handleWheelEvent (event: WheelEvent) {
             this.wheelDelta += event.deltaY
             if (Math.abs(this.wheelDelta) >= WHEEL_TRIGGER_THRESHOLD) {
-                const step = Math.min(this.SETTINGS.pageLength, Math.floor(this.visibleRange))
+                const step = this.pageStep()
                 if (event.deltaY > 0) {
                     // Wheel scrolled down -> browse forward.
                     this.goForward(step)
@@ -757,6 +848,10 @@ export default defineComponent({
                 }
                 this.wheelDelta = 0
             }
+        },
+        /** Seconds one page turn moves the view: the whole stack in a cascade, otherwise one page. */
+        pageStep () {
+            return this.activeCascade()?.pageStep || this.secPerPage
         },
         removeAllPointerEventHandlers (operation: PointerInteraction) {
             this.pointerEventHandlers[operation].splice(0)
@@ -807,6 +902,111 @@ export default defineComponent({
             }
         },
         /**
+         * Set each cascade row's drawn span for the playback position, and redraw when that changes anything.
+         *
+         * Outside a sweep the stack in view is drawn whole. During one, each set draws the part `sweepRange` gives
+         * it, so a blank runs ahead of the new signal over the old one in overwrite sweep.
+         */
+        updateCascadeReveal (cascade: BiosignalCascadeMontage) {
+            const step = cascade.pageStep || 0
+            const rowLength = cascade.pageLength || 0
+            const sets = this.cascadeSets
+            if (!this.wglPlot || !step || !rowLength || !sets.current.traces.length) {
+                return
+            }
+            const viewStart = this.RESOURCE.viewStart
+            const offset = this.RESOURCE.playbackPosition - viewStart
+            const sweeping = this.cascadeSweepActive && offset >= 0 && offset < step
+            const erase = sweeping && this.SETTINGS.cascade.sweep === 'overwrite'
+                          ? Math.max(0, this.SETTINGS.cascade.eraseWidth)/100*rowLength
+                          : 0
+            const trace = sets.current.traces[0]
+            const pointsPerSec = trace.samplingRate/this.downSampleFactor
+            const written = Math.round(offset*pointsPerSec)
+            const state = sweeping
+                          ? `${viewStart}|${written}|${erase}|${sets.current.start}|${sets.previous.start}`
+                          : `full|${sets.current.start}`
+            if (state === this.cascadeReveal) {
+                return
+            }
+            this.cascadeReveal = state
+            const rowCount = sets.current.traces.length
+            const apply = (set: CascadeTraceSet, range: [number, number] | null) => {
+                const spans = rowSpans(range, rowCount, rowLength, pointsPerSec)
+                set.traces.forEach((line, i) => {
+                    line.drawSpan = spans[i]
+                })
+            }
+            if (!sweeping) {
+                // The stack in view, whole; a set read for an earlier view keeps showing until the new one arrives.
+                apply(sets.current, [0, step])
+                apply(sets.previous, null)
+            } else {
+                const sweep = { erase, offset, stackLength: step, viewStart }
+                apply(sets.current, sweepRange(sets.current.start, sweep))
+                apply(sets.previous, sweepRange(sets.previous.start, sweep))
+            }
+            if (!this.newSignalData) {
+                // A frame with new data is drawn by the frame loop anyway.
+                this.wglPlot.update()
+            }
+        },
+        /**
+         * Read the stack in view, and in overwrite sweep the stack before it, into the cascade row traces. A read that
+         * resolves after the view has moved on is dropped, since its stack is no longer the one asked for.
+         */
+        updateCascadeTraces (cascade: BiosignalCascadeMontage) {
+            if (cascade.channels.length !== this.cascadeSets.current.traces.length) {
+                // The row count changed under the traces.
+                this.addCascadeTraces(cascade)
+                return
+            }
+            const start = this.RESOURCE.viewStart
+            const step = cascade.pageStep || 0
+            const rowLength = cascade.pageLength
+            const fill = (set: CascadeTraceSet, setStart: number) => {
+                cascade.getAllSignals([setStart, setStart + this.viewRange]).then((response) => {
+                    // The rows are cut at the row length of the request, so a read made before a row length change is
+                    // as stale as one made for another view.
+                    if (
+                        !this.wglPlot || !response || this.destroyed || this.RESOURCE.viewStart !== start ||
+                        this.activeCascade() !== cascade || cascade.pageLength !== rowLength
+                    ) {
+                        return
+                    }
+                    for (let i=0; i<set.traces.length; i++) {
+                        const line = set.traces[i]
+                        const chan = cascade.channels[i]
+                        line.polarity = resolveDisplayPolarity(
+                            chan.displayPolarity, this.SETTINGS.displayPolarity, 'up'
+                        )
+                        line.scale = chan.scale || 0
+                        line.sensitivity = chan.sensitivity || this.RESOURCE.sensitivity
+                        // The read past the recording end comes back as zeros, so each row is cut at the end and
+                        // a row wholly past it is left blank rather than drawn as a flat line.
+                        const data = response.signals[i]?.data ?? new Float32Array(0)
+                        const rowStart = setStart + i*(rowLength || 0)
+                        const inRecording = Math.max(0, this.RESOURCE.totalDuration - rowStart)
+                        const samples = Math.ceil(inRecording*(response.signals[i]?.samplingRate || 0) - 1e-6)
+                        line.setData(data.subarray(0, Math.min(data.length, samples)), this.downSampleFactor)
+                    }
+                    set.start = setStart
+                    this.cascadeReveal = ''
+                    this.newSignalData = true
+                }).catch((e: unknown) => {
+                    Log.error(`Reading the cascade rows failed.`, this.$options.name!, e as Error)
+                })
+            }
+            fill(this.cascadeSets.current, start)
+            if (this.cascadeSets.previous.traces.length) {
+                if (step && start - step >= 0) {
+                    fill(this.cascadeSets.previous, start - step)
+                } else {
+                    this.cascadeSets.previous.start = NaN
+                }
+            }
+        },
+        /**
          * Update trace amplitudes and offsets to fit current plot height.
          */
         updateTraceHeights () {
@@ -828,6 +1028,11 @@ export default defineComponent({
             }
             if (!this.updatingPlot) {
                 this.updatingPlot = true
+            }
+            const cascade = this.activeCascade()
+            if (cascade) {
+                this.updateCascadeTraces(cascade)
+                return
             }
             // Y-axis values for each channel
             // TODO: ampScale and sensitivity into trace properties?
@@ -931,6 +1136,16 @@ export default defineComponent({
         this.addPropertyChangeHandler(`${this.SCOPE}.displayPolarity`, this.refreshTraces)
         this.addPropertyChangeHandler(`${this.SCOPE}.trace`, this.refreshTraces)
         this.addPropertyChangeHandler(`${this.SCOPE}.epochMode`, this.refreshTraces)
+        this.addPropertyChangeHandler(`${this.SCOPE}.cascade.sweep`, this.refreshTraces)
+        // A cascade has its own number of traces, so a montage switch rebuilds them.
+        this.RESOURCE.onPropertyChange('activeMontage', this.refreshTraces, this.ID)
+        // The sweep runs from playback start to its stop or end; a pause holds it where it is.
+        this.RESOURCE.addEventListener(EmgRecording.EVENTS.AUDIO_PLAYBACK_STARTED, () => {
+            this.cascadeSweepActive = true
+        }, this.ID)
+        this.RESOURCE.addEventListener(EmgRecording.EVENTS.AUDIO_PLAYBACK_STOPPED, () => {
+            this.cascadeSweepActive = false
+        }, this.ID)
         // Trigger element resize in parent component once this component is done loading
         this.$emit('loaded')
         // Wait for the signals to be cached before loading the first frame.
@@ -986,12 +1201,18 @@ export default defineComponent({
             if (this.RESOURCE.isAudioPlaying) {
                 // Update view start to follow playback position.
                 const audioPos = this.RESOURCE.playbackPosition
-                if (audioPos >= 0 && audioPos < this.RESOURCE.totalDuration) {
-                    const audioPage = audioPos - (audioPos - this.startOffset)%this.secPerPage
+                const step = this.pageStep()
+                if (step && audioPos >= 0 && audioPos < this.RESOURCE.totalDuration) {
+                    const audioPage = this.startOffset + stackStart(audioPos - this.startOffset, step)
                     if (audioPage !== this.RESOURCE.viewStart) {
                         this.$emit('go-to', audioPage)
                     }
                 }
+            }
+            const cascade = this.activeCascade()
+            if (cascade) {
+                // Before the new-data draw below, so new data is drawn with the spans of the sweep rather than whole.
+                this.updateCascadeReveal(cascade)
             }
             if (this.newSignalData) {
                 this.wglPlot?.update()

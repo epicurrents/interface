@@ -71,6 +71,8 @@ export const runtime = {
 }
 
 enum EmgActionTypes {
+    SET_ACTIVE_MONTAGE = 'emg.set-active-montage',
+    SET_CASCADE = 'emg.set-cascade',
     SET_CURSOR_TOOL = 'emg.set-cursor-tool',
     SET_HIGHPASS_FILTER = 'emg.set-highpass-filter',
     SET_LOWPASS_FILTER = 'emg.set-lowpass-filter',
@@ -82,6 +84,13 @@ enum EmgActionTypes {
 }
 
 export const actions = {
+    [EmgActionTypes.SET_ACTIVE_MONTAGE] (_injectee: ActionContext<State, State>, payload: number | string | null) {
+        runtime.setPropertyValue('active-montage', payload)
+    },
+    [EmgActionTypes.SET_CASCADE] (_injectee: ActionContext<State, State>, _payload: boolean) {
+        // A broadcast: the viewer builds the cascade on first use, which needs the recording's buffer and the page
+        // length it draws, and activates it.
+    },
     [EmgActionTypes.SET_CURSOR_TOOL] (_injectee: ActionContext<State, State>, payload: string | null) {
         runtime.setPropertyValue('cursor-tool', payload)
     },

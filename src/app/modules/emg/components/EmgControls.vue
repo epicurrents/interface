@@ -69,11 +69,25 @@ export default defineComponent({
                 version: 0,
                 width: '7rem',
             },
+            // Cascade view toggle.
+            {
+                id: 'cascade',
+                align: 'right',
+                iconName: 'bars',
+                joinRight: true,
+                label: T('Toggle cascade view', 'EmgControls'),
+                onclick: ['emg.set-cascade', true],
+                reloadOn: ['resource:activeMontage'],
+                type: 'on-off',
+                value: false,
+                version: 0,
+            },
             // Inspect tool toggle.
             {
                 id: 'inspect',
                 align: 'right',
                 iconName: 'search',
+                joinLeft: true,
                 joinRight: true,
                 label: T('Inspect EMG segments', 'EmgControls'),
                 onclick: ['emg.set-cursor-tool', 'inspect'],
@@ -200,6 +214,13 @@ export default defineComponent({
                     c.enabled = true
                     c.value = `timebase-${this.RESOURCE.timebaseUnit}-${this.RESOURCE.timebase}`
                 }
+                c.version++
+            }
+            if (wants('cascade')) {
+                const c = control('cascade')
+                const isActive = this.RESOURCE.activeMontage?.isCascade === true
+                c.value = isActive
+                c.onclick = ['emg.set-cascade', !isActive]
                 c.version++
             }
             if (wants('inspect')) {

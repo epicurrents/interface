@@ -230,8 +230,13 @@ export default class WebGlPlot implements BiosignalPlot {
             gl.bufferData(gl.ARRAY_BUFFER, line.xy, gl.STREAM_DRAW)
             const segments = line.colorSegments
             if (!segments?.length) {
-                applyColor(line.color)
-                gl.drawArrays(gl.LINE_STRIP, 0, line.pointCount)
+                const first = line.drawSpan ? Math.max(0, line.drawSpan[0]) : 0
+                const end = line.drawSpan ? Math.min(line.pointCount, line.drawSpan[1]) : line.pointCount
+                // A single vertex is no line, and a LINE_STRIP of one renders nothing anyway.
+                if (end - first >= 2) {
+                    applyColor(line.color)
+                    gl.drawArrays(gl.LINE_STRIP, first, end - first)
+                }
             } else {
                 this._drawSegmentedLine(gl, line, segments, applyColor)
             }
