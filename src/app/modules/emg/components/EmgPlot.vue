@@ -55,6 +55,10 @@ const DOUBLE_CLICK_THRESHOLD = 250
 const SWIPE_RANGE_THRESHOLD = 100
 const SWIPE_TIME_THRESHOLD = 500
 const WHEEL_TRIGGER_THRESHOLD = 150
+/** Milliseconds before a read the signal service displaced is asked again. */
+const READ_RETRY_DELAY = 50
+/** Displaced reads asked again in a row before the plot gives up on a view and says so. */
+const READ_RETRY_LIMIT = 40
 
 /**
  * One set of cascade row traces and the stack its data was read from. The start is the recording time of the stack's
@@ -112,6 +116,9 @@ export default defineComponent({
         const clickCountResetTimer = 0
         const consecutiveClickCount = ref(0)
         const delayedRefresh = ref(0)
+        const readRetries = ref(0)
+        const readRetryView = ref('')
+        const readRetryTimer = ref(0)
         const destroyed = ref(false)
         const downSampleFactor = ref(1)
         const keydownIntervals = reactive<KeydownTimer>({
@@ -163,6 +170,11 @@ export default defineComponent({
             clickCountResetTimer,
             consecutiveClickCount,
             delayedRefresh,
+            /** Reads of the current view asked again in a row, see `retryRead`. */
+            readRetries,
+            readRetryTimer,
+            /** The view `readRetries` counts for; a new view starts the count again. */
+            readRetryView,
             /** Set to true before component gets destroyed. */
             destroyed,
             /** Draw one datapoint per downSampleFactor. */
@@ -324,6 +336,8 @@ export default defineComponent({
                     chan.scale || 0,
                     chan.offset?.baseline || 0
                 )
+                // Nothing is drawn until the stack is read, rather than a flat line at every row.
+                line.setData(new Float32Array(0))
                 this.wglPlot!.addChannel(line)
                 return line
             })
@@ -385,6 +399,8 @@ export default defineComponent({
                     scale,
                     chan.offset?.baseline || 0
                 )
+                // Nothing is drawn until the signal is read, rather than a flat line.
+                line.setData(new Float32Array(0))
                 this.wglPlot.addChannel(line)
             }
             this.updateTraces()
@@ -849,9 +865,42 @@ export default defineComponent({
                 this.wheelDelta = 0
             }
         },
+        /**
+         * Is the view still the one a read was made for. The signal service answers reads in turn and may resolve one
+         * long after it was asked, by which time the traces belong to another view.
+         * @param start - View start the read was made for.
+         * @param viewRange - Page length the read was made for.
+         */
+        isCurrentView (start: number, viewRange: number) {
+            return start === this.RESOURCE.viewStart && viewRange === this.viewRange
+        },
         /** Seconds one page turn moves the view: the whole stack in a cascade, otherwise one page. */
         pageStep () {
             return this.activeCascade()?.pageStep || this.secPerPage
+        },
+        /**
+         * Read the current view again after a read came back empty. The signal service keeps one read in flight and
+         * one waiting, and answers a waiting read it displaces with nothing, whichever component asked; the navigator
+         * reading the whole recording displaces the plot's read this way. Without asking again the traces keep no data
+         * until something else redraws them.
+         */
+        retryRead () {
+            const view = `${this.RESOURCE.viewStart}|${this.viewRange}`
+            if (view !== this.readRetryView) {
+                this.readRetryView = view
+                this.readRetries = 0
+            }
+            if (this.readRetries >= READ_RETRY_LIMIT) {
+                Log.warn(`The signals of the view could not be read.`, this.$options.name!)
+                return
+            }
+            this.readRetries++
+            window.clearTimeout(this.readRetryTimer)
+            this.readRetryTimer = window.setTimeout(() => {
+                if (!this.destroyed) {
+                    this.updateTraces()
+                }
+            }, READ_RETRY_DELAY)
         },
         removeAllPointerEventHandlers (operation: PointerInteraction) {
             this.pointerEventHandlers[operation].splice(0)
@@ -969,11 +1018,16 @@ export default defineComponent({
                     // The rows are cut at the row length of the request, so a read made before a row length change is
                     // as stale as one made for another view.
                     if (
-                        !this.wglPlot || !response || this.destroyed || this.RESOURCE.viewStart !== start ||
+                        !this.wglPlot || this.destroyed || !this.isCurrentView(start, this.viewRange) ||
                         this.activeCascade() !== cascade || cascade.pageLength !== rowLength
                     ) {
                         return
                     }
+                    if (!response) {
+                        this.retryRead()
+                        return
+                    }
+                    this.readRetries = 0
                     for (let i=0; i<set.traces.length; i++) {
                         const line = set.traces[i]
                         const chan = cascade.channels[i]
@@ -1039,10 +1093,15 @@ export default defineComponent({
             const range = [this.RESOURCE.viewStart, this.RESOURCE.viewStart + this.viewRange]
             // The method returns raw signals if no montage is set
             this.RESOURCE.getAllSignals(range).then((response) => {
-                if (!this.wglPlot || !response || this.destroyed) {
-                    // Mostly for TypeScript
+                if (!this.wglPlot || this.destroyed || !this.isCurrentView(range[0], this.viewRange)) {
+                    // A read for a view that has moved on is not drawn; the read for the current view follows.
                     return
                 }
+                if (!response) {
+                    this.retryRead()
+                    return
+                }
+                this.readRetries = 0
                 // Check that component width hasn't changed
                 if (this.wglPlot.width !== this.plot.offsetWidth) {
                     this.wglPlot.resetWidth()
@@ -1233,6 +1292,7 @@ export default defineComponent({
     beforeUnmount () {
         // Stop the anomation frame loop.
         cancelAnimationFrame(this.nextAnimationFrame)
+        window.clearTimeout(this.readRetryTimer)
         this.destroyed = true
         // Remove all remaining leave handlers
         this.cancelPointerEventHandlers('drag')

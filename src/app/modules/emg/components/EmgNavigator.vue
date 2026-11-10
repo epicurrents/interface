@@ -68,6 +68,11 @@ import { SignalSelectionLimit } from "#types/interface"
 // Child components
 import NavigatorTimeline from './EmgNavigatorTimeline.vue'
 
+/** Milliseconds before a displaced signal read is asked again. */
+const READ_RETRY_DELAY = 100
+/** Displaced signal reads asked again in a row before the navigator draws without its signal line. */
+const READ_RETRY_LIMIT = 20
+
 export default defineComponent({
     name: 'EmgNavigator',
     components: {
@@ -97,6 +102,8 @@ export default defineComponent({
     },
     setup () {
         const audioPlaying = ref(false)
+        const readRetries = ref(0)
+        const readRetryTimer = ref(0)
         /** Observer keeping `timelineWidth` in step with the timeline column. */
         const rso = null as ResizeObserver | null
         const highlights = ref([] as { color: SettingsColor, highlights: [number, number][], interval: number }[])
@@ -111,6 +118,9 @@ export default defineComponent({
         const viewbox = ref<HTMLCanvasElement>() as Ref<HTMLCanvasElement>
         return {
             audioPlaying,
+            /** Signal reads asked again in a row after the service displaced them. */
+            readRetries,
+            readRetryTimer,
             highlights,
             rso,
             startPosition,
@@ -253,15 +263,24 @@ export default defineComponent({
                 }
             }
             // Draw signal. Nothing is cached before the first progress report, and the reader refuses an empty range;
-            // the cache status change that follows redraws the navigator.
+            // the cache status change that follows redraws the navigator. The raw signals, since through an active
+            // montage a cascade answers its rows, each one page long, which would draw the recording into one page.
             const cached = this.RESOURCE.signalCacheStatus
             const signalRequest = cached[1] > cached[0]
-                ? this.RESOURCE.getAllSignals([...cached])
+                ? this.RESOURCE.getAllRawSignals([...cached])
                 : Promise.resolve(null)
             signalRequest.then((response) => {
                 if (!response) {
+                    // The signal service answers a read it displaced with nothing, and the plot's reads displace this
+                    // one; once the cache is complete nothing else redraws the navigator, so it asks again.
+                    if (cached[1] > cached[0] && this.readRetries < READ_RETRY_LIMIT) {
+                        this.readRetries++
+                        window.clearTimeout(this.readRetryTimer)
+                        this.readRetryTimer = window.setTimeout(this.drawNavigator, READ_RETRY_DELAY)
+                    }
                     return
                 }
+                this.readRetries = 0
                 for (let i=0; i<response.signals.length; i++) {
                     const sig = response.signals[i]
                     context.strokeStyle = settingsColorToRgba(this.SETTINGS.navigator.signalColor)
@@ -569,6 +588,7 @@ export default defineComponent({
     },
     beforeUnmount () {
         this.rso?.disconnect()
+        window.clearTimeout(this.readRetryTimer)
         // Remove property update handlers
         this.RESOURCE.removeAllEventListeners(this.ID)
         this.RESOURCE.activeMontage?.removeAllEventListeners(this.ID)

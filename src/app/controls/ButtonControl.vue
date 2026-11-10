@@ -113,6 +113,25 @@ export default defineComponent({
         $t: function (key: string, params = {}, capitalized = false) {
             return T(key, this.$options.name, params, capitalized)
         },
+        /**
+         * Subscribe the `resource:` reload triggers on the active recording, dropping them from the one followed so
+         * far. The control outlives a recording switch, so a trigger bound once at mount keeps following a recording
+         * that is no longer shown while the one that is changes unheard.
+         */
+        followResource () {
+            this.RESOURCE?.removeAllEventListeners(this.ID)
+            const active = this.$store.getters.getActiveResource()
+            if (!active) {
+                return
+            }
+            this.RESOURCE = active as typeof this.RESOURCE
+            for (const reload of this.reloadOn) {
+                const [scope, prop] = reload.split(':')
+                if (scope === 'resource' && prop) {
+                    this.RESOURCE.onPropertyChange(prop as keyof typeof this.RESOURCE, this.reloadComponent, this.ID)
+                }
+            }
+        },
         reloadComponent () {
             this.$nextTick(() => {
                 this.$emit('reload')
@@ -144,6 +163,14 @@ export default defineComponent({
         )
     },
     mounted () {
+        this.followResource()
+        // A recording switch moves the triggers and reloads, since the new recording's values were set unheard.
+        this.$store.state.addEventListener('set-active-resource', () => {
+            this.$nextTick(() => {
+                this.followResource()
+                this.reloadComponent()
+            })
+        }, this.ID)
         // Listen to set property changes in the recording
         for (const reload of this.reloadOn) {
             const [scope, prop] = reload.split(':')
@@ -158,7 +185,7 @@ export default defineComponent({
                 // its descendants either way.
                 this.addPropertyChangeHandler(prop.replace(/\.$/, ''), this.reloadComponent)
             } else if (scope === 'resource') {
-                this.RESOURCE.onPropertyChange(prop as keyof typeof this.RESOURCE, this.reloadComponent, this.ID)
+                // Followed on whichever recording is active, see `followResource`.
             } else if (scope === 'onnx') {
                 const ONNX = this.$store.state.SERVICES.get('ONNX')
                 ONNX?.onPropertyChange(prop as keyof typeof ONNX, this.reloadComponent, this.ID)
@@ -168,6 +195,7 @@ export default defineComponent({
     beforeUnmount () {
         // Remove property update handlers
         this.RESOURCE?.removeAllEventListeners(this.ID)
+        this.$store.state.removeAllEventListeners(this.ID)
         this.$store.state.SERVICES.get('ONNX')?.removeAllEventListeners(this.ID)
         this.removePropertyChangeHandlers()
     }

@@ -42,6 +42,8 @@ export default defineComponent({
         const controlsLeft = ref([] as ControlElement[])
         const controlsRight = ref([] as ControlElement[])
         const context = useEmgContext(useStore())
+        /** The recording whose display state the controls follow, see `followResource`. */
+        const followedResource = null as typeof context.RESOURCE | null
         const emgControls = reactive([
             ////////////////      SENSITIVITY    //////////////////
             {
@@ -117,6 +119,7 @@ export default defineComponent({
             controlsLeft,
             controlsRight,
             emgControls,
+            followedResource,
             // Unsubscribers
             unsubscribe,
             // Scope properties.
@@ -250,6 +253,20 @@ export default defineComponent({
                 this.controlsRight.push(...this.emgControls.filter(c => (c.align === 'right')))
             }
         },
+        /**
+         * Rebuild the controls whenever the active recording's display state changes, dropping the recording followed
+         * so far. The viewer of a newly shown recording gives it its default sensitivity and timebase only after the
+         * switch, by which time the controls are built and their own triggers recreated.
+         */
+        followResource () {
+            this.followedResource?.removeAllEventListeners(this.ID)
+            this.followedResource = this.RESOURCE
+            this.RESOURCE?.onPropertyChange(
+                ['activeMontage', 'sensitivity', 'timebase', 'timebaseUnit'],
+                () => this.constructControls(),
+                this.ID
+            )
+        },
         handleInput (event: any) {
             if (event.onclick && event.onclick.length === 2) {
                 this.$store.dispatch(event.onclick[0], event.onclick[1])
@@ -273,10 +290,12 @@ export default defineComponent({
             if ((event.detail.payload as { modality: string })?.modality === 'emg') {
                 this.$nextTick(() => {
                     this.RESOURCE = useEmgContext(this.$store, this.$options.name).RESOURCE
+                    this.followResource()
                     this.constructControls()
                 })
             }
         }, this.ID)
+        this.followResource()
         this.constructControls()
     },
     beforeUnmount () {
@@ -285,6 +304,7 @@ export default defineComponent({
             this.unsubscribe()
         }
         this.$store.state.removeAllEventListeners(this.ID)
+        this.followedResource?.removeAllEventListeners(this.ID)
     },
 })
 </script>
