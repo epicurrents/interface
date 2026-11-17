@@ -482,6 +482,14 @@ So EEG actions like `SET_SENSITIVITY` call `runtime.setPropertyValue('sensitivit
 
 All injected into the live Vuex store via `hotUpdate()` when `loadModules()` runs.
 
+### Native media module
+
+Source: [src/app/modules/native/](src/app/modules/native/)
+
+Video, audio and raster images, which the browser decodes itself. The module carries both halves a modality needs, because there is nothing for a `*-module` package to do: `NativeMediaResource` holds only the file's URL and is `ready` on construction, `NativeMediaLoader` implements `StudyLoader` without an importer (a URL study keeps the URL, a file study uses the object URL minted for the file), and `NativeMediaViewer.vue` renders the `<video>`, `<audio>` or `<img>` in the media view, showing a message when the element reports an error. The modalities are `audio`, `image` and `video`, the names `MediaInterface.getMediaElement` resolves.
+
+Register one with `registerNativeMedia(ctx, modality)`, which adds the core module, the `media/<modality>-file` and `media/<modality>-url` importers and the interface module. Each modality gets module objects of its own from `nativeMediaModules(modality)`: `AppStore.addModule` rebinds `runtime.setPropertyValue` to the name it registers, so one object shared across three names would answer for the last of them only.
+
 ---
 
 ## Biosignal trend rendering

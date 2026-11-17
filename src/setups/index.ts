@@ -66,6 +66,9 @@
  *   | 'acc'   | Accelerometry viewer                 | CSV              | @epicurrents/acc-module, csv-reader
  *   | 'htm'   | Markdown / HTML document viewer      | Markdown, HTML   | @epicurrents/doc-module, htm-reader
  *   | 'pdf'   | PDF document viewer                  | PDF              | @epicurrents/doc-module, pdf-reader
+ *   | 'audio' | Audio player                         | browser formats  | interface modules/native
+ *   | 'image' | Image viewer                         | browser formats  | interface modules/native
+ *   | 'video' | Video player                         | browser formats  | interface modules/native
  *   | pyodide | Python-in-browser analysis service   | —                | @epicurrents/pyodide-service
  *
  * The all-in `setups/full.example.ts` is the reference consumer: it

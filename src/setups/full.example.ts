@@ -39,6 +39,7 @@ import { PyodideService } from '@epicurrents/pyodide-service'
 import * as interfaceAccModule from '#app/modules/acc'
 import * as interfaceDocModule from '#app/modules/doc'
 import * as interfaceEegModule from '#app/modules/eeg'
+import { NATIVE_MEDIA_MODALITIES, registerNativeMedia } from '#app/modules/native'
 import * as interfacePdfModule from '#app/modules/pdf'
 import type { EegModuleConfiguration } from '#app/modules/eeg/types'
 import { leadFieldProvider } from './leadFields.example'
@@ -288,6 +289,13 @@ export const registerAllModules = ({ app, useSAB, setup, registerInterfaceModule
         app.registerStudyImporter('doc/pdf-folder', 'Open PDF files from folder', 'folder', pdfLoader)
         app.registerStudyImporter('doc/pdf-url', 'Open PDF from URL', 'url', pdfLoader)
         registerInterfaceModule('pdf', interfacePdfModule)
+    }
+
+    // Native media: video, audio and images, rendered by the browser's own elements.
+    for (const modality of NATIVE_MEDIA_MODALITIES) {
+        if (!setup.activeModules.length || setup.activeModules.includes(modality)) {
+            registerNativeMedia({ app, registerInterfaceModule }, modality)
+        }
     }
 }
 
