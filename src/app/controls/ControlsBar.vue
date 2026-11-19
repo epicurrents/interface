@@ -96,7 +96,7 @@
  * This component is responsible for displaying all the tools and other control elements
  * of the interface.
  */
-import { defineComponent, reactive, ref, PropType } from "vue"
+import { defineComponent, ref, PropType } from "vue"
 import { T } from "#i18n"
 //import { useStore } from "vuex"
 import { DataResource } from "@epicurrents/core/types"
@@ -129,15 +129,15 @@ export default defineComponent({
         },
     },
     setup () {
-        const allResources = reactive([] as DataResource[])
         const hasActiveResource = ref(false)
         const hasNextResource = ref(false)
         const hasPrevResource = ref(false)
         return {
-            allResources,
             hasActiveResource,
             hasNextResource,
             hasPrevResource,
+            /** A position check is queued for the end of the current task. */
+            positionCheckPending: false,
             // Unsubscribers
         }
     },
@@ -151,17 +151,13 @@ export default defineComponent({
             return T(key, this.$options.name, params, capitalized)
         },
         checkResourcePosition () {
-            this.allResources = []
-            const sortedResources = this.$store.state.APP.activeDataset?.sortedResources || []
-            for (const [_cat, ctx] of sortedResources) {
-                this.allResources.push(...ctx.map(c => c.resource))
-            }
+            this.positionCheckPending = false
             const resId = this.$store.getters.getActiveResource()?.id
             if (!resId) {
                 this.hasNextResource = false
                 this.hasPrevResource = false
             } else {
-                const allIds = this.allResources.map(r => r.id)
+                const allIds = this.orderedResources().map(r => r.id)
                 this.hasPrevResource = allIds.indexOf(resId) > 0
                 this.hasNextResource = allIds.indexOf(resId) < allIds.length - 1
             }
@@ -192,18 +188,43 @@ export default defineComponent({
             if (!resource || !this.hasNextResource) {
                 return
             }
-            const resIdx = this.allResources.map(r => r.id).indexOf(resource.id)
-            const nextRes = this.allResources[resIdx + 1]
-            this.$store.dispatch('set-active-resource', nextRes)
+            const resources = this.orderedResources()
+            const resIdx = resources.map(r => r.id).indexOf(resource.id)
+            this.$store.dispatch('set-active-resource', resources[resIdx + 1])
         },
         openPrevResource () {
             const resource = this.$store.getters.getActiveResource()
             if (!resource || !this.hasPrevResource) {
                 return
             }
-            const resIdx = this.allResources.map(r => r.id).indexOf(resource.id)
-            const prevRes = this.allResources[resIdx - 1]
-            this.$store.dispatch('set-active-resource', prevRes)
+            const resources = this.orderedResources()
+            const resIdx = resources.map(r => r.id).indexOf(resource.id)
+            this.$store.dispatch('set-active-resource', resources[resIdx - 1])
+        },
+        /**
+         * The active dataset's resources in the order the navigator lists them, read when needed rather than kept,
+         * since the dataset's sorting is the only authority on that order.
+         */
+        orderedResources () {
+            const resources = [] as DataResource[]
+            for (const [_cat, ctx] of this.$store.state.APP.activeDataset?.sortedResources || []) {
+                resources.push(...ctx.map(c => c.resource))
+            }
+            return resources
+        },
+        /**
+         * Check the active resource's position once the current task has finished adding or replacing resources. A
+         * dataset listing many studies adds them one at a time, and checking after each addition sorts the whole
+         * dataset once per study.
+         */
+        scheduleResourcePositionCheck () {
+            if (this.positionCheckPending) {
+                return
+            }
+            this.positionCheckPending = true
+            queueMicrotask(() => {
+                this.checkResourcePosition()
+            })
         },
         toggleNavigation () {
             this.$emit('toggle-navigation')
@@ -226,7 +247,7 @@ export default defineComponent({
             this.checkResourcePosition()
         }, this.$options.name!)
         this.$store.state.addEventListener(['add-resource', 'replace-resource'], () => {
-            this.checkResourcePosition()
+            this.scheduleResourcePositionCheck()
         }, this.$options.name!)
         this.hasActiveResource = this.$store.getters.getActiveResource() !== null
         this.checkResourcePosition()
