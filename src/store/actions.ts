@@ -14,8 +14,10 @@ import type {
     DataResource,
     DatasourceConnector,
     Entries,
+    EpicurrentsApp,
     FileSystemItem,
 } from "@epicurrents/core/types"
+import { isDeferredResource } from "@epicurrents/core/util"
 import { MutationTypes } from './mutations'
 import { applicationViews, useContext } from '#config'
 import type { InterfaceComponent } from '#types/config'
@@ -57,6 +59,11 @@ export type UrlWithCredentials = {
  * Map of components and their associated styles.
  */
 const COMPONENT_STYLES = new Map<string, string[]>()
+/**
+ * Count of requests to set the active resource. Opening a deferred resource waits for its study to load, and a request
+ * made in the meantime supersedes it, so a load only activates its resource while its request is still the latest.
+ */
+let activeResourceRequests = 0
 
 /**
  * Disable all other resources, except for the resource at `index`.
@@ -304,6 +311,22 @@ export const actions = {
         injectee.commit(MutationTypes.SET_ACTIVE_MODALITY, payload)
     },
     [ActionTypes.SET_ACTIVE_RESOURCE] (injectee: ActionContext<State, State>, payload: DataResource | null) {
+        const request = ++activeResourceRequests
+        if (isDeferredResource(payload)) {
+            // A listed study is loaded first and the loaded resource, which takes its place in the dataset, is what
+            // becomes active.
+            const app = window.__EPICURRENTS__?.APP as EpicurrentsApp | null
+            if (!app) {
+                Log.error(`Cannot open deferred resource ${payload.name}, the application is not available.`, SCOPE)
+                return
+            }
+            app.openDeferredResource(payload).then(loaded => {
+                if (loaded && request === activeResourceRequests) {
+                    injectee.dispatch(ActionTypes.SET_ACTIVE_RESOURCE, loaded)
+                }
+            })
+            return
+        }
         // Disable other resources before enabling the new one (to avoid race conditions in shared memory buffer ops).
         disableAllOtherResources(injectee.state, payload).then(() => {
             if (payload) {

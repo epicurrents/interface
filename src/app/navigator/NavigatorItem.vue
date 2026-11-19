@@ -3,12 +3,14 @@
         appearance="outlined"
         :class="{
             'active': resource.isActive,
-            'disabled': !isReady
+            'disabled': !isReady && !isDeferred
         }"
         variant="brand"
         @click="resourceClicked"
     >
-        <div v-if="isReady" :class="['name', 'epicv-oneliner']">{{ parseResourceName(resource.name) }}</div>
+        <div v-if="isReady || isDeferred" :class="['name', 'epicv-oneliner']">
+            {{ parseResourceName(resource.name) }}
+        </div>
         <div v-else-if="resource.state === 'error'" :class="['name', 'epicv-oneliner']">
             {{ $t('Error loading resource') }}
         </div>
@@ -40,7 +42,7 @@
             {{ $t('Close resource') }}
         </wa-tooltip>
         </div>
-        <div v-if="!isReady" class="spinner" slot="suffix">
+        <div v-if="!isReady && (!isDeferred || resource.state === 'loading')" class="spinner" slot="suffix">
             <wa-spinner v-if="resource.state !== 'error'"></wa-spinner>
             <app-icon v-else class="error" name="octagon-exclamation"></app-icon>
         </div>
@@ -55,7 +57,7 @@ import { defineComponent, PropType, ref } from "vue"
 import { T } from "#i18n"
 import type { DataResource } from "@epicurrents/core/types"
 import { useStore } from "vuex"
-import { secondsToTimeString, timePartsToShortString } from "@epicurrents/core/util"
+import { isDeferredResource, secondsToTimeString, timePartsToShortString } from "@epicurrents/core/util"
 
 // Child components
 
@@ -69,10 +71,12 @@ export default defineComponent({
     },
     setup () {
         const ID = 'NavigatorItem-' + useStore().state.APP.runningId++
+        const isDeferred = ref(false)
         const isReady = ref(false)
         const resourceProps = ref([] as { [key: string]: string }[])
         return {
             ID,
+            isDeferred,
             isReady,
             resourceProps,
         }
@@ -102,7 +106,8 @@ export default defineComponent({
             return name.substring(0,(firstDotPos >= 0 ? firstDotPos : name.length))
         },
         resourceClicked () {
-            if (!this.resource.isReady) {
+            // A deferred resource lists a study that loads when it is opened, so it is opened from the listing.
+            if (!this.resource.isReady && !isDeferredResource(this.resource)) {
                 return
             }
             this.$store.dispatch('set-active-resource', this.resource)
@@ -177,6 +182,7 @@ export default defineComponent({
                     props.push({ text: this.$t(name) })
                 }
             }
+            this.isDeferred = isDeferredResource(this.resource)
             this.isReady = this.resource.isReady
             this.resourceProps = props
         },

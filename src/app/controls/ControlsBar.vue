@@ -225,7 +225,7 @@ export default defineComponent({
             this.hasActiveResource = newResource !== null
             this.checkResourcePosition()
         }, this.$options.name!)
-        this.$store.state.addEventListener('add-resource', () => {
+        this.$store.state.addEventListener(['add-resource', 'replace-resource'], () => {
             this.checkResourcePosition()
         }, this.$options.name!)
         this.hasActiveResource = this.$store.getters.getActiveResource() !== null

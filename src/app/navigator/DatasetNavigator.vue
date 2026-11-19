@@ -14,8 +14,8 @@
                 <div v-else-if="key === 'meg'" class="header">{{ $t('MEG') }}</div>
                 <div v-else-if="key === 'emg'" class="header">{{ $t('EMG') }}</div>
                 <div v-else-if="key === 'ncs'" class="header">{{ $t('NCS') }}</div>
-                <navigator-item v-for="(ctx, idx) in value"
-                    :key="`navigator-item-${idx}`"
+                <navigator-item v-for="ctx in value"
+                    :key="`navigator-item-${ctx.resource.id}`"
                     :resource="ctx.resource"
                 />
             </template>
@@ -133,7 +133,12 @@ export default defineComponent({
         )
     },
     mounted () {
-        this.$store.state.addEventListener(['add-resource', 'set-active-dataset', 'set-active-resource'], () => {
+        this.$store.state.addEventListener([
+            'add-resource',
+            'replace-resource',
+            'set-active-dataset',
+            'set-active-resource',
+        ], () => {
             // I would REALLY like to avoid this, but it doesn't seem possible at the moment.
             this.updateCounter++
         }, this.$options.name || 'AppNavigator')
@@ -162,6 +167,11 @@ export default defineComponent({
     flex: 1;
     overflow: auto;
 }
+    /* The scroller's content part is the scroll container, so its children must keep their height and overflow
+       into the scroll instead of shrinking to fit. */
+    .items > * {
+        flex-shrink: 0;
+    }
 .header {
     height: 2rem;
     line-height: 2rem;
