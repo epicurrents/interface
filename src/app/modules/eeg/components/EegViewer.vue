@@ -1828,7 +1828,7 @@ export default defineComponent({
                     this.setupMessage = this.$t('Setting up montages.')
                 } else {
                     this.montageSetupDone = true
-                    // The resource starts by setting up montages, but may in fact finish loading the first 
+                    // The resource starts by setting up montages, but may in fact finish loading the first
                     // batch of signal data before the montage setup is complete.
                     this.setupMessage = this.dataSetupDone
                                       ? ''
@@ -1967,7 +1967,8 @@ export default defineComponent({
                     this.activateDefaultMontage()
                 }
                 this.dataSetupDone = true
-                this.setupMessage = ''
+                // The overlay stays up until the montages are in place as well, so its message does too.
+                this.setupMessage = this.montageSetupDone ? '' : this.$t('Setting up montages.')
             }
         },
         handleInterfaceSettingChange (e: Event) {
