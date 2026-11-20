@@ -8,8 +8,10 @@
  * (the i18n instance sets `silentFallbackWarn` and `silentTranslationWarn`).
  *
  * The locale therefore registers placeholder-bearing keys as identity mappings, English
- * to identical English, purely so the compiler runs. This test asserts that convention
- * holds for every call site rather than for the ones someone remembered.
+ * to identical English, purely so the compiler runs: at the root of the English locale,
+ * or in the English file of the component the call is made in, which the component looks
+ * in first. This test asserts that convention holds for every call site rather than for
+ * the ones someone remembered.
  */
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
@@ -48,6 +50,18 @@ const localeKeys = (): Set<string> => {
 }
 
 /**
+ * Keys of the English file of the component a source file defines, empty if it defines no
+ * component or the component has no file. The name is the one the component passes to `T`.
+ */
+const componentKeys = (source: string): Set<string> => {
+    const declared = /^    name: (?:'([^']+)'|([A-Z_]+)),/m.exec(source)
+    const name = declared?.[1]
+        ?? (declared?.[2] && new RegExp(`^const ${declared[2]} = '([^']+)'`, 'm').exec(source)?.[1])
+    const file = name ? join(SRC, `i18n/locales/en/${name}.json`) : null
+    return new Set(file && existsSync(file) ? Object.keys(JSON.parse(readFileSync(file, 'utf-8'))) : [])
+}
+
+/**
  * Translation calls that pass a named-parameter object, with their key.
  *
  * Matches both `$t(...)` and the `T(...)` helper, and joins a key split across
@@ -77,8 +91,10 @@ describe('i18n interpolation', () => {
         const keys = localeKeys()
         const missing: string[] = []
         for (const path of sourceFiles(SRC)) {
-            for (const { key, line } of interpolatingCalls(readFileSync(path, 'utf-8'))) {
-                if (!keys.has(key)) {
+            const source = readFileSync(path, 'utf-8')
+            const ownKeys = componentKeys(source)
+            for (const { key, line } of interpolatingCalls(source)) {
+                if (!keys.has(key) && !ownKeys.has(key)) {
                     missing.push(`${relative(SRC, path)}:${line} — ${key}`)
                 }
             }

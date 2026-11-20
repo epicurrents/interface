@@ -1,0 +1,9 @@
+{
+    "{rate} Hz": "{rate} Hz",
+    "Channels: {count}. Length: {length} s. Sampling rate: {rate}.": "Channels: {count}. Length: {length} s. Sampling rate: {rate}.",
+    "Choose a source channel for {labels}.": "Choose a source channel for {labels}.",
+    "Samples are clipped to {min} … {max} {unit} with {resolution} {unit} resolution.": "Samples are clipped to {min} … {max} {unit} with {resolution} {unit} resolution.",
+    "Send to {label}": "Send to {label}",
+    "Signals are resampled to {rate} Hz, as the destination requires.": "Signals are resampled to {rate} Hz, as the destination requires.",
+    "The recording is {duration} s long.": "The recording is {duration} s long."
+}

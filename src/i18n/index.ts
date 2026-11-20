@@ -6,7 +6,7 @@
  */
 
 import { App } from "vue"
-import { createI18n, I18n } from "vue-i18n"
+import { createI18n, I18n, MessageResolver, PathValue } from "vue-i18n"
 
 import { messagesEN, datetimeUS } from "./locales/en"
 import { messagesFI, datetimeFI } from "./locales/fi"
@@ -20,6 +20,45 @@ export const capitalize = (text: string) => {
         return text
     }
     return text.substring(0,1).toLocaleUpperCase() + text.substring(1)
+}
+
+/**
+ * Look a key up in a messages object, as a literal key first and as a dotted path into nested objects second.
+ * @param messages - Messages object to look in.
+ * @param key - Key to look up.
+ * @returns The message, or null if there is none.
+ */
+const lookUp = (messages: unknown, key: string): unknown => {
+    if (!messages || typeof messages !== 'object') {
+        return null
+    }
+    if (Object.hasOwn(messages, key)) {
+        return (messages as Record<string, unknown>)[key]
+    }
+    let value = messages as unknown
+    for (const part of key.split('.')) {
+        if (!value || typeof value !== 'object' || !Object.hasOwn(value, part)) {
+            return null
+        }
+        value = (value as Record<string, unknown>)[part]
+    }
+    return value
+}
+
+/**
+ * Resolve a message for vue-i18n. Keys are English sentences, which vue-i18n's own resolver cannot read as a path once
+ * they carry a period. A key under `components.<Name>.` is the rest of the key looked up in that component's messages.
+ * @param messages - Messages of one locale.
+ * @param path - Key to resolve, prefixed with `components.<Name>.` for a component's own message.
+ * @returns The message, or null if there is none.
+ */
+export const resolveMessage: MessageResolver = (messages, path) => {
+    const scoped = /^components\.([^.]+)\.(.+)$/s.exec(path)
+    if (scoped) {
+        const components = lookUp(messages, 'components')
+        return lookUp(lookUp(components, scoped[1]), scoped[2]) as PathValue
+    }
+    return lookUp(messages, path) as PathValue
 }
 
 /**
@@ -43,6 +82,7 @@ export const init = (vueInstance: App, locale: string) => {
         fallbackLocale: 'en',
         messages: messages,
         dateTimeFormats: dateTimeFormats,
+        messageResolver: resolveMessage,
         silentFallbackWarn: true,
         silentTranslationWarn: true,
     })

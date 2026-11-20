@@ -5,90 +5,54 @@
  * @license    Apache-2.0
  */
 
+import locAccSynthesisTool from "./en/AccSynthesisTool.json"
 import locApp from "./en/App.json"
+import locBiosignalAnnotationSidebar from "./en/BiosignalAnnotationSidebar.json"
+import locDatasetDialog from "./en/DatasetDialog.json"
+import locDefaultFooter from "./en/DefaultFooter.json"
+import locEegControls from "./en/EegControls.json"
+import locEegFooter from "./en/EegFooter.json"
 import locEegViewer from "./en/EegViewer.json"
 import locExamineTool from "./en/ExamineTool.json"
+import locFindingPicker from "./en/FindingPicker.json"
+import locNavigatorItem from "./en/NavigatorItem.json"
+import locSignalExportDialog from "./en/SignalExportDialog.json"
+import locSignalPropertiesTool from "./en/SignalPropertiesTool.json"
+import locSourceLocalizationTool from "./en/SourceLocalizationTool.json"
+import locWelcomeDialog from "./en/WelcomeDialog.json"
 
 const messagesEN = {
+    // A component's own messages, looked up first for keys translated in that component.
     components: {
+        AccSynthesisTool: locAccSynthesisTool,
         App: locApp,
+        BiosignalAnnotationSidebar: locBiosignalAnnotationSidebar,
+        DatasetDialog: locDatasetDialog,
+        DefaultFooter: locDefaultFooter,
+        EegControls: locEegControls,
+        EegFooter: locEegFooter,
         EegViewer: locEegViewer,
         ExamineTool: locExamineTool,
+        FindingPicker: locFindingPicker,
+        NavigatorItem: locNavigatorItem,
+        SignalExportDialog: locSignalExportDialog,
+        SignalPropertiesTool: locSignalPropertiesTool,
+        SourceLocalizationTool: locSourceLocalizationTool,
+        WelcomeDialog: locWelcomeDialog,
     },
-    // Formatted strings with properties must be declared here.
-    'Adjust speed between {min}-{max}': 'Adjust speed between {min}-{max}',
-    'Channels: {count}. Length: {length} s. Sampling rate: {rate}.':
-        'Channels: {count}. Length: {length} s. Sampling rate: {rate}.',
-    'Choose a source channel for {labels}.': 'Choose a source channel for {labels}.',
+    // Formatted strings with properties need an entry, here or in the file of the one component that uses them.
+    // The ones here are used in several components, or come from resources and are translated wherever shown.
     date: '{y}/{m}/{d}',
     datetime: '{y}/{m}/{d} {h}:{min}',
-    'Dataset {n}': 'Dataset {n}',
-    'Date: {d}': 'Date: {d}',
     'Day {d}': 'Day {d}',
-    'Dipole ({x}, {y}, {z}) mm — GOF {gof}%': 'Dipole ({x}, {y}, {z}) mm — GOF {gof}%',
-    'Document has a total of {n} pages': 'Document has a total of {n} pages',
-    'Duration: {t}': 'Duration: {t}',
-    'Finding group {number}': 'Finding group {number}',
-    'GOF {gof}%': 'GOF {gof}%',
-    'Group {number}': 'Group {number}',
     'Lead field model for {montage} is not available on this server. Contact an administrator to compute it.':
         'Lead field model for {montage} is not available on this server. Contact an administrator to compute it.',
-    'Loading studies from {c}...': 'Loading studies from {c}...',
     'Loading dependency {n}/{t}...': 'Loading dependency {n}/{t}...',
-    'Loading module dependencies, please wait ({ready}/{total} done)...':
-        'Loading module dependencies, please wait ({ready}/{total} done)...',
-    'Memory use: {p} % ({u} / {t} MiB)': 'Memory use: {p} % ({u} / {t} MiB)',
-    'Negative maximum near {electrode}': 'Negative maximum near {electrode}',
     'Number {n}': 'Number {n}',
-    'Peak at {t} ms': 'Peak at {t} ms',
-    'Remove {property}': 'Remove {property}',
-    'Samples are clipped to {min} … {max} {unit} with {resolution} {unit} resolution.': 'Samples are clipped to {min} … {max} {unit} with {resolution} {unit} resolution.',
-    'Save and apply to the other {count} events of group {number}, each keeping its location':
-        'Save and apply to the other {count} events of group {number}, each keeping its location',
-    'Send to {label}': 'Send to {label}',
-    'Signals are resampled to {rate} Hz, as the destination requires.': 'Signals are resampled to {rate} Hz, as the destination requires.',
-    'Stamping {name}: click for a copy, drag for a span': 'Stamping {name}: click for a copy, drag for a span',
-    'Take this event out of group {number}': 'Take this event out of group {number}',
-    'The recording is {duration} s long.': 'The recording is {duration} s long.',
-    'The server and this viewer have different copies of HED-SCORE {version}.':
-        'The server and this viewer have different copies of HED-SCORE {version}.',
-    'The server validates findings against HED-SCORE {server}; this viewer has {viewer}.':
-        'The server validates findings against HED-SCORE {server}; this viewer has {viewer}.',
-    'Voltage / Δ ({unit})': 'Voltage / Δ ({unit})',
     'uV': 'µV', // Display ASCII-compatible unit uV in the interface as µV.
-    '{count} events': '{count} events',
-    welcome: {
-        advanced: 'Advanced',
-        basic: 'Basic',
-        instruction: 'Read the below information carefully before proceeding.',
-        login: 'Log in',
-        medical: 'This software is designed solely for educational and scientific use. '
-                 + 'It is not a medical device and may not be used for medical diagnostics.',
-        notice: {
-            default: 'By continuing you accept the disclaimer.',
-            disclaimer: 'You must accept the disclaimer to use the application.',
-            error: 'Login failed. Please check your username and password.',
-            login: 'You must log in to use the application.',
-        },
-        password: 'Password',
-        select: 'Select your name to log in',
-        title: 'Welcome to Epicurrents!',
-        username: 'Username',
-        version: 'Choose the version to use. The advanced version offers more signal processing '
-                 + 'tools but requires more resources from your device.',
-        warranty: 'This is free software and is provided "as is". It comes with no warranty of any '
-                  + 'kind. The authors of this software are not responsible for any damages or '
-                  + 'losses caused by the use of this software.',
-    },
     '{n} channels': '{n} channel | {n} channels',
-    '{n} errors': '{n} error | {n} errors',
-    '{n} pages': '{n} page | {n} pages',
-    '{n} signals': '{n} signal | {n} signals',
     '{n} studies': '{n} study | {n} studies',
     '{n} tables': '{n} table | {n} tables',
-    '{n} warnings': '{n} warning | {n} warnings',
-    '{rate} Hz': '{rate} Hz',
-    '{value} {unit}': '{value} {unit}',
 }
 
 const datetimeUS = {

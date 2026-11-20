@@ -1,0 +1,6 @@
+{
+    "{n} errors": "{n} error | {n} errors",
+    "{n} warnings": "{n} warning | {n} warnings",
+    "Loading studies from {c}...": "Loading studies from {c}...",
+    "Memory use: {p} % ({u} / {t} MiB)": "Memory use: {p} % ({u} / {t} MiB)"
+}

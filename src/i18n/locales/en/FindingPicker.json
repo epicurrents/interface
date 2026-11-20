@@ -1,0 +1,9 @@
+{
+    "{count} events": "{count} events",
+    "Group {number}": "Group {number}",
+    "Remove {property}": "Remove {property}",
+    "Save and apply to the other {count} events of group {number}, each keeping its location": "Save and apply to the other {count} events of group {number}, each keeping its location",
+    "Take this event out of group {number}": "Take this event out of group {number}",
+    "The server and this viewer have different copies of HED-SCORE {version}.": "The server and this viewer have different copies of HED-SCORE {version}.",
+    "The server validates findings against HED-SCORE {server}; this viewer has {viewer}.": "The server validates findings against HED-SCORE {server}; this viewer has {viewer}."
+}
