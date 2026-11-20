@@ -154,9 +154,6 @@ export default defineComponent({
         }
     },
     computed: {
-        controlsHeight (): string  {
-            return this.$store.state.INTERFACE.app.controlsBarHeight
-        },
         nextItem (): DropdownItem | null {
             for (let i=0; i<this.options.length; i++) {
                 if (i < this.options.length - 1 && this.options[i].id === this.value) {
@@ -346,11 +343,11 @@ export default defineComponent({
         font-size: 1.75em;
     }
 .control::part(form-control-input) {
-    height: v-bind(controlsHeight);
+    height: var(--epicv-controls-height);
 }
 .control::part(combobox) {
-    height: v-bind(controlsHeight);
-    min-height: v-bind(controlsHeight);
+    height: var(--epicv-controls-height);
+    min-height: var(--epicv-controls-height);
     padding-left: 0.5rem;
     padding-right: 0;
     line-height: 1;

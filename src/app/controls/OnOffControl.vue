@@ -107,11 +107,6 @@ export default defineComponent({
             ...useBiosignalContext(store, 'OnOffControl')
         }
     },
-    computed: {
-        controlsHeight (): string  {
-            return this.$store.state.INTERFACE.app.controlsBarHeight
-        }
-    },
     methods: {
         /**
          * Override the default I18n translate method.
@@ -222,8 +217,8 @@ export default defineComponent({
 
 <style scoped>
 .control {
-    width: v-bind(controlsHeight);
-    height: v-bind(controlsHeight);
+    width: var(--epicv-controls-height);
+    height: var(--epicv-controls-height);
     margin-left: 0.5rem;
     background-color: var(--epicv-background);
     text-align: center;
@@ -247,9 +242,9 @@ export default defineComponent({
     .control::part(label),
     .control::part(prefix),
     .control::part(suffix) {
-        height: v-bind(controlsHeight);
-        max-height: v-bind(controlsHeight);
-        min-height: v-bind(controlsHeight);
+        height: var(--epicv-controls-height);
+        max-height: var(--epicv-controls-height);
+        min-height: var(--epicv-controls-height);
     }
     .control::part(base) {
         border: none;

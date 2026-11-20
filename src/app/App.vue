@@ -38,6 +38,7 @@
             ...appClass,
             { 'epicv-hidden': loading },
         ]"
+        :style="appStyle"
         @pointerleave="pointerLeftApp"
     >
         <component :is="SETTINGS.isMainComponent ? 'header' : 'div'"
@@ -369,6 +370,13 @@ export default defineComponent({
     computed: {
         appClass (): string[] {
             return appContextClass(this.$store.state.APP.view)
+        },
+        /**
+         * Values the app's components read as custom properties. Set here once rather than bound in each component's
+         * style, where every instance would search the whole document for its own elements on every update.
+         */
+        appStyle (): Record<string, string> {
+            return { '--epicv-controls-height': this.$store.state.INTERFACE.app.controlsBarHeight }
         },
         applicationTheme (): string {
             return `epicv-${this.$store.state.APP.view.theme || this.$store.state.APP.view.defaultTheme}-theme`
