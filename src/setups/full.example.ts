@@ -158,7 +158,7 @@ export const registerAllModules = ({ app, useSAB, setup, registerInterfaceModule
             }
             return new EdfWorkerSubstitute()
         })
-        // The EDF exporter turns the active recording into an anonymized EDF file plus a metadata sidecar. It runs
+        // The EDF exporter turns the active recording into a de-identified EDF file plus a metadata sidecar. It runs
         // the encode in the writer worker (transferring the result back for the main thread to download).
         const edfExporter = new EdfExporter()
         edfExporter.setWorkerOverride(edfWriterWorker)
@@ -171,7 +171,7 @@ export const registerAllModules = ({ app, useSAB, setup, registerInterfaceModule
         app.registerStudyImporter('eeg/edf-file', 'Open EDF file', 'file', eegLoader)
         app.registerStudyImporter('eeg/edf-folder', 'Open EDF files from folder', 'folder', eegLoader)
         app.registerStudyImporter('eeg/edf-url', 'Open EDF from URL', 'url', eegLoader)
-        app.registerStudyExporter('eeg/edf-export', 'Export as anonymized EDF', 'file', eegLoader)
+        app.registerStudyExporter('eeg/edf-export', 'Export as de-identified EDF', 'file', eegLoader)
         // DICOM reader is in development stage.
         const dcmLoader = new DicomImporter()
         dcmLoader.setWorkerOverride('eeg', () => {

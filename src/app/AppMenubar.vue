@@ -596,7 +596,7 @@ export default defineComponent({
                         icon: 'book',
                         id: 'manual',
                         label: 'Online manual',
-                        onclick: () => emit('external-url', 'https://epicurrents.readthedocs.io/en/latest/'),
+                        onclick: () => emit('external-url', 'https://docs.epicurrents.io/#/docs/introduction'),
                         suffix: 'arrow-up-right-from-square',
                     },
                 ] as MenuItem[],
