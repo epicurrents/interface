@@ -38,8 +38,11 @@ const installApp = () => {
     return { app, pending }
 }
 
+/** The dataset active when a request is made. */
+const DATASET = { name: 'dataset' }
+
 const activate = (resource: DataResource | null) => {
-    const injectee = { dispatch: vi.fn(), commit: vi.fn(), state: {} }
+    const injectee = { dispatch: vi.fn(), commit: vi.fn(), state: { APP: { activeDataset: DATASET as unknown } } }
     ;(actions[ActionTypes.SET_ACTIVE_RESOURCE] as (i: unknown, p: unknown) => void)(injectee, resource)
     return injectee
 }
@@ -79,6 +82,15 @@ describe('activating a deferred resource', () => {
             expect(second.dispatch).toHaveBeenCalledWith(ActionTypes.SET_ACTIVE_RESOURCE, loadedB)
         })
         expect(first.dispatch).not.toHaveBeenCalled()
+    })
+    it('drops a load when another dataset has become active meanwhile', async () => {
+        const { pending } = installApp()
+        const injectee = activate(listing('a'))
+        // The loaded resource would be activated against the dataset active now, which does not hold it.
+        injectee.state.APP.activeDataset = { name: 'another' }
+        pending.get('a')!({ name: 'loaded a' } as DataResource)
+        await new Promise(resolve => setTimeout(resolve, 0))
+        expect(injectee.dispatch).not.toHaveBeenCalled()
     })
 })
 

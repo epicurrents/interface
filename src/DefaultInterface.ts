@@ -195,10 +195,9 @@ export const DefaultInterface: DefaultInterfaceModuleConstructor
             const { key, payload } = (e as CustomEvent).detail
             this.store?.instance?.dispatch(key, payload)
         })
-        // Handle new biosignal resources.
-        epicApp.eventBus.subscribe('add-resource', event => {
-            const context = event.detail.payload as { resource: BiosignalResource }
-            const resource = context.resource
+        // Handle new biosignal resources, which arrive added to a dataset or, for a study loaded from its listing,
+        // put in the listing's place.
+        const prepareBiosignalResource = (resource: BiosignalResource) => {
             const pyodide = window.__EPICURRENTS__.RUNTIME!.SERVICES
                 .get('pyodide') as unknown as PythonInterpreterService | null
             const memoryManager = window.__EPICURRENTS__.RUNTIME!.SETTINGS.app.useMemoryManager
@@ -235,6 +234,12 @@ export const DefaultInterface: DefaultInterfaceModuleConstructor
                     }
                 })
             }
+        }
+        epicApp.eventBus.subscribe('add-resource', event => {
+            prepareBiosignalResource((event.detail.payload as { resource: BiosignalResource }).resource)
+        }, 'ViteInterface')
+        epicApp.eventBus.subscribe('replace-resource', event => {
+            prepareBiosignalResource((event.detail.payload as { next: BiosignalResource }).next)
         }, 'ViteInterface')
         // Store subscriptions.
         this.store.instance?.subscribe((mutation: MutationPayload) => {

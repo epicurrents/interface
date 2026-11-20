@@ -320,8 +320,11 @@ export const actions = {
                 Log.error(`Cannot open deferred resource ${payload.name}, the application is not available.`, SCOPE)
                 return
             }
+            // The loaded resource is activated in the active dataset, so a switch to another one while the study
+            // loads supersedes the request as a newer request does.
+            const dataset = injectee.state.APP.activeDataset
             app.openDeferredResource(payload).then(loaded => {
-                if (loaded && request === activeResourceRequests) {
+                if (loaded && request === activeResourceRequests && dataset === injectee.state.APP.activeDataset) {
                     injectee.dispatch(ActionTypes.SET_ACTIVE_RESOURCE, loaded)
                 }
             })

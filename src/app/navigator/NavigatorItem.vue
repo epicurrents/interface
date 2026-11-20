@@ -19,10 +19,10 @@
             <template v-for="(props, idx) of resourceProps" :key="`resource-property-${idx}`">
                 <span class="separator" v-if="idx"> | </span>
                 <app-icon v-if="props.icon"
-                    :id="`nav-item-${idx}-icon`"
+                    :id="`nav-item-${resource.id}-${idx}-icon`"
                     :name="props.icon"
                 ></app-icon>
-                <wa-tooltip v-if="props.icon" :for="`nav-item-${idx}-icon`">
+                <wa-tooltip v-if="props.icon" :for="`nav-item-${resource.id}-${idx}-icon`">
                     {{ props.tooltip || '' }}
                 </wa-tooltip>
                 {{ props.text }}
