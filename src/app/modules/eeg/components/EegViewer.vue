@@ -226,20 +226,12 @@
                                     :tab="reportWindow.tab"
                                 />
                             </detached-window>
-                            <div v-if="!montageSetupDone && RESOURCE.state !== 'error'"
+                            <div v-if="(!montageSetupDone || !dataSetupDone) && RESOURCE.state !== 'error'"
                                 class="setup"
                             >
                                 <div>
                                     <p>{{ $t('Please wait...') }}</p>
                                     <p>{{ setupMessage }}</p>
-                                </div>
-                            </div>
-                            <div v-else-if="!dataSetupDone && RESOURCE.state !== 'error'"
-                                class="setup"
-                            >
-                                <div>
-                                    <p>{{ $t('Please wait...') }}</p>
-                                    <p>{{ $t('Loading signal data.') }}</p>
                                 </div>
                             </div>
                         </div>
@@ -1824,11 +1816,6 @@ export default defineComponent({
                                                .filter(([key, _value]) => this.SETTINGS.defaultSetups?.includes(key))
                                                .map(([_key, value]) => value)
                                                .flat().length || 0
-                // Extra montages are loaded once the default montages are set up.
-                const nExtraMontages = Object.values(this.SETTINGS.extraMontages || {}).flat().length || 0
-                const totalMontages = this.SETTINGS.skipDefaultSetups
-                                    ? nExtraMontages
-                                    : nDefaultMontages + nExtraMontages
                 // A recording that reports its own readiness is asked, because which montages it makes is its own
                 // decision: a polysomnography replaces the EEG defaults with one montage of its own, and counting
                 // against the settings would wait for montages that never come. The count serves a resource without
@@ -1838,12 +1825,14 @@ export default defineComponent({
                                         : !this.SETTINGS.skipDefaultSetups
                                           && this.RESOURCE.montages.length < nDefaultMontages
                 if (montagesPending) {
-                    this.setupMessage = this.$t('Setting up montage {current} of {total}', {
-                        current: this.RESOURCE.montages.length + 1,
-                        total: totalMontages,
-                    })
+                    this.setupMessage = this.$t('Setting up montages.')
                 } else {
                     this.montageSetupDone = true
+                    // The resource starts by setting up montages, but may in fact finish loading the first 
+                    // batch of signal data before the montage setup is complete.
+                    this.setupMessage = this.dataSetupDone
+                                      ? ''
+                                      : this.$t('Loading signal data.')
                 }
                 // Add the host's extra montages before the two passes below, and await them.
                 // This body runs once — every later call returns at the `montageSetupDone` guard
@@ -1978,6 +1967,7 @@ export default defineComponent({
                     this.activateDefaultMontage()
                 }
                 this.dataSetupDone = true
+                this.setupMessage = ''
             }
         },
         handleInterfaceSettingChange (e: Event) {

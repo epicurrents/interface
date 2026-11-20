@@ -46,7 +46,6 @@ const messagesEN = {
     'Save and apply to the other {count} events of group {number}, each keeping its location':
         'Save and apply to the other {count} events of group {number}, each keeping its location',
     'Send to {label}': 'Send to {label}',
-    'Setting up montage {current} of {total}': 'Setting up montage {current} of {total}',
     'Signals are resampled to {rate} Hz, as the destination requires.': 'Signals are resampled to {rate} Hz, as the destination requires.',
     'Stamping {name}: click for a copy, drag for a span': 'Stamping {name}: click for a copy, drag for a span',
     'Take this event out of group {number}': 'Take this event out of group {number}',
