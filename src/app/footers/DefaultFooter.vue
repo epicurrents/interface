@@ -52,8 +52,7 @@ export default defineComponent({
         },
         deactivateChild () {
             if (this.RESOURCE && this.RESOURCE.activeChildResource) {
-                this.RESOURCE.activeChildResource = null
-                this.$store.dispatch('set-active-resource', this.RESOURCE)
+                this.$store.dispatch('set-active-child-resource', { child: null, parent: this.RESOURCE })
             }
         }
     },

@@ -1,6 +1,6 @@
 /**
- * The way back from a radiology study, step by step: the dataset, then the resource the study is attached to, if it
- * has one. The radiology footer shows the steps as a trail, and the framed page's Back button takes the nearest one.
+ * The way back from a radiology study, step by step: the dataset, then the resource the study is listed under, if it
+ * is a child of one. The radiology footer shows the steps as a trail, and the framed page's Back button takes the nearest one.
  * @package    epicurrents/interface
  * @copyright  2026 Sampsa Lohi
  * @license    Apache-2.0
@@ -12,19 +12,18 @@ import type { State } from '#store'
 import type RadiologyResource from './RadiologyResource'
 
 /**
- * The resource `study` is attached to, while it is still a resource of the active dataset; null otherwise.
+ * The resource of the active dataset `study` is listed under as a child; null for a study that is a member of the
+ * dataset itself.
  * @param state - The application store state.
  * @param study - The radiology study.
  */
 export const parentOf = (state: State, study: RadiologyResource | null | undefined): DataResource | null => {
-    const parent = study?.parent
-    if (!parent) {
+    if (!study) {
         return null
     }
-    const listed = state.APP.activeDataset?.resources?.some(
-        (ctx: { resource: DataResource }) => ctx.resource === parent
-    )
-    return listed ? parent : null
+    return state.APP.activeDataset?.resources?.find(
+        (ctx: { resource: DataResource }) => ctx.resource.childResources.some(child => child.id === study.id)
+    )?.resource ?? null
 }
 
 /**
@@ -44,7 +43,7 @@ export const showDataset = (store: Store<State>) => {
 export const stepBack = (store: Store<State>, study: RadiologyResource | null | undefined) => {
     const parent = parentOf(store.state, study)
     if (parent) {
-        store.dispatch('set-active-resource', parent)
+        store.dispatch('set-active-child-resource', { child: null, parent })
     } else {
         showDataset(store)
     }

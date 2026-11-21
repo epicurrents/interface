@@ -210,12 +210,9 @@ export default defineComponent({
             return values
         },
         inspectStudy (subctxId: string) {
-            const subctxExists = this.RESOURCE.subcontexts.has(subctxId)
-            if (subctxExists) {
-                this.RESOURCE.setActiveSubcontext(subctxId)
-                // Trigger update by resetting the active resource in the store.
-                // TODO: A better way to handle this.
-                this.$store.dispatch('set-active-resource', this.RESOURCE)
+            const subcontext = this.RESOURCE.subcontexts.get(subctxId)
+            if (subcontext) {
+                this.$store.dispatch('set-active-child-resource', { child: subcontext, parent: this.RESOURCE })
             }
         },
         labelsChanged (

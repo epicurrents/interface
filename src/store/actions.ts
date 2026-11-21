@@ -225,6 +225,7 @@ export enum ActionTypes {
     POINTER_LEFT_APP = 'pointer-left-app',
     REDO_ACTION = 'redo-action',
     REMOVE_CONNECTOR = 'remove-connector',
+    SET_ACTIVE_CHILD_RESOURCE = 'set-active-child-resource',
     SET_ACTIVE_RESOURCE = 'set-active-resource',
     SET_ACTIVE_MODALITY = 'set-active-modality',
     SET_SETTINGS_VALUE = 'set-settings-value',
@@ -263,6 +264,7 @@ export type Actions = {
     [ActionTypes.POINTER_LEFT_APP] (): void
     [ActionTypes.REDO_ACTION] (): void
     [ActionTypes.REMOVE_CONNECTOR] (payload: string): void
+    [ActionTypes.SET_ACTIVE_CHILD_RESOURCE] (payload: { child: DataResource | null, parent: DataResource }): void
     [ActionTypes.SET_ACTIVE_RESOURCE] (payload: DataResource | null): void
     [ActionTypes.SET_ACTIVE_MODALITY] (payload: string): void
     [ActionTypes.SET_SETTINGS_VALUE] (payload: { field: string, value: string | number | boolean }): void
@@ -278,6 +280,60 @@ export type Actions = {
     [ActionTypes.CREATE_DATASET] (payload?: { name: string, connector: DatasourceConnector | null }): void
     [ActionTypes.SET_ACTIVE_DATASET] (payload: MixedMediaDataset | null): void
 }
+/**
+ * Activate `payload` in the active dataset and show the view of its active child, or of the resource itself when it
+ * has none. Other resources are deactivated first.
+ */
+const activateResource = (injectee: ActionContext<State, State>, payload: DataResource | null) => {
+    const request = ++activeResourceRequests
+    if (isDeferredResource(payload)) {
+        // A listed study is loaded first and the loaded resource, which takes its place in the dataset, is what
+        // becomes active.
+        const app = window.__EPICURRENTS__?.APP as EpicurrentsApp | null
+        if (!app) {
+            Log.error(`Cannot open deferred resource ${payload.name}, the application is not available.`, SCOPE)
+            return
+        }
+        // The loaded resource is activated in the active dataset, so a switch to another one while the study
+        // loads supersedes the request as a newer request does.
+        const dataset = injectee.state.APP.activeDataset
+        app.openDeferredResource(payload).then(loaded => {
+            if (loaded && request === activeResourceRequests && dataset === injectee.state.APP.activeDataset) {
+                injectee.dispatch(ActionTypes.SET_ACTIVE_RESOURCE, loaded)
+            }
+        })
+        return
+    }
+    // Disable other resources before enabling the new one (to avoid race conditions in shared memory buffer ops).
+    disableAllOtherResources(injectee.state, payload).then(async () => {
+        if (payload) {
+            // Make sure the required view is available and active.
+            const modView = injectee.state.INTERFACE.modules.get(
+                                payload.activeChildResource?.modality || payload.modality
+                            )?.settings?.compatibleView
+            if (!modView) {
+                Log.error(
+                    `Cannot set active resource, modality '${payload.modality}' is not available.`, SCOPE)
+                return
+            }
+            if (injectee.state.APP.view.name !== modView) {
+                const view = applicationViews.get(modView as string)
+                if (view) {
+                    await switchView(injectee, view)
+                }
+                if (injectee.state.APP.view.name !== modView) {
+                    Log.error(
+                        `Cannot set active resource, required view '${modView}' is not available.`,
+                        SCOPE
+                    )
+                    return
+                }
+            }
+        }
+        injectee.commit(MutationTypes.SET_ACTIVE_RESOURCE, payload)
+    })
+}
+
 export const actions = {
     [ActionTypes.ACCEPT_DISCLAIMER] (injectee: ActionContext<State, State>) {
         injectee.commit(MutationTypes.ACCEPT_DISCLAIMER)
@@ -392,54 +448,39 @@ export const actions = {
     [ActionTypes.SET_ACTIVE_MODALITY] (injectee: ActionContext<State, State>, payload: string) {
         injectee.commit(MutationTypes.SET_ACTIVE_MODALITY, payload)
     },
-    [ActionTypes.SET_ACTIVE_RESOURCE] (injectee: ActionContext<State, State>, payload: DataResource | null) {
-        const request = ++activeResourceRequests
-        if (isDeferredResource(payload)) {
-            // A listed study is loaded first and the loaded resource, which takes its place in the dataset, is what
-            // becomes active.
-            const app = window.__EPICURRENTS__?.APP as EpicurrentsApp | null
-            if (!app) {
-                Log.error(`Cannot open deferred resource ${payload.name}, the application is not available.`, SCOPE)
-                return
-            }
-            // The loaded resource is activated in the active dataset, so a switch to another one while the study
-            // loads supersedes the request as a newer request does.
-            const dataset = injectee.state.APP.activeDataset
-            app.openDeferredResource(payload).then(loaded => {
-                if (loaded && request === activeResourceRequests && dataset === injectee.state.APP.activeDataset) {
-                    injectee.dispatch(ActionTypes.SET_ACTIVE_RESOURCE, loaded)
-                }
-            })
+    [ActionTypes.SET_ACTIVE_CHILD_RESOURCE] (
+        injectee: ActionContext<State, State>,
+        payload: { child: DataResource | null, parent: DataResource },
+    ) {
+        const { parent } = payload
+        const child = payload.child
+                      ? parent.childResources.find(r => r.id === payload.child!.id) ?? null
+                      : null
+        if (payload.child && !child) {
+            Log.error(`Cannot open ${payload.child.name}, it is not a child of ${parent.name}.`, SCOPE)
             return
         }
-        // Disable other resources before enabling the new one (to avoid race conditions in shared memory buffer ops).
-        disableAllOtherResources(injectee.state, payload).then(async () => {
-            if (payload) {
-                // Make sure the required view is available and active.
-                const modView = injectee.state.INTERFACE.modules.get(
-                                    payload.activeChildResource?.modality || payload.modality
-                                )?.settings?.compatibleView
-                if (!modView) {
-                    Log.error(
-                        `Cannot set active resource, modality '${payload.modality}' is not available.`, SCOPE)
-                    return
+        if (parent.activeChildResource !== child) {
+            parent.activeChildResource = child
+        }
+        // A listed child loads in place as it opens, and its view shows the loading state until it is ready.
+        if (child && (child.state === 'added' || child.state === 'loaded')) {
+            child.load().then(loaded => {
+                if (!loaded) {
+                    Log.error(`Loading the child resource ${child.name} failed.`, SCOPE)
                 }
-                if (injectee.state.APP.view.name !== modView) {
-                    const view = applicationViews.get(modView as string)
-                    if (view) {
-                        await switchView(injectee, view)
-                    }
-                    if (injectee.state.APP.view.name !== modView) {
-                        Log.error(
-                            `Cannot set active resource, required view '${modView}' is not available.`,
-                            SCOPE
-                        )
-                        return
-                    }
-                }
-            }
-            injectee.commit(MutationTypes.SET_ACTIVE_RESOURCE, payload)
-        })
+            })
+        }
+        // The parent is activated behind its child, so the child is opened in its context and the way back to the
+        // parent is instant.
+        activateResource(injectee, parent)
+    },
+    [ActionTypes.SET_ACTIVE_RESOURCE] (injectee: ActionContext<State, State>, payload: DataResource | null) {
+        // Activating a resource shows the resource itself; a child of it opens through SET_ACTIVE_CHILD_RESOURCE.
+        if (payload?.activeChildResource) {
+            payload.activeChildResource = null
+        }
+        activateResource(injectee, payload)
     },
     [ActionTypes.SET_SETTINGS_VALUE] (
         injectee: ActionContext<State, State>,

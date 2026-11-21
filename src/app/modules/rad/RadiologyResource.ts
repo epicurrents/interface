@@ -6,7 +6,6 @@
  */
 
 import { GenericResource } from '@epicurrents/core'
-import type { DataResource } from '@epicurrents/core/types'
 
 /** The modality every radiology resource carries. */
 export const RADIOLOGY_MODALITY = 'rad'
@@ -21,13 +20,10 @@ export const RADIOLOGY_RETURN_MESSAGE = 'epicurrents:radiology:return'
  * radiology view frames. What the page is (a DICOM viewer under the host's own mount, typically) is the host's choice,
  * so the resource is ready as soon as it exists and knows nothing about the study's format.
  *
- * A study attached to another resource of its dataset, a recording it was made alongside, names that resource as its
- * `parent`, which the way back from the study passes through. The host sets it, and keeps it current: a deferred
- * resource is replaced by another object when it loads, so a parent set while its resource was deferred has to be
- * set again once it has loaded. A resource listed in place keeps its object.
+ * A study attached to a recording it was made alongside is listed as one of that recording's `childResources`, and
+ * the way back from the study passes through the recording.
  */
 export default class RadiologyResource extends GenericResource {
-    protected _parent: DataResource | null = null
     protected _viewerUrl: string
 
     /**
@@ -41,20 +37,12 @@ export default class RadiologyResource extends GenericResource {
         this._state = 'ready'
     }
 
-    /** The resource of the same dataset this study is attached to, or null for a study standing on its own. */
-    get parent () {
-        return this._parent
-    }
-    set parent (value: DataResource | null) {
-        this._setPropertyValue('parent', value)
-    }
     /** Address of the page that renders the study. */
     get viewerUrl () {
         return this._viewerUrl
     }
 
     destroy () {
-        this._parent = null
         this._viewerUrl = ''
         super.destroy()
     }

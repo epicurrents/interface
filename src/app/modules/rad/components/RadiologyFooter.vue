@@ -84,7 +84,7 @@ export default defineComponent({
         },
         showParent () {
             if (this.parent) {
-                this.$store.dispatch('set-active-resource', this.parent)
+                this.$store.dispatch('set-active-child-resource', { child: null, parent: this.parent })
             }
         },
     },

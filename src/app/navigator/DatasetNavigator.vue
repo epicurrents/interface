@@ -14,8 +14,8 @@
                 <div v-else-if="key === 'meg'" class="header">{{ $t('MEG') }}</div>
                 <div v-else-if="key === 'emg'" class="header">{{ $t('EMG') }}</div>
                 <div v-else-if="key === 'ncs'" class="header">{{ $t('NCS') }}</div>
-                <navigator-item v-for="ctx in value"
-                    :key="`navigator-item-${ctx.resource.id}`"
+                <navigator-entry v-for="ctx in value"
+                    :key="`navigator-entry-${ctx.resource.id}`"
                     :resource="ctx.resource"
                 />
             </template>
@@ -45,14 +45,14 @@ import { useStore } from 'vuex'
 import { useAppContext } from '../../config'
 // Child components
 import DatasetSelector from './DatasetSelector.vue'
-import NavigatorItem from './NavigatorItem.vue'
+import NavigatorEntry from './NavigatorEntry.vue'
 import SystemFooter from '#app/footers/SystemFooter.vue'
 
 export default defineComponent({
     name: 'AppNavigator',
     components: {
         DatasetSelector,
-        NavigatorItem,
+        NavigatorEntry,
         SystemFooter,
     },
     props: {

@@ -2,7 +2,7 @@
     <wa-button data-component="navigator-item"
         appearance="outlined"
         :class="{
-            'active': resource.isActive,
+            'active': isShown,
             'disabled': !isSelectableNow
         }"
         variant="brand"
@@ -79,10 +79,15 @@ const isSelectable = (resource: DataResource, wasListed: boolean) => {
 export default defineComponent({
     name: 'NavigatorItem',
     props: {
+        /** The resource this one is listed under as a child, or null for a dataset member. */
+        parent: {
+            type: Object as PropType<DataResource | null>,
+            default: null,
+        },
         resource: {
             type: Object as PropType<DataResource>,
             required: true,
-        }
+        },
     },
     setup () {
         const ID = 'NavigatorItem-' + useStore().state.APP.runningId++
@@ -90,6 +95,8 @@ export default defineComponent({
         /** The item lists a study that loads in place on its first activation, and keeps its name while it loads. */
         const isListing = ref(false)
         const isReady = ref(false)
+        /** Whether the item's resource is the one shown: active itself, or the active child of its active parent. */
+        const isShown = ref(false)
         /** Whether clicking the item activates its resource. */
         const isSelectableNow = ref(false)
         const resourceProps = ref([] as { [key: string]: string }[])
@@ -99,6 +106,7 @@ export default defineComponent({
             isListing,
             isReady,
             isSelectableNow,
+            isShown,
             resourceProps,
         }
     },
@@ -130,7 +138,11 @@ export default defineComponent({
             if (!isSelectable(this.resource, this.isListing)) {
                 return
             }
-            this.$store.dispatch('set-active-resource', this.resource)
+            if (this.parent) {
+                this.$store.dispatch('set-active-child-resource', { child: this.resource, parent: this.parent })
+            } else {
+                this.$store.dispatch('set-active-resource', this.resource)
+            }
         },
         resourceUpdated () {
             const props = [] as { [key: string]: string }[]
@@ -206,6 +218,9 @@ export default defineComponent({
             this.isListing = this.isListing || this.resource.isListed
             this.isReady = this.resource.isReady
             this.isSelectableNow = isSelectable(this.resource, this.isListing)
+            this.isShown = this.parent
+                           ? this.parent.isActive && this.parent.activeChildResource?.id === this.resource.id
+                           : this.resource.isActive && !this.resource.activeChildResource
             this.resourceProps = props
         },
     },
@@ -219,10 +234,11 @@ export default defineComponent({
     mounted () {
         // Add property update handlers
         this.resource.onPropertyChange(
-            ['dependenciesReady', 'isActive', 'isReady', 'state'],
+            ['activeChildResource', 'dependenciesReady', 'isActive', 'isReady', 'state'],
             this.resourceUpdated,
             this.ID
         )
+        this.parent?.onPropertyChange(['activeChildResource', 'isActive'], this.resourceUpdated, this.ID)
         // Check initial state.
         this.resourceUpdated()
         this.$nextTick(() => {
@@ -232,6 +248,7 @@ export default defineComponent({
     beforeUnmount () {
         // Remove property update handlers
         this.resource.unsubscribeAll(this.ID)
+        this.parent?.unsubscribeAll(this.ID)
     }
 })
 </script>

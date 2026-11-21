@@ -105,9 +105,7 @@ The intent is a revision rather than an extension of the current item.
 - **With a dataset**, it shows a summary and a tree of the dataset, from which any member opens. The summary covers counts per modality, the total recorded duration, the number of child resources, and how many members are activated against only listed. The figures come from what a listing carries, so showing them loads nothing.
 - The radiology view's way back (`showDataset` in [wayBack.ts](src/app/modules/rad/wayBack.ts)) lands here.
 
-**Depends on core's load-in-place lifecycle** ("Load a study in place, not through a placeholder" in the core ROADMAP). Under the placeholder design, a listed child cannot be loaded, since only a dataset member is swapped, and a parent's children would not survive its own swap.
-
-Until this lands, a host lists an attached resource after its parent in the same dataset.
+**Progress.** Children are in place, unreleased. Core lists a study under a parent with `listStudy`, and a parent destroys its children. `set-active-child-resource` opens a child and closes it, and the navigator, the footers' trails, the radiology way back and the tab viewer's subcontexts go through it; a plain `set-active-resource` shows the resource itself. The navigator lists a member's children under it, in the current item style, and the platform lists attachments as their recording's children. Measured in the full edition on a platform dataset in November 2026: an ultrasound study attached to an EEG recording was listed under it and not as a member, opening it switched to the radiology view with the recording still active, and the recording's trail step showed the EEG again with no worker started. The row revision, the group headers, rendering only the rows in view and the landing view are next.
 
 ## A theme chosen by the resource, not only the view
 
