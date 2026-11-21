@@ -36,7 +36,7 @@ import { NUMERIC_ERROR_VALUE } from "@epicurrents/core/util"
 import { PointerInteraction } from "#types/interface"
 import { useEegContext } from "#app/modules/eeg"
 import { EegNavigationKey } from "../types"
-import { NO_POINTER_BUTTON_DOWN, resolveDisplayPolarity, traceRange } from "#util"
+import { NO_POINTER_BUTTON_DOWN, resolveDisplayPolarity, steppedSensitivity, traceRange } from "#util"
 import type {
     OverlayPointerEventMeta,
     PointerEventOverlay,
@@ -541,33 +541,17 @@ export default defineComponent({
                 // Special actions that require the alt (or opt) key to be pressed.
                 // For example, up and down arrow keys are used for mouseless navigation so we can't
                 // just use them as such.
-                if (key === 'ArrowUp') {
+                if (key === 'ArrowUp' || key === 'ArrowDown') {
                     event.preventDefault()
-                    // Try to switch to the next sensitivity setting.
-                    const sensVals = this.SETTINGS.sensitivity[this.SETTINGS.sensitivityUnit].availableValues
-                    for (let i=0; i<sensVals.length; i++) {
-                        if (i && sensVals[i] >= this.RESOURCE.sensitivity) {
-                            this.$store.dispatch('eeg.set-sensitivity', sensVals[i-1])
-                            return
-                        }
+                    // Up draws the signal larger, which is the next smaller value per unit of height.
+                    const sensitivity = steppedSensitivity(
+                        this.SETTINGS.sensitivity[this.SETTINGS.sensitivityUnit],
+                        this.RESOURCE.sensitivity,
+                        key === 'ArrowUp' ? -1 : 1
+                    )
+                    if (sensitivity !== null) {
+                        this.$store.dispatch('eeg.set-sensitivity', sensitivity)
                     }
-                } else if (key === 'ArrowDown') {
-                    const sensVals = this.SETTINGS.sensitivity[this.SETTINGS.sensitivityUnit].availableValues
-                    for (let i=0; i<sensVals.length; i++) {
-                        if (sensVals[i] > this.RESOURCE.sensitivity) {
-                            this.$store.dispatch('eeg.set-sensitivity', sensVals[i])
-                            return
-                        } else if (i < sensVals.length - 1) {
-                            if (
-                                sensVals[i] === this.RESOURCE.sensitivity ||
-                                sensVals[i+1] > this.RESOURCE.sensitivity
-                            ) {
-                                this.$store.dispatch('eeg.set-sensitivity', sensVals[i+1])
-                                return
-                            }
-                        }
-                    }
-                    event.preventDefault()
                 }
                 // TODO: Left and right arrows to control the page width.
             }

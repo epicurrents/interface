@@ -38,7 +38,7 @@ import { PointerInteraction } from "#types/interface"
 import { useEmgContext } from "#app/modules/emg"
 import { EmgNavigationKey } from "../types"
 import { rowSpans, stackStart, sweepRange } from "../sweep"
-import { NO_POINTER_BUTTON_DOWN, resolveDisplayPolarity } from "#util"
+import { NO_POINTER_BUTTON_DOWN, resolveDisplayPolarity, steppedSensitivity } from "#util"
 import type {
     OverlayPointerEventMeta,
     PointerEventOverlay,
@@ -562,33 +562,17 @@ export default defineComponent({
                 // Special actions that require the alt (or opt) key to be pressed.
                 // For example, up and down arrow keys are used for mouseless navigation so we can't
                 // just use them as such.
-                if (key === 'ArrowUp') {
+                if (key === 'ArrowUp' || key === 'ArrowDown') {
                     event.preventDefault()
-                    // Try to switch to the next sensitivity setting.
-                    const sensVals = this.SETTINGS.sensitivity[this.SETTINGS.sensitivityUnit].availableValues
-                    for (let i=0; i<sensVals.length; i++) {
-                        if (i && sensVals[i] >= this.RESOURCE.sensitivity) {
-                            this.$store.dispatch('emg.set-sensitivity', sensVals[i-1])
-                            return
-                        }
+                    // Up draws the signal larger, which is the next smaller value per unit of height.
+                    const sensitivity = steppedSensitivity(
+                        this.SETTINGS.sensitivity[this.SETTINGS.sensitivityUnit],
+                        this.RESOURCE.sensitivity,
+                        key === 'ArrowUp' ? -1 : 1
+                    )
+                    if (sensitivity !== null) {
+                        this.$store.dispatch('emg.set-sensitivity', sensitivity)
                     }
-                } else if (key === 'ArrowDown') {
-                    const sensVals = this.SETTINGS.sensitivity[this.SETTINGS.sensitivityUnit].availableValues
-                    for (let i=0; i<sensVals.length; i++) {
-                        if (sensVals[i] > this.RESOURCE.sensitivity) {
-                            this.$store.dispatch('emg.set-sensitivity', sensVals[i])
-                            return
-                        } else if (i < sensVals.length - 1) {
-                            if (
-                                sensVals[i] === this.RESOURCE.sensitivity ||
-                                sensVals[i+1] > this.RESOURCE.sensitivity
-                            ) {
-                                this.$store.dispatch('emg.set-sensitivity', sensVals[i+1])
-                                return
-                            }
-                        }
-                    }
-                    event.preventDefault()
                 }
                 // TODO: Left and right arrows to control the page width.
             }
