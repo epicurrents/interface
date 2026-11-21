@@ -19,9 +19,11 @@
         >
             <!-- Scoped view -->
             <template v-for="resource in visibleResources" :key="`viewer-${resource.id}`">
-                <component :is="VIEWERS[resource.modality]"
-                    :viewerSize="singleViewerSize"
-                />
+                <resource-gate :resource="resource">
+                    <component :is="VIEWERS[resource.modality]"
+                        :viewerSize="singleViewerSize"
+                    />
+                </resource-gate>
             </template>
         </component>
         <component v-if="$store.state.APP.uiComponentVisible.footer && !$store.state.INTERFACE.app.isExpanded"
@@ -43,6 +45,7 @@ import { useStore } from "vuex"
 // Child components
 import ControlsBar from '#app/controls/ControlsBar.vue'
 import BiosignalFooter from './footers/BiosignalFooter.vue'
+import ResourceGate from '#app/views/ResourceGate.vue'
 import { useContext } from "#root/src/config"
 
 export default defineComponent({
@@ -50,6 +53,7 @@ export default defineComponent({
     components: {
         BiosignalFooter,
         ControlsBar,
+        ResourceGate,
     },
     props: {
         controlsComponent: {

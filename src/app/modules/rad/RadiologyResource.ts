@@ -22,9 +22,9 @@ export const RADIOLOGY_RETURN_MESSAGE = 'epicurrents:radiology:return'
  * so the resource is ready as soon as it exists and knows nothing about the study's format.
  *
  * A study attached to another resource of its dataset, a recording it was made alongside, names that resource as its
- * `parent`, which the way back from the study passes through. The host sets it, and keeps it current: a listed
- * resource is replaced by another object when it loads, so a parent set while its resource was a listing has to be
- * set again once it has loaded.
+ * `parent`, which the way back from the study passes through. The host sets it, and keeps it current: a deferred
+ * resource is replaced by another object when it loads, so a parent set while its resource was deferred has to be
+ * set again once it has loaded. A resource listed in place keeps its object.
  */
 export default class RadiologyResource extends GenericResource {
     protected _parent: DataResource | null = null

@@ -16,6 +16,7 @@ import locEegViewer from "./en/EegViewer.json"
 import locExamineTool from "./en/ExamineTool.json"
 import locFindingPicker from "./en/FindingPicker.json"
 import locNavigatorItem from "./en/NavigatorItem.json"
+import locResourceGate from "./en/ResourceGate.json"
 import locSignalExportDialog from "./en/SignalExportDialog.json"
 import locSignalPropertiesTool from "./en/SignalPropertiesTool.json"
 import locSourceLocalizationTool from "./en/SourceLocalizationTool.json"
@@ -35,6 +36,7 @@ const messagesEN = {
         ExamineTool: locExamineTool,
         FindingPicker: locFindingPicker,
         NavigatorItem: locNavigatorItem,
+        ResourceGate: locResourceGate,
         SignalExportDialog: locSignalExportDialog,
         SignalPropertiesTool: locSignalPropertiesTool,
         SourceLocalizationTool: locSourceLocalizationTool,

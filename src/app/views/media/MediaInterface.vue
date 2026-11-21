@@ -16,9 +16,11 @@
         >
             <!-- Scoped view -->
             <template v-for="resource in activeResources" :key="`viewer-${resource.id}`">
-                <component v-if="VIEWERS[resource.modality]" :is="VIEWERS[resource.modality]" ref="viewer"
-                    :viewerSize="singleViewerSize"
-                />
+                <resource-gate v-if="VIEWERS[resource.modality]" :resource="resource">
+                    <component :is="VIEWERS[resource.modality]" ref="viewer"
+                        :viewerSize="singleViewerSize"
+                    />
+                </resource-gate>
                 <div v-else class="unsupported">
                     <app-icon class="inline" name="triangle-exclamation"></app-icon>
                     {{ $t('Unsupported media format.') }}
@@ -43,11 +45,13 @@ import type { DataResource } from "@epicurrents/core/types"
 // Child components
 import ControlsBar from '#app/controls/ControlsBar.vue'
 import DefaultFooter from '#app/footers/DefaultFooter.vue'
+import ResourceGate from '#app/views/ResourceGate.vue'
 import { useContext } from "#root/src/config"
 
 export default defineComponent({
     name: "MediaInterface",
     components: {
+        ResourceGate,
     },
     props: {
         type: {

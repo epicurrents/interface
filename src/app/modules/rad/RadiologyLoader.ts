@@ -13,6 +13,7 @@ import type {
     FileSystemItem,
     StudyContext,
     StudyContextCollection,
+    StudyListing,
     StudyLoader,
 } from '@epicurrents/core/types'
 import { Log } from 'scoped-event-log'
@@ -41,6 +42,18 @@ export default class RadiologyLoader implements StudyLoader {
     }
     get supportedModalities () {
         return [RADIOLOGY_MODALITY]
+    }
+
+    /**
+     * List a study from the address of its viewer page. The resource needs nothing read, so it is ready as listed and
+     * its activation loads nothing.
+     */
+    createListedResource (listing: StudyListing) {
+        if (typeof listing.source !== 'string' || !listing.source) {
+            Log.error(`Study '${listing.name}' is listed without the address of its viewer page.`, SCOPE)
+            return null
+        }
+        return new RadiologyResource(listing.name, listing.source)
     }
 
     async getResource (idx: number | string = -1) {

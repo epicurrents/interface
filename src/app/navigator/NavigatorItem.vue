@@ -3,12 +3,12 @@
         appearance="outlined"
         :class="{
             'active': resource.isActive,
-            'disabled': !isReady && !isDeferred
+            'disabled': !isSelectableNow
         }"
         variant="brand"
         @click="resourceClicked"
     >
-        <div v-if="isReady || isDeferred" :class="['name', 'epicv-oneliner']">
+        <div v-if="isReady || isDeferred || isListing" :class="['name', 'epicv-oneliner']">
             {{ parseResourceName(resource.name) }}
         </div>
         <div v-else-if="resource.state === 'error'" :class="['name', 'epicv-oneliner']">
@@ -42,7 +42,10 @@
             {{ $t('Close resource') }}
         </wa-tooltip>
         </div>
-        <div v-if="!isReady && (!isDeferred || resource.state === 'loading')" class="spinner" slot="suffix">
+        <div v-if="!isReady && !resource.isListed && (!isDeferred || resource.state === 'loading')"
+            class="spinner"
+            slot="suffix"
+        >
             <wa-spinner v-if="resource.state !== 'error'"></wa-spinner>
             <app-icon v-else class="error" name="octagon-exclamation"></app-icon>
         </div>
@@ -59,6 +62,18 @@ import type { DataResource } from "@epicurrents/core/types"
 import { useStore } from "vuex"
 import { isDeferredResource, secondsToTimeString, timePartsToShortString } from "@epicurrents/core/util"
 
+/**
+ * Whether activating `resource` from the navigator is allowed. A listed study is activated to load it, and stays
+ * selectable while it loads, since its view shows the loading state; a resource read from a file is selectable once it
+ * is ready. `wasListed` carries the listing past the start of the load, which clears `isListed`.
+ */
+const isSelectable = (resource: DataResource, wasListed: boolean) => {
+    if (resource.state === 'error' || resource.state === 'destroyed') {
+        return false
+    }
+    return resource.isReady || isDeferredResource(resource) || wasListed || resource.isListed
+}
+
 // Child components
 
 export default defineComponent({
@@ -72,12 +87,18 @@ export default defineComponent({
     setup () {
         const ID = 'NavigatorItem-' + useStore().state.APP.runningId++
         const isDeferred = ref(false)
+        /** The item lists a study that loads in place on its first activation, and keeps its name while it loads. */
+        const isListing = ref(false)
         const isReady = ref(false)
+        /** Whether clicking the item activates its resource. */
+        const isSelectableNow = ref(false)
         const resourceProps = ref([] as { [key: string]: string }[])
         return {
             ID,
             isDeferred,
+            isListing,
             isReady,
+            isSelectableNow,
             resourceProps,
         }
     },
@@ -106,8 +127,7 @@ export default defineComponent({
             return name.substring(0,(firstDotPos >= 0 ? firstDotPos : name.length))
         },
         resourceClicked () {
-            // A deferred resource lists a study that loads when it is opened, so it is opened from the listing.
-            if (!this.resource.isReady && !isDeferredResource(this.resource)) {
+            if (!isSelectable(this.resource, this.isListing)) {
                 return
             }
             this.$store.dispatch('set-active-resource', this.resource)
@@ -183,7 +203,9 @@ export default defineComponent({
                 }
             }
             this.isDeferred = isDeferredResource(this.resource)
+            this.isListing = this.isListing || this.resource.isListed
             this.isReady = this.resource.isReady
+            this.isSelectableNow = isSelectable(this.resource, this.isListing)
             this.resourceProps = props
         },
     },

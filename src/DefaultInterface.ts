@@ -195,9 +195,14 @@ export const DefaultInterface: DefaultInterfaceModuleConstructor
             const { key, payload } = (e as CustomEvent).detail
             this.store?.instance?.dispatch(key, payload)
         })
-        // Handle new biosignal resources, which arrive added to a dataset or, for a study loaded from its listing,
-        // put in the listing's place.
+        // Wire a biosignal resource to the interpreter on its first activation: a dataset may list hundreds of
+        // recordings, and wiring each would boot Pyodide for recordings nobody opens.
+        const wiredResources = new WeakSet<BiosignalResource>()
         const prepareBiosignalResource = (resource: BiosignalResource) => {
+            if (wiredResources.has(resource)) {
+                return
+            }
+            wiredResources.add(resource)
             const pyodide = window.__EPICURRENTS__.RUNTIME!.SERVICES
                 .get('pyodide') as unknown as PythonInterpreterService | null
             const memoryManager = window.__EPICURRENTS__.RUNTIME!.SETTINGS.app.useMemoryManager
@@ -207,8 +212,8 @@ export const DefaultInterface: DefaultInterfaceModuleConstructor
             // `runCode`, which resolves `initialSetup` and its script dependencies before running
             // anything. Adding the dependencies regardless would hold every recording closed behind
             // an interpreter download and a package install for a capability the session may never
-            // open — the resource is not ready until `dependenciesMissing` is empty, and the
-            // navigator refuses to activate a resource that is not ready.
+            // open — the resource is not ready until `dependenciesMissing` is empty, and its view
+            // shows the loading state until it is.
             if (
                 pyodide && config.usePyodideBiosignal && memoryManager
                 && Object.hasOwn(resource, '_signalCacheStatus')
@@ -235,12 +240,14 @@ export const DefaultInterface: DefaultInterfaceModuleConstructor
                 })
             }
         }
-        epicApp.eventBus.subscribe('add-resource', event => {
-            prepareBiosignalResource((event.detail.payload as { resource: BiosignalResource }).resource)
-        }, 'ViteInterface')
-        epicApp.eventBus.subscribe('replace-resource', event => {
-            prepareBiosignalResource((event.detail.payload as { next: BiosignalResource }).next)
-        }, 'ViteInterface')
+        // The 'before' phase adds the dependencies ahead of the activation itself, so the resource never reads as ready
+        // to a view between being activated and being wired.
+        epicApp.eventBus.subscribe('set-active-resource', event => {
+            const resource = (event.detail as { payload?: BiosignalResource | null }).payload
+            if (resource) {
+                prepareBiosignalResource(resource)
+            }
+        }, 'ViteInterface', undefined, 'before')
         // Store subscriptions.
         this.store.instance?.subscribe((mutation: MutationPayload) => {
             if (mutation.type === 'load-dataset-folder') {

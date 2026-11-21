@@ -13,6 +13,7 @@ import type {
     FileSystemItem,
     StudyContext,
     StudyContextCollection,
+    StudyListing,
     StudyLoader,
 } from '@epicurrents/core/types'
 import { Log } from 'scoped-event-log'
@@ -50,6 +51,27 @@ export default class NativeMediaLoader implements StudyLoader {
     }
     get supportedModalities () {
         return [this._modality]
+    }
+
+    /**
+     * List a media file from its address, or from a local file, for which an object URL is minted that the resource
+     * revokes. The browser reads the file, so the resource is ready as listed and its activation loads nothing.
+     */
+    createListedResource (listing: StudyListing) {
+        if (listing.source instanceof File) {
+            return new NativeMediaResource(
+                listing.name,
+                this._modality,
+                URL.createObjectURL(listing.source),
+                listing.source.type,
+                true,
+            )
+        }
+        if (typeof listing.source !== 'string' || !listing.source) {
+            Log.error(`Study '${listing.name}' is listed without a file address.`, SCOPE)
+            return null
+        }
+        return new NativeMediaResource(listing.name, this._modality, listing.source)
     }
 
     async getResource (idx: number | string = -1) {
