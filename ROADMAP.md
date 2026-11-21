@@ -82,11 +82,30 @@ A census of dispatch and subscription sites turned up several dead paths, since 
 
 ## Dataset navigator with nested resources
 
-The navigator ([src/app/navigator/](src/app/navigator/)) lists a dataset as one flat column of tall items, one per resource. Two kinds of resource need it to show a resource inside another: a recording with media attached to it (a video, a document, a radiology study framed by the radiology view), and the composite resource, whose parts are resources of their own. The intent is a revision rather than an extension of the current item:
+The navigator ([src/app/navigator/](src/app/navigator/)) lists a dataset as one flat column of tall items, one per resource, each an outlined button. Three kinds of resource need it to show a resource inside another:
 
-- **Vertically compact items.** A dataset of a few dozen members should fit without scrolling, which the current item height does not allow.
-- **Nesting.** A child is listed under its parent and opened from there; activating it switches to the view its modality needs, as any resource does. The platform's attached media and attached radiology studies are the first producers, the composite resource the second.
-- **One shape for both producers.** An attachment and a composite part differ in where the child comes from, not in how it is listed, so the navigator should take a parent–child relation from the resource rather than knowing either case.
+- a recording with media attached to it (a video, a document, a radiology study framed by the radiology view);
+- a tab resource, whose subcontexts are the studies its tables link to;
+- the composite resource, whose parts are resources of their own.
+
+The intent is a revision rather than an extension of the current item.
+
+- **Borderless, compact rows.** Rows lose the button outline. The active row is marked by a quiet background and an accent bar, and other rows by a hover tint. A dataset of a few dozen members fits without scrolling.
+- **Nesting through `childResources`.** A child is listed under its parent and nowhere else. The list expands while the parent or one of its children is active; collapsed, the parent shows the number of children it holds.
+- **Activating a child.** It sets the parent's `activeChildResource` and activates the parent. The store already picks the view from the active child's modality, so a radiology child mounts the radiology view.
+  - This becomes one store action. Today [TabViewer.vue](src/app/modules/tab/components/TabViewer.vue) sets the subcontext and re-dispatches the activation under a `TODO`.
+  - The footer breadcrumb's way back clears the child without re-dispatching, so it leaves the child's view showing. It goes through the same action.
+  - Opening a child loads and activates its parent first: a radiology study attached to an EEG recording opens with that recording's worker and signal cache set up behind it. The way back is instant for it, and the memory cost is accepted on the grounds that an attachment is opened in its recording's context. A child opened on its own, without its parent, is not supported.
+- **One shape for every producer.** An attachment, a subcontext and a composite part differ in where the child comes from, not in how it is listed, so the navigator reads `childResources` and knows none of the three cases. A tab resource's sheets are its `tables`, part of the resource itself, and are not children.
+- **Group headers from the module registry.** The current template names six modalities, so radiology and video members get no header.
+- **Render only the rows in view.** A thousand-member dataset renders every row today, which is most of a second on the main thread when it opens.
+
+**The landing view.** `DefaultInterface`, shown while no resource is active, is empty today.
+- **With no dataset, or an empty one**, it shows a short hint with two actions: open a study, and create a dataset.
+- **With a dataset**, it shows a summary and a tree of the dataset, from which any member opens. The summary covers counts per modality, the total recorded duration, the number of child resources, and how many members are activated against only listed. The figures come from what a listing carries, so showing them loads nothing.
+- The radiology view's way back (`showDataset` in [wayBack.ts](src/app/modules/rad/wayBack.ts)) lands here.
+
+**Depends on core's load-in-place lifecycle** ("Load a study in place, not through a placeholder" in the core ROADMAP). Under the placeholder design, a listed child cannot be loaded, since only a dataset member is swapped, and a parent's children would not survive its own swap.
 
 Until this lands, a host lists an attached resource after its parent in the same dataset.
 
