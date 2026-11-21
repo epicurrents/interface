@@ -40,6 +40,7 @@ beforeAll(() => {
 const render = (entries: [string, MainProperty][], isReady = true): Rendered[] => {
     const stub = {
         $options: { name: 'NavigatorItem' },
+        $store: { state: { MODULES: new Map() } },
         $t: options.methods.$t,
         isReady: false,
         resource: { getMainProperties: () => new Map(entries), isReady },
@@ -104,6 +105,7 @@ describe('readiness', () => {
     it('mirrors the resource state onto the item', () => {
         const stub = {
             $options: { name: 'NavigatorItem' },
+            $store: { state: { MODULES: new Map() } },
             $t: options.methods.$t,
             isReady: false,
             resource: { getMainProperties: () => new Map(), isReady: true },

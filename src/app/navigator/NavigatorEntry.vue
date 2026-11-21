@@ -1,6 +1,12 @@
 <template>
-    <navigator-item :resource="resource"></navigator-item>
-    <div v-if="children.length" class="children">
+    <navigator-item
+        :child-count="children.length"
+        :expanded="isOpen"
+        :resource="resource"
+        @selected="openChildren"
+        @toggle-children="toggleChildren"
+    ></navigator-item>
+    <div v-if="isOpen && children.length" class="children" role="group">
         <navigator-item v-for="child in children" :key="`navigator-item-${child.id}`"
             :parent="resource"
             :resource="child"
@@ -10,7 +16,9 @@
 
 <script lang="ts">
 /**
- * A dataset member in the navigator, with the resources listed under it as its children.
+ * A dataset member in the navigator, with the resources listed under it as its children. The children are shown
+ * when the member is opened and while it is active, which it also is while one of them is shown, and hidden when it
+ * stops being active; the disclosure row shows or hides them in between.
  */
 import { defineComponent, PropType, ref } from "vue"
 import type { DataResource } from "@epicurrents/core/types"
@@ -32,21 +40,41 @@ export default defineComponent({
     setup () {
         const ID = 'NavigatorEntry-' + useStore().state.APP.runningId++
         const children = ref([] as DataResource[])
+        const isOpen = ref(false)
+        /** The member's activity when the entry last read it, so only a change of it opens or closes the list. */
+        const wasActive = ref(false)
         return {
             ID,
             children,
+            isOpen,
+            wasActive,
         }
     },
     methods: {
-        childrenUpdated () {
+        entryUpdated () {
             this.children = [...this.resource.childResources]
+            if (this.resource.isActive !== this.wasActive) {
+                this.isOpen = this.resource.isActive
+                this.wasActive = this.resource.isActive
+            }
+        },
+        openChildren () {
+            this.isOpen = true
+        },
+        subscribe (resource: DataResource) {
+            resource.onPropertyChange(['childResources', 'isActive'], this.entryUpdated, this.ID)
+        },
+        toggleChildren () {
+            this.isOpen = !this.isOpen
         },
     },
     watch: {
         resource (value: DataResource, previous: DataResource) {
             previous.unsubscribeAll(this.ID)
-            value.onPropertyChange('childResources', this.childrenUpdated, this.ID)
-            this.childrenUpdated()
+            this.subscribe(value)
+            this.isOpen = false
+            this.wasActive = false
+            this.entryUpdated()
         },
     },
     beforeMount () {
@@ -56,8 +84,8 @@ export default defineComponent({
         )
     },
     mounted () {
-        this.resource.onPropertyChange('childResources', this.childrenUpdated, this.ID)
-        this.childrenUpdated()
+        this.subscribe(this.resource)
+        this.entryUpdated()
     },
     beforeUnmount () {
         this.resource.unsubscribeAll(this.ID)
@@ -66,12 +94,10 @@ export default defineComponent({
 </script>
 
 <style scoped>
-/* Spaced as the navigator spaces its members, and kept at its height in the scroll as they are. */
+/* Kept at its height in the navigator's scroll, as the members are. */
 .children {
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
-    gap: 0.25rem;
-    padding-left: 1rem;
 }
 </style>

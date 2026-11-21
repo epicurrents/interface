@@ -4,7 +4,9 @@
  * One store action opens a child and closes it again. Opening a child makes it its parent's active child, loads it in
  * place if it is a listing, and activates the parent behind it, so the view follows the child's modality while the
  * parent stays set up for the way back. Activating a resource the ordinary way shows the resource itself. In the
- * navigator, a child's item opens through that action and is marked as shown only while its parent shows it.
+ * navigator, a child's item opens through that action and is marked as shown only while its parent shows it; a member
+ * lists its children when it is opened and while it is active, and marks its shown child in its place while they are
+ * hidden. The module registered for a modality names the navigator's group headers and leads each row's properties.
  * @package    epicurrents/interface
  * @copyright  2026 Sampsa Lohi
  * @license    Apache-2.0
@@ -14,6 +16,8 @@ import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { createApp } from 'vue'
 import { actions, ActionTypes } from '#store/actions'
 import { MutationTypes } from '#store/mutations'
+import DatasetNavigator from '#app/navigator/DatasetNavigator.vue'
+import NavigatorEntry from '#app/navigator/NavigatorEntry.vue'
 import NavigatorItem from '#app/navigator/NavigatorItem.vue'
 import { init } from '#i18n'
 import type { DataResource } from '@epicurrents/core/types'
@@ -112,10 +116,13 @@ describe('a child resource in the navigator', () => {
     beforeAll(() => {
         init(createApp({}), 'en')
     })
-    const stub = (item: DataResource, parent: DataResource | null) => ({
+    const stub = (item: DataResource, parent: DataResource | null, expanded = true) => ({
+        $emit: vi.fn(),
         $options: { name: 'NavigatorItem' },
-        $store: { dispatch: vi.fn() },
+        $store: { dispatch: vi.fn(), state: { MODULES: new Map() } },
         $t: options.methods.$t,
+        childCount: parent ? 0 : item.childResources.length,
+        expanded,
         isDeferred: false,
         isListing: false,
         isReady: false,
@@ -152,5 +159,132 @@ describe('a child resource in the navigator', () => {
         options.methods.resourceUpdated.call(parentItem)
         expect(childItem.isShown).toBe(false)
         expect(parentItem.isShown).toBe(true)
+    })
+
+    it('leads its properties with the name of the module for its modality', () => {
+        const member = resource('EEG', 'eeg', {
+            getMainProperties: () => new Map([['duration', 60], ['signals', 20]]),
+        } as Partial<DataResource>)
+        const item = stub(member, null)
+        item.$store.state.MODULES = new Map([['eeg', { moduleName: { code: 'eeg', full: 'EEG', short: 'EEG' } }]])
+        options.methods.resourceUpdated.call(item)
+        expect(item.resourceProps.map(p => (p as { text: string }).text)).toEqual(['EEG', '20', '01:00'])
+    })
+
+    it('marks a collapsed member in place of its shown child', () => {
+        const child = resource('US', 'rad')
+        const parent = resource('EEG', 'eeg', {
+            activeChildResource: child,
+            childResources: [child],
+            isActive: true,
+        } as Partial<DataResource>)
+        const parentItem = stub(parent, null, false)
+        options.methods.resourceUpdated.call(parentItem)
+        expect(parentItem.isShown).toBe(true)
+    })
+})
+
+describe('a member with children in the navigator', () => {
+    const options = NavigatorEntry as unknown as {
+        methods: {
+            entryUpdated: () => void
+            openChildren: () => void
+            toggleChildren: () => void
+        }
+    }
+    const stub = (member: DataResource) => ({
+        children: [] as DataResource[],
+        isOpen: false,
+        resource: member,
+        wasActive: false,
+    })
+
+    it('lists its children while it is active and hides them when it stops', () => {
+        const child = resource('US', 'rad')
+        const member = resource('EEG', 'eeg', { childResources: [child] })
+        const entry = stub(member)
+        options.methods.entryUpdated.call(entry)
+        expect(entry.children).toEqual([child])
+        expect(entry.isOpen).toBe(false)
+        ;(member as { isActive: boolean }).isActive = true
+        options.methods.entryUpdated.call(entry)
+        expect(entry.isOpen).toBe(true)
+        ;(member as { isActive: boolean }).isActive = false
+        options.methods.entryUpdated.call(entry)
+        expect(entry.isOpen).toBe(false)
+    })
+
+    it('lists its children when the member is opened again after they were hidden', () => {
+        const child = resource('US', 'rad')
+        const member = resource('EEG', 'eeg', { childResources: [child], isActive: true } as Partial<DataResource>)
+        const entry = stub(member)
+        options.methods.entryUpdated.call(entry)
+        options.methods.toggleChildren.call(entry)
+        expect(entry.isOpen).toBe(false)
+        const itemOptions = NavigatorItem as unknown as { methods: { resourceClicked: () => void } }
+        const item = {
+            $emit: vi.fn(),
+            $store: { dispatch: vi.fn() },
+            isListing: false,
+            parent: null,
+            resource: member,
+        }
+        itemOptions.methods.resourceClicked.call(item)
+        expect(item.$emit).toHaveBeenCalledWith('selected')
+        options.methods.openChildren.call(entry)
+        expect(entry.isOpen).toBe(true)
+    })
+
+    it('keeps a toggled list as it is until the member changes its activity', () => {
+        const child = resource('US', 'rad')
+        const member = resource('EEG', 'eeg', { childResources: [child], isActive: true } as Partial<DataResource>)
+        const entry = stub(member)
+        options.methods.entryUpdated.call(entry)
+        options.methods.toggleChildren.call(entry)
+        expect(entry.isOpen).toBe(false)
+        // A new child changes the list, not whether it is shown.
+        ;(member as { childResources: DataResource[] }).childResources = [child, resource('CT', 'rad')]
+        options.methods.entryUpdated.call(entry)
+        expect(entry.children).toHaveLength(2)
+        expect(entry.isOpen).toBe(false)
+    })
+})
+
+describe('the navigator groups', () => {
+    const options = DatasetNavigator as unknown as {
+        computed: { groups: () => { header: string, key: string, resources: unknown[] }[] }
+        methods: { $t: (key: string) => string }
+    }
+    beforeAll(() => {
+        init(createApp({}), 'en')
+    })
+    const navigator = (scheme: string, sorted: Map<string, unknown[]>) => ({
+        $options: { name: 'AppNavigator' },
+        $store: {
+            state: {
+                APP: { activeDataset: { resourceSorting: { scheme }, sortedResources: sorted } },
+                MODULES: new Map([
+                    ['eeg', { moduleName: { code: 'eeg', full: 'Electroencephalography', short: 'EEG' } }],
+                    ['rad', { moduleName: { code: 'rad', full: 'Radiology', short: 'Radiology' } }],
+                ]),
+            },
+        },
+        $t: options.methods.$t,
+        updateCounter: 0,
+    })
+
+    it('heads each modality with its module name, and skips empty groups', () => {
+        const groups = options.computed.groups.call(navigator('modality', new Map([
+            ['eeg', [{}]],
+            ['rad', [{}]],
+            ['pdf', []],
+            ['meg', [{}]],
+        ])))
+        expect(groups.map(g => g.header)).toEqual(['EEG', 'Radiology', 'MEG'])
+    })
+
+    it('takes no headers when sorted otherwise', () => {
+        const groups = options.computed.groups.call(navigator('alphabetical', new Map([['A', [{}]], ['E', [{}]]])))
+        expect(groups.map(g => g.header)).toEqual(['', ''])
     })
 })

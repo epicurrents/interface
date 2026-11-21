@@ -1,60 +1,69 @@
 <template>
-    <wa-button data-component="navigator-item"
-        appearance="outlined"
+    <div data-component="navigator-item"
         :class="{
             'active': isShown,
-            'disabled': !isSelectableNow
+            'child': parent,
+            'disabled': !isSelectableNow,
         }"
-        variant="brand"
-        @click="resourceClicked"
     >
-        <div v-if="isReady || isDeferred || isListing" :class="['name', 'epicv-oneliner']">
-            {{ parseResourceName(resource.name) }}
+        <div class="main">
+            <button
+                :aria-current="isShown || undefined"
+                :aria-disabled="!isSelectableNow || undefined"
+                class="select"
+                @click="resourceClicked"
+            >
+                <span v-if="isReady || isDeferred || isListing" class="name epicv-oneliner">
+                    {{ parseResourceName(resource.name) }}
+                </span>
+                <span v-else-if="resource.state === 'error'" class="name epicv-oneliner">
+                    {{ $t('Error loading resource') }}
+                </span>
+                <span v-else class="name epicv-oneliner">{{ $t('Loading resource') }}</span>
+                <span class="properties epicv-oneliner">
+                    <template v-for="(props, idx) of resourceProps" :key="`resource-property-${idx}`">
+                        <span v-if="idx" class="separator"> | </span>
+                        <app-icon v-if="props.icon"
+                            :id="`nav-item-${resource.id}-${idx}-icon`"
+                            :name="props.icon"
+                        ></app-icon>
+                        <wa-tooltip v-if="props.icon" :for="`nav-item-${resource.id}-${idx}-icon`">
+                            {{ props.tooltip || '' }}
+                        </wa-tooltip>
+                        {{ props.text }}
+                    </template>
+                </span>
+            </button>
+            <span v-if="!isReady && !resource.isListed && (!isDeferred || resource.state === 'loading')"
+                class="spinner"
+            >
+                <wa-spinner v-if="resource.state !== 'error'"></wa-spinner>
+                <app-icon v-else class="error" name="octagon-exclamation"></app-icon>
+            </span>
+            <wa-button v-if="isShown"
+                appearance="plain"
+                class="close-button"
+                :id="`close-button-${resource.id}`"
+                @click="closeResource"
+            >
+                <app-icon :label="$t('Close resource')" :name="closeButtonIcon"></app-icon>
+            </wa-button>
+            <wa-tooltip v-if="isShown" :for="`close-button-${resource.id}`">{{ $t('Close resource') }}</wa-tooltip>
         </div>
-        <div v-else-if="resource.state === 'error'" :class="['name', 'epicv-oneliner']">
-            {{ $t('Error loading resource') }}
-        </div>
-        <div v-else :class="['name', 'epicv-oneliner']">{{ $t('Loading resource') }}</div>
-        <div :class="['properties', 'epicv-oneliner']">
-            <template v-for="(props, idx) of resourceProps" :key="`resource-property-${idx}`">
-                <span class="separator" v-if="idx"> | </span>
-                <app-icon v-if="props.icon"
-                    :id="`nav-item-${resource.id}-${idx}-icon`"
-                    :name="props.icon"
-                ></app-icon>
-                <wa-tooltip v-if="props.icon" :for="`nav-item-${resource.id}-${idx}-icon`">
-                    {{ props.tooltip || '' }}
-                </wa-tooltip>
-                {{ props.text }}
-            </template>
-        <wa-button
-            appearance="plain"
-            class="close-button"
-            :id="`close-button-${resource.id}`"
-            @click.stop="closeResource"
+        <button v-if="childCount"
+            :aria-expanded="expanded"
+            class="disclosure"
+            @click="toggleChildren"
         >
-            <app-icon :name="closeButtonIcon"></app-icon>
-        </wa-button>
-        <wa-tooltip
-            :for="`close-button-${resource.id}`"
-            position="down"
-        >
-            {{ $t('Close resource') }}
-        </wa-tooltip>
-        </div>
-        <div v-if="!isReady && !resource.isListed && (!isDeferred || resource.state === 'loading')"
-            class="spinner"
-            slot="suffix"
-        >
-            <wa-spinner v-if="resource.state !== 'error'"></wa-spinner>
-            <app-icon v-else class="error" name="octagon-exclamation"></app-icon>
-        </div>
-    </wa-button>
+            <app-icon :name="expanded ? 'chevron-down' : 'chevron-right'"></app-icon>
+            {{ $t('{n} nested resources', { n: childCount }) }}
+        </button>
+    </div>
 </template>
 
 <script lang="ts">
 /**
- * A single item in for the sidebar.
+ * A row in the dataset navigator: a dataset member, or a resource listed under one.
  */
 import { defineComponent, PropType, ref } from "vue"
 import { T } from "#i18n"
@@ -79,6 +88,16 @@ const isSelectable = (resource: DataResource, wasListed: boolean) => {
 export default defineComponent({
     name: 'NavigatorItem',
     props: {
+        /** The number of resources listed under this one, which gives a member its disclosure row. */
+        childCount: {
+            type: Number,
+            default: 0,
+        },
+        /** Whether the resources listed under this one are shown. */
+        expanded: {
+            type: Boolean,
+            default: false,
+        },
         /** The resource this one is listed under as a child, or null for a dataset member. */
         parent: {
             type: Object as PropType<DataResource | null>,
@@ -89,13 +108,17 @@ export default defineComponent({
             required: true,
         },
     },
+    emits: ['loaded', 'selected', 'toggle-children'],
     setup () {
         const ID = 'NavigatorItem-' + useStore().state.APP.runningId++
         const isDeferred = ref(false)
         /** The item lists a study that loads in place on its first activation, and keeps its name while it loads. */
         const isListing = ref(false)
         const isReady = ref(false)
-        /** Whether the item's resource is the one shown: active itself, or the active child of its active parent. */
+        /**
+         * Whether the item marks the resource that is shown: active itself, or the active child of its active parent.
+         * A collapsed member marks its shown child in its place.
+         */
         const isShown = ref(false)
         /** Whether clicking the item activates its resource. */
         const isSelectableNow = ref(false)
@@ -114,6 +137,11 @@ export default defineComponent({
         closeButtonIcon (): string {
             // This can return a different icon, if the resource is set up to be destroyed after closing.
             return 'xmark'
+        },
+    },
+    watch: {
+        expanded () {
+            this.resourceUpdated()
         },
     },
     methods: {
@@ -143,6 +171,7 @@ export default defineComponent({
             } else {
                 this.$store.dispatch('set-active-resource', this.resource)
             }
+            this.$emit('selected')
         },
         resourceUpdated () {
             const props = [] as { [key: string]: string }[]
@@ -214,14 +243,22 @@ export default defineComponent({
                     props.push({ text: this.$t(name) })
                 }
             }
+            // The row leads with the resource's modality, named by the module registered for it.
+            const module = this.$store.state.MODULES.get(this.resource.modality)
+            if (module) {
+                props.unshift({ text: this.$t(module.moduleName.short) })
+            }
             this.isDeferred = isDeferredResource(this.resource)
             this.isListing = this.isListing || this.resource.isListed
             this.isReady = this.resource.isReady
             this.isSelectableNow = isSelectable(this.resource, this.isListing)
             this.isShown = this.parent
                            ? this.parent.isActive && this.parent.activeChildResource?.id === this.resource.id
-                           : this.resource.isActive && !this.resource.activeChildResource
+                           : this.resource.isActive && (!this.resource.activeChildResource || !this.expanded)
             this.resourceProps = props
+        },
+        toggleChildren () {
+            this.$emit('toggle-children')
         },
     },
     beforeMount () {
@@ -254,81 +291,117 @@ export default defineComponent({
 </script>
 
 <style scoped>
+/* Rows are borderless. The shown row carries a light background and the others a hover tint. */
 [data-component="navigator-item"] {
-    height: 3rem;
-    overflow: hidden;
+    /* A child's name starts where the text of its parent's disclosure row does, after the caret. */
+    --disclosure-caret: 0.875rem;
+    --disclosure-gap: 0.25rem;
+    --disclosure-padding: 0.375rem;
+    border-radius: 0.25rem;
+    display: flex;
+    flex-direction: column;
     width: 100%;
 }
-    [data-component="navigator-item"]::part(base) {
-        justify-content: flex-start;
-        height: 3rem;
-        padding: 0 0.5rem;
-        position: relative;
+    [data-component="navigator-item"]:hover:not(.disabled) {
+        background-color: var(--epicv-background-active);
     }
-    [data-component="navigator-item"]::part(start) {
-        flex: 0;
-    }
-    [data-component="navigator-item"]::part(label) {
-        flex: 1;
-        text-align: left;
-        padding: 0;
-    }
-    [data-component="navigator-item"]::part(end) {
-        flex: 0 0 1.5rem;
-    }
-    [data-component="navigator-item"].active::part(base) {
-        border-color: var(--epicv-border-active);
-        box-shadow: inset 0 0 0.25rem var(--epicv-border-active);
-    }
-    [data-component="navigator-item"]:not(.active):not(:hover) {
-        opacity: 0.8;
+    [data-component="navigator-item"].active,
+    [data-component="navigator-item"].active:hover {
+        background-color: var(--epicv-background-hover);
     }
     [data-component="navigator-item"].disabled {
         opacity: 0.5;
+    }
+button {
+    appearance: none;
+    background: none;
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    padding: 0;
+}
+    button:focus-visible {
+        border-radius: 0.25rem;
+        outline: 2px solid var(--epicv-border-active);
+        outline-offset: -2px;
+    }
+.main {
+    align-items: center;
+    display: flex;
+}
+.select {
+    align-items: stretch;
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+    padding: 0.375rem 0.25rem 0.375rem 0.5rem;
+    text-align: left;
+}
+    .child .select {
+        padding-left: calc(var(--disclosure-padding) + var(--disclosure-caret) + var(--disclosure-gap));
+    }
+    .disabled .select {
         cursor: default;
     }
-    .close-button {
-        display: none;
-        position: absolute;
-        right: 0.5rem;
-        top: 0.25rem;
+.name {
+    color: var(--epicv-text-main);
+    font-size: 0.85rem;
+    line-height: 1.1rem;
+}
+.properties {
+    color: var(--epicv-text-minor);
+    font-size: 0.7rem;
+    line-height: 0.9rem;
+}
+    .properties wa-icon {
+        opacity: 0.75;
     }
-        .close-button::part(base) {
-            font-size: 0.75rem;
-            height: 0.5rem;
-            padding: 0;
-            width: 0.5rem;
-        }
-        [data-component="navigator-item"].active:hover .close-button {
-            display: block;
-        }
-    .name {
+    .properties .separator {
+        position: relative;
+        top: -1px;
+    }
+/* A low second row on a member with children, which shows or hides them without opening the member. */
+.disclosure {
+    align-items: center;
+    color: var(--epicv-text-minor);
+    display: flex;
+    font-size: 0.7rem;
+    gap: var(--disclosure-gap);
+    justify-content: flex-start;
+    line-height: 1rem;
+    margin-top: -0.125rem;
+    padding: 0 0.5rem 0.375rem var(--disclosure-padding);
+    text-align: left;
+}
+    .disclosure app-icon {
+        flex: 0 0 var(--disclosure-caret);
+    }
+    .disclosure:hover {
         color: var(--epicv-text-main);
-        font-size: 0.9em;
-        height: 1.25rem;
-        line-height: 1.5rem;
     }
-    .properties {
-        height: 1rem;
-        line-height: 1rem;
-        font-size: 0.7em;
-        color: var(--epicv-text-minor);
+.spinner {
+    display: flex;
+    flex: 0 0 1.5rem;
+    font-size: 1rem;
+    justify-content: center;
+}
+.close-button {
+    flex: 0 0 1.5rem;
+    visibility: hidden;
+}
+    .close-button::part(base) {
+        font-size: 0.75rem;
+        height: 1.5rem;
+        padding: 0;
+        width: 1.5rem;
     }
-        .properties wa-icon {
-            opacity: 0.75;
-            position: relative;
-            top: 1px;
-        }
-        .properties .separator {
-            position: relative;
-            top: -1px;
-        }
-    .spinner {
-        display: flex;
-        justify-content: center;
-        font-size: 1.25rem;
+    [data-component="navigator-item"]:hover .close-button,
+    [data-component="navigator-item"]:focus-within .close-button {
+        visibility: visible;
     }
-    .error {
-        color: var(--epicv-error);
-    }
+.error {
+    color: var(--epicv-error);
+}
 </style>

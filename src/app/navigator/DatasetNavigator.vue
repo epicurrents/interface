@@ -6,15 +6,9 @@
             v-on:create-dataset="$emit('create-dataset')"
         ></dataset-selector>
         <wa-scroller class="items" orientation="vertical">
-            <template v-for="([key, value]) of sortedResources.entries()" :key="`nav-group-${key}`">
-                <!-- Sorting by type -->
-                <div v-if="key === 'htm'" class="header">{{ $t('Pages') }}</div>
-                <div v-else-if="key === 'pdf'" class="header">{{ $t('Documents') }}</div>
-                <div v-else-if="key === 'eeg'" class="header">{{ $t('EEG') }}</div>
-                <div v-else-if="key === 'meg'" class="header">{{ $t('MEG') }}</div>
-                <div v-else-if="key === 'emg'" class="header">{{ $t('EMG') }}</div>
-                <div v-else-if="key === 'ncs'" class="header">{{ $t('NCS') }}</div>
-                <navigator-entry v-for="ctx in value"
+            <template v-for="group of groups" :key="`nav-group-${group.key}`">
+                <div v-if="group.header" class="header">{{ group.header }}</div>
+                <navigator-entry v-for="ctx in group.resources"
                     :key="`navigator-entry-${ctx.resource.id}`"
                     :resource="ctx.resource"
                 />
@@ -80,39 +74,28 @@ export default defineComponent({
             }
             return 'flex'
         },
-        sortedResources (): Map<string, DatasetResourceContext[]> {
-            const sortedResources = new Map<string, DatasetResourceContext[]>()
+        /**
+         * The active dataset's members in its sorting. Sorted by modality, each group is headed by the short name of
+         * the module registered for it; the other schemes group by initial or by member, and take no header.
+         */
+        groups (): { header: string, key: string, resources: DatasetResourceContext[] }[] {
             const activeSet = this.$store.state.APP.activeDataset
             this.updateCounter
-            if (activeSet instanceof Promise) {
-                // Wait for fulfillment
-                return sortedResources
+            if (!activeSet || activeSet instanceof Promise) {
+                return []
             }
-            if (!activeSet) {
-                return sortedResources
-            }
-            const activeSetResources = activeSet.resources
-            if (!activeSetResources.length) {
-                return sortedResources
-            }
-            if (
-                activeSet.resourceSorting.scheme === 'modality'
-            ) {
-                for (const [key, resources] of activeSet.sortedResources.entries()) {
-                    sortedResources.set(key, resources)
+            const byModality = activeSet.resourceSorting.scheme === 'modality'
+            const groups = [] as { header: string, key: string, resources: DatasetResourceContext[] }[]
+            for (const [key, resources] of activeSet.sortedResources.entries()) {
+                if (!resources.length) {
+                    continue
                 }
-                return sortedResources
-            } else if (
-                activeSet.resourceSorting.scheme === 'alphabetical' ||
-                activeSet.resourceSorting.scheme === 'id'
-            ) {
-                const resourceList = []
-                for (const [_key, resources] of activeSet.sortedResources.entries()) {
-                    resourceList.push(...resources)
-                }
-                sortedResources.set('@', resourceList)
+                const header = byModality
+                               ? this.$t(this.$store.state.MODULES.get(key)?.moduleName.short || key.toUpperCase())
+                               : ''
+                groups.push({ header, key, resources })
             }
-            return activeSet.sortedResources
+            return groups
         },
     },
     methods: {
@@ -159,7 +142,6 @@ export default defineComponent({
 [data-component="dataset-navigator"] wa-scroller::part(content) {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
     padding: 0.25rem;
 }
 .items {
@@ -173,10 +155,15 @@ export default defineComponent({
         flex-shrink: 0;
     }
 .header {
-    height: 2rem;
-    line-height: 2rem;
-    padding: 0 5px;
-    background-color: var(--epicv-background-highlight);
-    font-variant: small-caps;
+    color: var(--epicv-text-minor);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    line-height: 1rem;
+    padding: 0.5rem 0.5rem 0.25rem 1.25rem;
+    text-transform: uppercase;
 }
+    .header:first-child {
+        padding-top: 0.25rem;
+    }
 </style>

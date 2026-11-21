@@ -54,15 +54,4 @@ export default class NativeMediaResource extends GenericResource {
         this._url = ''
         super.destroy()
     }
-
-    getMainProperties () {
-        const props = super.getMainProperties()
-        if (this.state === 'ready') {
-            const label = this._modality === 'audio' ? 'Audio'
-                        : this._modality === 'image' ? 'Image'
-                        : 'Video'
-            props.set(label, null)
-        }
-        return props
-    }
 }

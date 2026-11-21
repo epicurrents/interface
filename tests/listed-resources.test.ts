@@ -120,7 +120,8 @@ describe('a listed resource in the navigator', () => {
     }
     const stub = (resource: DataResource) => ({
         $options: { name: 'NavigatorItem' },
-        $store: { dispatch: vi.fn() },
+        $emit: vi.fn(),
+        $store: { dispatch: vi.fn(), state: { MODULES: new Map() } },
         $t: options.methods.$t,
         isDeferred: false,
         isListing: false,

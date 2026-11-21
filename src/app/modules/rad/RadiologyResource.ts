@@ -46,12 +46,4 @@ export default class RadiologyResource extends GenericResource {
         this._viewerUrl = ''
         super.destroy()
     }
-
-    getMainProperties () {
-        const props = super.getMainProperties()
-        if (this.state === 'ready') {
-            props.set('Radiology', null)
-        }
-        return props
-    }
 }
