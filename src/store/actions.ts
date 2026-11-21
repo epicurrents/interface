@@ -5,6 +5,7 @@
  * @license    Apache-2.0
  */
 
+import { nextTick } from "vue"
 import { ActionContext } from "vuex"
 import type { State } from "#store"
 import { Log } from "scoped-event-log"
@@ -20,7 +21,7 @@ import type {
 import { isDeferredResource } from "@epicurrents/core/util"
 import { MutationTypes } from './mutations'
 import { applicationViews, useContext } from '#config'
-import type { InterfaceComponent } from '#types/config'
+import type { ApplicationView, InterfaceComponent } from '#types/config'
 import type { WebDAVClient } from 'webdav'
 
 const SCOPE = "StoreActions"
@@ -64,6 +65,87 @@ const COMPONENT_STYLES = new Map<string, string[]>()
  * made in the meantime supersedes it, so a load only activates its resource while its request is still the latest.
  */
 let activeResourceRequests = 0
+/**
+ * Visibility each component had before the active view set it. A view that sets a component's visibility only does so
+ * while it is active, so leaving it puts back what the user had, even for a view entered by opening a resource.
+ */
+const visibilityBeforeView = new Map<InterfaceComponent, boolean>()
+
+/** Length of the crossfade between two themes, in milliseconds. */
+export const THEME_CROSSFADE_MS = 600
+
+/** The theme a view is shown in: the one chosen for it, or its default. */
+const themeOf = (view: ApplicationView) => view.theme || view.defaultTheme
+
+/**
+ * Make `view` the application view: set the components it names a visibility for, and put back the visibility of
+ * those the departing view had set and this one leaves alone. Every view switch goes through here, so a component
+ * hidden by one view is never left hidden in another that never asked for it.
+ *
+ * A switch that changes the theme crossfades the whole page from the old theme to the new one through the View
+ * Transitions API, where the browser has it. The browser fades one image of the page as it was into the page as it
+ * is, so every component changes at the same pace, nested ones, shadow roots and framed pages included; transitioning
+ * the colours of each element instead runs at a different pace per component, and an instant switch between a dark
+ * and a light page is harsh on the eyes. Without the API the switch is instant. The returned promise resolves once
+ * the new view is in the store, which is before the fade has finished.
+ * @param injectee - The store action context.
+ * @param view - The view to switch to.
+ */
+const switchView = async (injectee: ActionContext<State, State>, view: ApplicationView) => {
+    type ViewTransition = { ready: Promise<void>, updateCallbackDone: Promise<void> }
+    const doc = document as Document & { startViewTransition?: (update: () => Promise<void>) => ViewTransition }
+    if (themeOf(injectee.state.APP.view) === themeOf(view) || typeof doc.startViewTransition !== 'function') {
+        applyView(injectee, view)
+        return
+    }
+    const transition = doc.startViewTransition(async () => {
+        applyView(injectee, view)
+        await nextTick()
+    })
+    // The pseudo-elements live on the document, outside the shadow root the application's styles go to, so the fade
+    // is set on them directly. These animations outlast the browser's own crossfade and so decide its length.
+    transition.ready.then(() => {
+        const timing = { duration: THEME_CROSSFADE_MS, easing: 'ease-in-out', fill: 'both' as const }
+        doc.documentElement.animate(
+            { opacity: [1, 0] }, { ...timing, pseudoElement: '::view-transition-old(root)' }
+        )
+        doc.documentElement.animate(
+            { opacity: [0, 1] }, { ...timing, pseudoElement: '::view-transition-new(root)' }
+        )
+    }).catch(() => {
+        // A transition skipped by the browser has applied the view already.
+    })
+    await transition.updateCallbackDone
+}
+
+/**
+ * Commit `view` and the component visibility it implies; the part of a view switch that changes the store.
+ * @param injectee - The store action context.
+ * @param view - The view to switch to.
+ */
+const applyView = (injectee: ActionContext<State, State>, view: ApplicationView) => {
+    const visible = injectee.state.APP.uiComponentVisible
+    const setVisible = (component: InterfaceComponent, value: boolean) => {
+        if (visible[component] !== value) {
+            injectee.commit(MutationTypes.SET_UI_COMPONENT_VISIBLE, { component, value })
+        }
+    }
+    injectee.commit(MutationTypes.SET_VIEW, view)
+    const restore = new Map(visibilityBeforeView)
+    visibilityBeforeView.clear()
+    type SupportedComponents = Entries<typeof view.components>
+    for (const [key, uiCmp] of Object.entries(view.components) as SupportedComponents) {
+        if (uiCmp && uiCmp.visible !== null) {
+            // A component the departing view had also set keeps the value from before either of them.
+            visibilityBeforeView.set(key, restore.get(key) ?? visible[key])
+            restore.delete(key)
+            setVisible(key, uiCmp.visible)
+        }
+    }
+    for (const [key, value] of restore) {
+        setVisible(key, value)
+    }
+}
 
 /**
  * Disable all other resources, except for the resource at `index`.
@@ -331,7 +413,7 @@ export const actions = {
             return
         }
         // Disable other resources before enabling the new one (to avoid race conditions in shared memory buffer ops).
-        disableAllOtherResources(injectee.state, payload).then(() => {
+        disableAllOtherResources(injectee.state, payload).then(async () => {
             if (payload) {
                 // Make sure the required view is available and active.
                 const modView = injectee.state.INTERFACE.modules.get(
@@ -343,11 +425,9 @@ export const actions = {
                     return
                 }
                 if (injectee.state.APP.view.name !== modView) {
-                    for (const [key, view] of applicationViews) {
-                        if (modView === key) {
-                            injectee.commit(MutationTypes.SET_VIEW, view)
-                            break
-                        }
+                    const view = applicationViews.get(modView as string)
+                    if (view) {
+                        await switchView(injectee, view)
                     }
                     if (injectee.state.APP.view.name !== modView) {
                         Log.error(
@@ -375,7 +455,7 @@ export const actions = {
             Log.error(`Cannot set UI component '${payload.component}' visibility.`, SCOPE)
             return
         }
-        injectee.commit(MutationTypes.SET_UI_COMPONENT_VISIBLE, payload.value)
+        injectee.commit(MutationTypes.SET_UI_COMPONENT_VISIBLE, payload)
     },
     [ActionTypes.SET_VIEW] (injectee: ActionContext<State, State>, payload: string) {
         const view = applicationViews.get(payload)
@@ -387,16 +467,7 @@ export const actions = {
             Log.debug(`Application view '${view.name}' is already active.`, SCOPE)
             return
         }
-        injectee.commit(MutationTypes.SET_VIEW, view)
-        // Check if we need to apply component defaults.
-        type SupportedComponents = Entries<typeof view.components>
-        for (const [key, uiCmp] of Object.entries(view.components) as SupportedComponents) {
-            if (uiCmp && uiCmp.visible !== null) {
-                if (injectee.state.APP.uiComponentVisible[key] !== uiCmp.visible) {
-                    injectee.commit(MutationTypes.SET_UI_COMPONENT_VISIBLE, { component: key, value: uiCmp.visible })
-                }
-            }
-        }
+        return switchView(injectee, view)
     },
     [ActionTypes.TOGGLE_DIALOG] (_injectee: ActionContext<State, State>, _payload: { name: string, value?: boolean }) {
         // Broadcast.

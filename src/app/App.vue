@@ -997,13 +997,6 @@ General styles
 .epicv-dialog wa-scroller[orientation="vertical"]::part(content) {
     padding-right: 0.5rem;
 }
-/* Transition on theme change */
-.epicv-theme-change {
-    -ms-transition: background-color 1.0s ease, border-color 1.0s ease;
-    -moz-transition: background-color 1.0s ease, border-color 1.0s ease;
-    -webkit-transition: background-color 1.0s ease, border-color 1.0s ease;
-    transition: background-color 1.0s ease, border-color 1.0s ease;
-}
 .epicv-dark-theme, .epicv-dark-theme * {
     --epicv-background: #080808;
     --epicv-background-active: #001828;

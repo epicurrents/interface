@@ -40,6 +40,7 @@ import * as interfaceAccModule from '#app/modules/acc'
 import * as interfaceDocModule from '#app/modules/doc'
 import * as interfaceEegModule from '#app/modules/eeg'
 import { NATIVE_MEDIA_MODALITIES, registerNativeMedia } from '#app/modules/native'
+import { RADIOLOGY_MODALITY, registerRadiology } from '#app/modules/rad'
 import * as interfacePdfModule from '#app/modules/pdf'
 import type { EegModuleConfiguration } from '#app/modules/eeg/types'
 import { leadFieldProvider } from './leadFields.example'
@@ -296,6 +297,11 @@ export const registerAllModules = ({ app, useSAB, setup, registerInterfaceModule
         if (!setup.activeModules.length || setup.activeModules.includes(modality)) {
             registerNativeMedia({ app, registerInterfaceModule }, modality)
         }
+    }
+
+    // Radiology: studies rendered by a viewer page the host serves, framed by the radiology view.
+    if (!setup.activeModules.length || setup.activeModules.includes(RADIOLOGY_MODALITY)) {
+        registerRadiology({ app, registerInterfaceModule })
     }
 }
 

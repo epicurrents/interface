@@ -69,6 +69,8 @@
  *   | 'audio' | Audio player                         | browser formats  | interface modules/native
  *   | 'image' | Image viewer                         | browser formats  | interface modules/native
  *   | 'video' | Video player                         | browser formats  | interface modules/native
+ *   | 'rad'   | Radiology view, framing a host's     | — (host's page)  | interface modules/rad
+ *   |         |   viewer page per study              |                  |
  *   | pyodide | Python-in-browser analysis service   | —                | @epicurrents/pyodide-service
  *
  * The all-in `setups/full.example.ts` is the reference consumer: it

@@ -49,6 +49,11 @@
       "import": "./dist/modules/native.js",
       "default": "./dist/modules/native.js"
     },
+    "./modules/rad": {
+      "types": "./dist/app/modules/rad/index.d.ts",
+      "import": "./dist/modules/rad.js",
+      "default": "./dist/modules/rad.js"
+    },
     "./modules/pdf": {
       "types": "./dist/app/modules/pdf/index.d.ts",
       "import": "./dist/modules/pdf.js",

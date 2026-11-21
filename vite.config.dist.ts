@@ -59,6 +59,7 @@ export default defineConfig({
                 'modules/emg': fileURLToPath(new URL('./src/app/modules/emg/index.ts', import.meta.url)),
                 'modules/native': fileURLToPath(new URL('./src/app/modules/native/index.ts', import.meta.url)),
                 'modules/pdf': fileURLToPath(new URL('./src/app/modules/pdf/index.ts', import.meta.url)),
+                'modules/rad': fileURLToPath(new URL('./src/app/modules/rad/index.ts', import.meta.url)),
                 // The detachable window — './window'.
                 'window': fileURLToPath(new URL('./src/app/windows/index.ts', import.meta.url)),
             },

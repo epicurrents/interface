@@ -79,3 +79,17 @@ A census of dispatch and subscription sites turned up several dead paths, since 
 - **No equivalent guard on the subscriber side.** A `store.subscribe` that matches a mutation type nothing commits is inert in the same way, and that is how the `set-label-value` and unprefixed `set-page-number` subscribers survived — the latter also leaking a subscription per mount, because `mounted` overwrote its unsubscriber. Scanning for it is harder than the dispatch case: a subscriber legitimately matches names declared anywhere, including in a host application.
 - The `getSettingsValue` getter has no call sites, and neither do `getSettingForInput` / `getInputForSetting`. Removing them is still the intent; their user-definable check was corrected in the meantime, because four module configs expose the pair on their public config surface and the check refused every field it was meant to admit while comparing two key spaces that never meet. [tests/settings-conversion.test.ts](tests/settings-conversion.test.ts) covers them, and goes away with them.
 - The `action:` scope in a control's `reloadOn` list now has no users. Only `OnOffControl` ever implemented it; `ButtonControl` and `DropdownControl` silently ignored the entry. Removing the branch belongs with stage 3, since it is the same `subscribeAction` teardown.
+
+## Dataset navigator with nested resources
+
+The navigator ([src/app/navigator/](src/app/navigator/)) lists a dataset as one flat column of tall items, one per resource. Two kinds of resource need it to show a resource inside another: a recording with media attached to it (a video, a document, a radiology study framed by the radiology view), and the composite resource, whose parts are resources of their own. The intent is a revision rather than an extension of the current item:
+
+- **Vertically compact items.** A dataset of a few dozen members should fit without scrolling, which the current item height does not allow.
+- **Nesting.** A child is listed under its parent and opened from there; activating it switches to the view its modality needs, as any resource does. The platform's attached media and attached radiology studies are the first producers, the composite resource the second.
+- **One shape for both producers.** An attachment and a composite part differ in where the child comes from, not in how it is listed, so the navigator should take a parent–child relation from the resource rather than knowing either case.
+
+Until this lands, a host lists an attached resource after its parent in the same dataset.
+
+## A theme chosen by the resource, not only the view
+
+The theme follows the view: `defaultTheme` on the view's registration, crossfaded on a switch by `switchView` in [src/store/actions.ts](src/store/actions.ts) through the View Transitions API, which fades the page as one layer so every component, shadow root and framed page changes at the same pace. The radiology view is dark and every other view light. A resource that shows radiology inside another view, the planned side-by-side of an NCS recording and its ultrasound study, needs the dark theme in the biosignal view, so a module or a resource should be able to name the theme it is shown in, with the view's default as the fallback, and the switch between two resources of one view should crossfade as a view switch does.

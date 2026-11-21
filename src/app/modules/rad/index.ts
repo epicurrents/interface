@@ -1,100 +1,100 @@
 /**
- * Epicurrents Interface Vuex store radiology module.
+ * Radiology module: studies rendered by a viewer page the host serves, framed by the radiology view.
+ *
+ * The application reads nothing of a radiology study. A host that serves a viewer for its studies (a DICOM viewer on
+ * its own mount, typically) lists each study by the address of its page, and `registerRadiology` registers the module
+ * with the importer `rad/viewer-url` that turns that address into a resource. Keeping the viewer in a page of its own
+ * is deliberate: a radiology viewer brings global styles, a router reading the page URL, document-wide hotkeys and,
+ * often, a content policy of its own, none of which can share the application's document.
  * @package    epicurrents/interface
- * @copyright  2025 Sampsa Lohi
+ * @copyright  2026 Sampsa Lohi
  * @license    Apache-2.0
  */
 
-import { type ActionContext } from "vuex"
+import type { DataResource, ResourceModule } from '@epicurrents/core/types'
 import { safeObjectFrom } from '@epicurrents/core/util'
-import type { Modify } from "@epicurrents/core/types"
-import { EpiCStore, type InterfaceResourceModule, type State } from "#store"
-import { loadAsyncComponent } from "#util"
-import { Log } from "scoped-event-log"
-import { useContext } from '#config'
-import type { ModuleConfiguration } from '#types/globals'
+import { Log } from 'scoped-event-log'
+import type { InterfaceResourceModule, ResourceModuleContext } from '#store'
+import { loadAsyncComponent } from '#util'
 import type { CommonInterfaceSettings } from '#types/config'
-import type { RadiologyModuleSettings, RadiologyResource } from './types'
+import type { SetupContext } from '#setups/index'
+import RadiologyLoader from './RadiologyLoader'
+import RadiologyResource, { RADIOLOGY_MODALITY, RADIOLOGY_RETURN_MESSAGE } from './RadiologyResource'
 
-const SCOPE = "vue-interface-doc-module"
+const SCOPE = 'radiology-module'
 
-export const runtime = {
-    moduleName: {
-        code: 'rad',
-        full: 'Radiology',
-        short: 'Radiology',
-    },
-    async applyConfiguration (_config: ModuleConfiguration) {
+const NAME = { code: RADIOLOGY_MODALITY, full: 'Radiology', short: 'Radiology' }
 
-    },
-    getControlsComponent: () => {
-        return loadAsyncComponent(() => null)
-    },
-    getFooterComponent: () => {
-        return loadAsyncComponent(() => null)
-    },
-    getViewerComponent: () => {
-        return loadAsyncComponent(() => null)
-    },
-    /** This method must be overridden by parent. */
-    setPropertyValue (_property, _value) {
-        Log.warn(`setPropertyValue method in 'htm' has not been overridden, state will not be altered.`, SCOPE)
-    },
-    resourceLifecycleHooks: {
-        beforeDestroy (_resource: RadiologyResource) {
-
+/** The core and interface halves of the radiology module. */
+export const radiologyModules = () => {
+    const core: ResourceModule = {
+        runtime: safeObjectFrom({
+            moduleName: NAME,
+            applyConfiguration () {
+                return Promise.resolve()
+            },
+            setPropertyValue (property: string, _value: unknown, _resource?: DataResource) {
+                // The framed viewer owns its state; the module keeps no properties of its own.
+                Log.debug(`The radiology module has no property '${property}' to set.`, SCOPE)
+            },
+        }),
+        settings: {
+            useMemoryManager: false,
         },
-        created (_resource: RadiologyResource) {
-
-        },
-        destroyed (_resource: RadiologyResource) {
-
-        },
-    },
-} as InterfaceResourceModule
-
-enum RadiologyActionTypes {
-    // An example action type.
-    DUMMY = 'dummy',
+    }
+    const ui: ResourceModuleContext = {
+        runtime: {
+            moduleName: NAME,
+            async applyConfiguration () {
+            },
+            // The radiology view frames the viewer page itself and shows no controls of its own.
+            getControlsComponent: () => {
+                return loadAsyncComponent(() => null)
+            },
+            getFooterComponent: () => {
+                return loadAsyncComponent(() => import('./components/RadiologyFooter.vue'))
+            },
+            getViewerComponent: () => {
+                return loadAsyncComponent(() => null)
+            },
+            /** Replaced when the module is registered. */
+            setPropertyValue () {
+                Log.warn(`setPropertyValue in '${RADIOLOGY_MODALITY}' has not been overridden.`, SCOPE)
+            },
+            resourceLifecycleHooks: {
+                beforeDestroy () {
+                },
+                created () {
+                },
+                destroyed () {
+                },
+            },
+        } as InterfaceResourceModule,
+        settings: safeObjectFrom({
+            _userDefinable: {},
+            compatibleView: 'radiology',
+        }) as CommonInterfaceSettings,
+    }
+    return { core, ui }
 }
-
-export const actions = {
-    // An example action.
-    [RadiologyActionTypes.DUMMY] (_injectee: ActionContext<State, State>, payload: number | string | null) {
-        runtime.setPropertyValue('dummy', payload)
-    },
-}
-
-export const settings: CommonInterfaceSettings = safeObjectFrom({
-    _userDefinable: {},
-    compatibleView: 'radiology',
-})
 
 /**
- * Get scoped component properties for the radiology scope.
- * @param store - The vuex store object.
- * @param component - Possible calling component name.
- * @returns Scoped component properties.
+ * Register the radiology module: its core module, the `rad/viewer-url` importer and its interface module.
+ * @param context - The setup context of the registering build.
  */
-export const useRadiologyContext = (store: EpiCStore, component?: string) => {
-    const scopeProps = useContext(store, 'radiology', component)
-    const typifiedProps = scopeProps as Modify<typeof scopeProps, {
-        /**
-         * Currently active radiology settings.
-         * @remarks
-         * These scoped properties are only meant to be used inside components that display
-         * data from active resources and expect that active recording cannot be null.
-         */
-        SETTINGS: typeof scopeProps['SETTINGS'] & RadiologyModuleSettings
-    }>
-    return {
-        /**
-         * Currently ective resource.
-         * @remarks
-         * These scoped properties are only meant to be used inside components that display
-         * data from active resources and expect that active recording cannot be null.
-         */
-        RESOURCE: store.getters.getActiveResource() as RadiologyResource,
-        ...typifiedProps,
-    }
+export const registerRadiology = (
+    { app, registerInterfaceModule }: Pick<SetupContext, 'app' | 'registerInterfaceModule'>,
+) => {
+    const { core, ui } = radiologyModules()
+    app.registerModule(RADIOLOGY_MODALITY, core)
+    const loader = new RadiologyLoader()
+    app.registerStudyImporter(`${RADIOLOGY_MODALITY}/viewer-url`, 'Open radiology study from URL', 'url', loader)
+    registerInterfaceModule(RADIOLOGY_MODALITY, ui)
+}
+
+export {
+    RADIOLOGY_MODALITY,
+    RADIOLOGY_RETURN_MESSAGE,
+    RadiologyLoader,
+    RadiologyResource,
 }

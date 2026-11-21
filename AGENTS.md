@@ -27,7 +27,7 @@ src/
       SplitPanelView.vue  # wrapper around wa-split-panel
       biosignal/          # BiosignalInterface, annotation overlays, axis plots, sidebar
       media/              # MediaInterface (audio/video)
-      radiology/          # RadiologyInterface (OHIF wrapper)
+      radiology/          # RadiologyInterface (frames a host's viewer page)
       default/            # DefaultInterface fallback
     navigator/            # DatasetNavigator, DatasetSelector
     overlays/             # ConnectorDialog, DatasetDialog, WelcomeDialog, etc.
@@ -118,9 +118,9 @@ top: menubar (calc(1.5rem + 1px) tall)
 bottom: [dataset-navigator split-panel | interface-view]
 ```
 
-**Interface views** — loaded conditionally based on `config.activeViews`:
+**Interface views** — every view in `applicationViews` is registered; `config.activeViews` is declared and read nowhere, so it gates nothing:
 - `default-interface` — always present
-- `biosignal-interface`, `media-interface`, `radiology-interface` — lazy-loaded only if in `activeViews`
+- `biosignal-interface`, `media-interface`, `radiology-interface` — async components, each loaded on its first render; the radiology one stays mounted and hidden once rendered, so its frame keeps its page across view switches
 
 **Browser check**: requires `window.chrome` (Chromium-only API). Shows an error page with a bypass link (`?override`) on other browsers.
 
@@ -138,7 +138,7 @@ bottom: [dataset-navigator split-panel | interface-view]
 
 **Native buttons**: WebAwesome's `native.css`, loaded with its stylesheet, gives every plain `<button>` the height of a form control and centres its content. A plain button used as a list row or a chip therefore sets `height: auto; min-height: 0` itself. In a flex column with a capped height the fixed height only shows while the list is short, since a full list squeezes its rows, which makes the cause hard to spot.
 
-**Theme**: CSS custom properties (`--epicv-background`, `--epicv-text-main`, etc.) under `.epicv-dark-theme` and `.epicv-light-theme`. WebAwesome components get matching `wa-dark` / `wa-light` class.
+**Theme**: CSS custom properties (`--epicv-background`, `--epicv-text-main`, etc.) under `.epicv-dark-theme` and `.epicv-light-theme`. WebAwesome components get matching `wa-dark` / `wa-light` class. The theme follows the view (`defaultTheme`, or the view's chosen `theme`). A view switch that changes it crossfades the page through the View Transitions API in `switchView` ([src/store/actions.ts](src/store/actions.ts)): the browser fades one image of the old page into the live new one, so every component, shadow root and framed page changes at one pace, where transitioning each element's colours runs at a different pace per component and per Web Awesome part. The fade is set with the Web Animations API on the `::view-transition-old(root)` / `::view-transition-new(root)` pseudo-elements, which live on the document, outside the shadow root the interface's styles go to. `THEME_CROSSFADE_MS` is its length; without the API the switch is instant.
 
 ### Component hierarchy (EEG modality)
 
@@ -294,7 +294,7 @@ Actions split into two behavioral categories:
 
 **State-mutating actions** — validate, then commit a mutation:
 - `set-active-resource`: key action. A deferred resource (a listed study not yet loaded, see core AGENTS.md → Deferred studies) is handed to `openDeferredResource` instead, and the loaded resource that takes its place is dispatched in turn, unless another `set-active-resource` was dispatched while the study loaded. The navigator keys its items by resource id, so the swap remounts the item rather than leaving it subscribed to the listing. Otherwise it first awaits `disableAllOtherResources()` (deactivates all other resources, waits for each deactivation if memory manager is in use to avoid SAB race conditions). Then checks that the view required by the resource's modality (`INTERFACE.modules.get(modality)?.settings?.compatibleView`) is available. Then commits `SET_ACTIVE_RESOURCE`.
-- `set-view`: looks up the view in `applicationViews` map, commits `SET_VIEW`, then applies per-view UI component defaults (e.g., hiding the navigator in some views).
+- `set-view`: looks up the view in `applicationViews` map and switches through `switchView`, which commits `SET_VIEW`, applies the view's component visibility (e.g. the radiology view hides the navigator) and puts back what the departing view had set and this one leaves alone. `set-active-resource` switches through the same helper, so a view entered by opening a resource applies its defaults too, and leaving it restores the user's choice.
 - `toggle-ui-component` / `set-ui-component-visible`: guard against unknown component names before committing.
 - `toggle-fullscreen`: uses browser fullscreen API directly.
 - `set-settings-value`, `add-dataset`, `set-active-dataset`, etc.: thin wrappers.
@@ -495,6 +495,14 @@ Source: [src/app/modules/native/](src/app/modules/native/)
 Video, audio and raster images, which the browser decodes itself. The module carries both halves a modality needs, because there is nothing for a `*-module` package to do: `NativeMediaResource` holds only the file's URL and is `ready` on construction, `NativeMediaLoader` implements `StudyLoader` without an importer (a URL study keeps the URL, a file study uses the object URL minted for the file), and `NativeMediaViewer.vue` renders the `<video>`, `<audio>` or `<img>` in the media view, showing a message when the element reports an error. The modalities are `audio`, `image` and `video`, the names `MediaInterface.getMediaElement` resolves.
 
 Register one with `registerNativeMedia(ctx, modality)`, which adds the core module, the `media/<modality>-file` and `media/<modality>-url` importers and the interface module. Each modality gets module objects of its own from `nativeMediaModules(modality)`: `AppStore.addModule` rebinds `runtime.setPropertyValue` to the name it registers, so one object shared across three names would answer for the last of them only.
+
+### Radiology module
+
+Source: [src/app/modules/rad/](src/app/modules/rad/), view [src/app/views/radiology/](src/app/views/radiology/)
+
+A radiology study the application reads nothing of: the host serves a page that renders it (a DICOM viewer on the host's own mount, typically), and `RadiologyResource` holds that page's address and is `ready` on construction. `RadiologyLoader` takes a study only from a URL, through the `rad/viewer-url` importer `registerRadiology(ctx)` adds with the core and interface modules; a file or a directory has no page and is refused. The module's `compatibleView` is `radiology`, and [RadiologyInterface.vue](src/app/views/radiology/RadiologyInterface.vue) frames the active radiology resource's page in an iframe, created on first activation and kept, page and state, while another view is active; activating another study points the same frame at its page, so one radiology viewer runs at a time. The viewer stays in a page of its own on purpose: a radiology viewer brings global styles, a router reading the page URL, document-wide hotkeys and often a content policy of its own, none of which can share the application's document. The radiology footer, [RadiologyFooter.vue](src/app/modules/rad/components/RadiologyFooter.vue), shows the trail dataset › parent › study, where the parent step appears for a study attached to another resource of its dataset (`RadiologyResource.parent`). The dataset step closes every resource and returns to the default view, which lists the dataset; the parent step opens the parent. The host sets `parent` and keeps it current, since a listed resource is replaced by another object when it loads; a parent no longer in the active dataset is treated as none. The steps are [wayBack.ts](src/app/modules/rad/wayBack.ts), so the trail and the framed page's Back cannot disagree.
+
+The framed page asks for the way back by posting `{ type: RADIOLOGY_RETURN_MESSAGE }` (`epicurrents:radiology:return`) to its parent window. The view honours it only from its own frame's window and from the application's own origin, and takes the nearest step of the trail: the parent, or the dataset when the study has none. The viewer's keyboard shortcuts do not reach a focused frame.
 
 ---
 

@@ -1,68 +1,65 @@
 <template>
     <div data-component="radiology-interface"
         :id="`epicurrents-radiology-interface-${$store.state.APP.id}`"
-        ref="wrapper"
     >
-        <div id="react-portal"></div>
-        <div id="root"></div>
-        <!-- Load OHIF scripts the first time the view is activated. -->
-        <component v-if="$store.state.APP.view.name === 'radiology'"
-            as="script"
-            is="script"
-            rel="preload"
-            :src="`${ohifUrl}app-config.js`"
-        ></component>
-        <component v-if="$store.state.APP.view.name === 'radiology'"
-            as="script"
-            is="script"
-            rel="preload"
-            type="module"
-            :src="`${ohifUrl}init-service-worker.js`"
-        ></component>
-        <component v-if="$store.state.APP.view.name === 'radiology'"
-            defer="defer"
-            is="script"
-            :src="`${ohifUrl}app.bundle.c61e990727612c91bbf8.js`"
+        <div class="viewer">
+            <iframe v-if="viewerUrl"
+                allow="fullscreen"
+                ref="frame"
+                :src="viewerUrl"
+                :title="viewerTitle"
+            ></iframe>
+            <div v-else class="empty">
+                {{ $t('No radiology study is open.') }}
+            </div>
+        </div>
+        <component v-if="$store.state.APP.uiComponentVisible.footer && !$store.state.INTERFACE.app.isExpanded"
+            class="footer"
+            :is="footer"
         ></component>
     </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, Ref } from "vue"
+/**
+ * Frames the viewer page of the active radiology resource.
+ *
+ * The application keeps this view mounted and hidden while another view is active, so the frame is created when a
+ * radiology resource is first activated and keeps its page, with whatever state the user left it in, across a switch
+ * to another view and back. Activating another radiology resource points the same frame at that resource's page, so
+ * one radiology viewer runs at a time.
+ *
+ * The framed page may ask to go back by posting `{ type: 'epicurrents:radiology:return' }` to this window. The request
+ * is honoured only from the frame's own window and from this document's origin, and takes the nearest step back from
+ * the study: to the resource it is attached to, or to the dataset when it has none.
+ */
+import { defineComponent, markRaw, ref, Ref } from "vue"
 import { T } from "#i18n"
-import { useStore } from "vuex"
-
+import type { DataResource } from "@epicurrents/core/types"
+import RadiologyResource, { RADIOLOGY_MODALITY, RADIOLOGY_RETURN_MESSAGE } from "#app/modules/rad/RadiologyResource"
+import { stepBack } from "#app/modules/rad/wayBack"
 
 export default defineComponent({
     name: "RadiologyInterface",
-    components: {
-    },
-    props: {
-    },
     setup () {
-        const rso = null as ResizeObserver | null
-        const viewerHeight = ref(0)
-        const viewerWidth = ref(0)
-        //const store = useStore()
-        const SETTINGS = useStore().state.SETTINGS.app
-        const wrapper = ref<HTMLDivElement>() as Ref<HTMLDivElement>
+        const frame = ref<HTMLIFrameElement>() as Ref<HTMLIFrameElement | undefined>
+        /** The study the frame shows, which the way back leaves. */
+        const study = null as RadiologyResource | null
+        // Unsubscribe from store mutations.
+        const unsubscribe = null as null | (() => void)
+        const viewerTitle = ref('')
+        const viewerUrl = ref('')
         return {
-            rso,
-            viewerHeight,
-            viewerWidth,
-            SETTINGS,
-            wrapper,
+            frame,
+            study,
+            unsubscribe,
+            viewerTitle,
+            viewerUrl,
         }
     },
     computed: {
-        ohifUrl () {
-            return (window as unknown as { PUBLIC_URL: string }).PUBLIC_URL || '/ohif/'
-        },
-        viewerStyles () {
-            return {
-                width: `${this.viewerWidth}px`,
-                height: `${this.viewerHeight}px`,
-            }
+        footer () {
+            return markRaw(this.$store.getters.getResourceFooter(RADIOLOGY_MODALITY))
         },
     },
     methods: {
@@ -74,17 +71,35 @@ export default defineComponent({
         $t: function (key: string, params = {}, capitalized = false) {
             return T(key, this.$options.name, params, capitalized)
         },
-        //footerUpdate (update: [any, any]) {
-            //this.footer?.update(update)
-        //},
-        resizeViewer () {
-            const viewer = this.wrapper.querySelector('#root > div > div:nth-child(2)') as HTMLDivElement
-            if (viewer) {
-                // Override OHIF viewer's default viewer component height to accommodate the menubar.
-                viewer.setAttribute('style', 'height: calc(-77px + 100vh);')
-                return true
+        /**
+         * Point the frame at the active radiology resource's page. With no radiology resource active the frame is left
+         * as it is, since this view is hidden then and the page is kept for the user's return.
+         */
+        checkActiveResource () {
+            const active = (this.$store.state.APP.activeDataset?.activeResources ?? []) as DataResource[]
+            const study = active.find(r => r.modality === RADIOLOGY_MODALITY) as RadiologyResource | undefined
+            if (!study?.viewerUrl) {
+                return
             }
-            return false
+            this.study = study
+            if (study.viewerUrl === this.viewerUrl) {
+                return
+            }
+            this.viewerTitle = study.name
+            this.viewerUrl = study.viewerUrl
+        },
+        /**
+         * Answer a framed page's request to go back.
+         * @param event - A message posted to this window.
+         */
+        handleMessage (event: MessageEvent) {
+            if (event.origin !== window.location.origin || event.source !== this.frame?.contentWindow) {
+                return
+            }
+            if ((event.data as { type?: string } | null)?.type !== RADIOLOGY_RETURN_MESSAGE) {
+                return
+            }
+            stepBack(this.$store, this.study)
         },
     },
     beforeMount () {
@@ -92,36 +107,54 @@ export default defineComponent({
             'add-component-styles',
             { component: this.$options.name, styles: this.$options.__scopeId }
         )
-        console.time('scriptToView')
     },
     mounted () {
-        this.rso = new ResizeObserver(this.resizeViewer)
-        this.rso.observe(this.wrapper)
-        // Resize the viewer when viewer data changes.
-        document.querySelector('body')?.addEventListener(
-            'event::cornerstoneViewportService:viewportDataChanged',
-            this.resizeViewer
-        )
-        //this.rso.observe(this.wrapper)
+        this.unsubscribe = this.$store.subscribe(mutation => {
+            if (mutation.type === 'set-active-resource' || mutation.type === 'set-active-dataset') {
+                this.$nextTick(() => {
+                    this.checkActiveResource()
+                })
+            }
+        })
+        window.addEventListener('message', this.handleMessage)
         this.$store.dispatch('display-viewer')
+        this.checkActiveResource()
     },
     beforeUnmount () {
-        // Remove all listeners and observers.
-        this.rso?.unobserve(this.wrapper)
-        document.querySelector('body')?.removeEventListener(
-            'event::cornerstoneViewportService:viewportDataChanged',
-            this.resizeViewer
-        )
+        window.removeEventListener('message', this.handleMessage)
+        if (this.unsubscribe) {
+            this.unsubscribe()
+        }
     },
 })
 </script>
 
 <style scoped>
 [data-component="radiology-interface"] {
+    display: flex;
+    flex-direction: column;
     width: 100%;
     height: 100%;
 }
-[data-component="radiology-interface"] > #root {
-    width: 100%;
+.viewer {
+    flex: 1;
+    min-height: 0;
+    /* Under the frame while its page loads, so a study opens on the view's background rather than a blank one. */
+    background-color: var(--epicv-background);
+}
+    .viewer iframe {
+        display: block;
+        width: 100%;
+        height: 100%;
+        border: none;
+    }
+.empty {
+    padding: 2rem;
+    text-align: center;
+    color: var(--epicv-text-faint);
+}
+.footer {
+    position: relative;
+    flex-basis: calc(1.5rem + 1px);
 }
 </style>

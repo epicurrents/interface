@@ -78,6 +78,10 @@ Set `window.__EPICURRENTS__.SETUP` before the entry script runs — for example 
 - Vite configs: `vite.config.dist.ts` (the `dist/` package), `vite.config.app.ts` (standalone app), `vite.config.ts` (dev)
 - Type-check: `scripts/typecheck.mjs`
 
+## Radiology studies
+
+The `rad` module (`@epicurrents/interface/modules/rad`) lists a radiology study by the address of a page the host serves to render it, and the radiology view frames that page; the application reads nothing of the study. Register it with `registerRadiology(ctx)` and load a study through the `rad/viewer-url` importer with the page's URL. The footer's trail leads back to the dataset and, for a study attached to another resource (its `parent`, which the host sets), to that resource; the framed page takes the nearest step by posting `{ type: 'epicurrents:radiology:return' }` to its parent. Switching between the dark radiology view and a light one crossfades the page where the browser has the View Transitions API. Details in [AGENTS.md → Radiology module](AGENTS.md#radiology-module).
+
 ## Development notes
 
 **Icons**
