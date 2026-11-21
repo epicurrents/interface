@@ -6,7 +6,8 @@
  * parent stays set up for the way back. Activating a resource the ordinary way shows the resource itself. In the
  * navigator, a child's item opens through that action and is marked as shown only while its parent shows it; a member
  * lists its children when it is opened and while it is active, and marks its shown child in its place while they are
- * hidden. The module registered for a modality names the navigator's group headers and leads each row's properties.
+ * hidden, which the navigator remembers while the member is scrolled out of view. The module registered for a modality
+ * names the navigator's group headers and leads each row's properties.
  * @package    epicurrents/interface
  * @copyright  2026 Sampsa Lohi
  * @license    Apache-2.0
@@ -192,11 +193,10 @@ describe('a member with children in the navigator', () => {
             toggleChildren: () => void
         }
     }
-    const stub = (member: DataResource) => ({
+    const stub = (member: DataResource, disclosure = { isOpen: false, wasActive: false }) => ({
         children: [] as DataResource[],
-        isOpen: false,
+        disclosure,
         resource: member,
-        wasActive: false,
     })
 
     it('lists its children while it is active and hides them when it stops', () => {
@@ -205,13 +205,13 @@ describe('a member with children in the navigator', () => {
         const entry = stub(member)
         options.methods.entryUpdated.call(entry)
         expect(entry.children).toEqual([child])
-        expect(entry.isOpen).toBe(false)
+        expect(entry.disclosure.isOpen).toBe(false)
         ;(member as { isActive: boolean }).isActive = true
         options.methods.entryUpdated.call(entry)
-        expect(entry.isOpen).toBe(true)
+        expect(entry.disclosure.isOpen).toBe(true)
         ;(member as { isActive: boolean }).isActive = false
         options.methods.entryUpdated.call(entry)
-        expect(entry.isOpen).toBe(false)
+        expect(entry.disclosure.isOpen).toBe(false)
     })
 
     it('lists its children when the member is opened again after they were hidden', () => {
@@ -220,7 +220,7 @@ describe('a member with children in the navigator', () => {
         const entry = stub(member)
         options.methods.entryUpdated.call(entry)
         options.methods.toggleChildren.call(entry)
-        expect(entry.isOpen).toBe(false)
+        expect(entry.disclosure.isOpen).toBe(false)
         const itemOptions = NavigatorItem as unknown as { methods: { resourceClicked: () => void } }
         const item = {
             $emit: vi.fn(),
@@ -232,7 +232,7 @@ describe('a member with children in the navigator', () => {
         itemOptions.methods.resourceClicked.call(item)
         expect(item.$emit).toHaveBeenCalledWith('selected')
         options.methods.openChildren.call(entry)
-        expect(entry.isOpen).toBe(true)
+        expect(entry.disclosure.isOpen).toBe(true)
     })
 
     it('keeps a toggled list as it is until the member changes its activity', () => {
@@ -241,12 +241,24 @@ describe('a member with children in the navigator', () => {
         const entry = stub(member)
         options.methods.entryUpdated.call(entry)
         options.methods.toggleChildren.call(entry)
-        expect(entry.isOpen).toBe(false)
+        expect(entry.disclosure.isOpen).toBe(false)
         // A new child changes the list, not whether it is shown.
         ;(member as { childResources: DataResource[] }).childResources = [child, resource('CT', 'rad')]
         options.methods.entryUpdated.call(entry)
         expect(entry.children).toHaveLength(2)
-        expect(entry.isOpen).toBe(false)
+        expect(entry.disclosure.isOpen).toBe(false)
+    })
+
+    it('keeps a toggled list as it is when its entry is mounted again', () => {
+        const child = resource('US', 'rad')
+        const member = resource('EEG', 'eeg', { childResources: [child], isActive: true } as Partial<DataResource>)
+        const entry = stub(member)
+        options.methods.entryUpdated.call(entry)
+        options.methods.toggleChildren.call(entry)
+        // Scrolled out of view and back: a new entry for the member, with the state the navigator kept.
+        const remounted = stub(member, entry.disclosure)
+        options.methods.entryUpdated.call(remounted)
+        expect(remounted.disclosure.isOpen).toBe(false)
     })
 })
 

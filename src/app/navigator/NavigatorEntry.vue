@@ -1,12 +1,12 @@
 <template>
     <navigator-item
         :child-count="children.length"
-        :expanded="isOpen"
+        :expanded="disclosure.isOpen"
         :resource="resource"
         @selected="openChildren"
         @toggle-children="toggleChildren"
     ></navigator-item>
-    <div v-if="isOpen && children.length" class="children" role="group">
+    <div v-if="disclosure.isOpen && children.length" class="children" role="group">
         <navigator-item v-for="child in children" :key="`navigator-item-${child.id}`"
             :parent="resource"
             :resource="child"
@@ -18,10 +18,12 @@
 /**
  * A dataset member in the navigator, with the resources listed under it as its children. The children are shown
  * when the member is opened and while it is active, which it also is while one of them is shown, and hidden when it
- * stops being active; the disclosure row shows or hides them in between.
+ * stops being active; the disclosure row shows or hides them in between. The navigator keeps that state, so it
+ * outlives the entry while the member is scrolled out of view.
  */
 import { defineComponent, PropType, ref } from "vue"
 import type { DataResource } from "@epicurrents/core/types"
+import type { EntryDisclosure } from "./rows"
 import { useStore } from "vuex"
 // Child components
 import NavigatorItem from './NavigatorItem.vue'
@@ -32,6 +34,11 @@ export default defineComponent({
         NavigatorItem,
     },
     props: {
+        /** Whether the member's children are shown, kept by the navigator for as long as the dataset is open. */
+        disclosure: {
+            type: Object as PropType<EntryDisclosure>,
+            required: true,
+        },
         resource: {
             type: Object as PropType<DataResource>,
             required: true,
@@ -40,40 +47,33 @@ export default defineComponent({
     setup () {
         const ID = 'NavigatorEntry-' + useStore().state.APP.runningId++
         const children = ref([] as DataResource[])
-        const isOpen = ref(false)
-        /** The member's activity when the entry last read it, so only a change of it opens or closes the list. */
-        const wasActive = ref(false)
         return {
             ID,
             children,
-            isOpen,
-            wasActive,
         }
     },
     methods: {
         entryUpdated () {
             this.children = [...this.resource.childResources]
-            if (this.resource.isActive !== this.wasActive) {
-                this.isOpen = this.resource.isActive
-                this.wasActive = this.resource.isActive
+            if (this.resource.isActive !== this.disclosure.wasActive) {
+                this.disclosure.isOpen = this.resource.isActive
+                this.disclosure.wasActive = this.resource.isActive
             }
         },
         openChildren () {
-            this.isOpen = true
+            this.disclosure.isOpen = true
         },
         subscribe (resource: DataResource) {
             resource.onPropertyChange(['childResources', 'isActive'], this.entryUpdated, this.ID)
         },
         toggleChildren () {
-            this.isOpen = !this.isOpen
+            this.disclosure.isOpen = !this.disclosure.isOpen
         },
     },
     watch: {
         resource (value: DataResource, previous: DataResource) {
             previous.unsubscribeAll(this.ID)
             this.subscribe(value)
-            this.isOpen = false
-            this.wasActive = false
             this.entryUpdated()
         },
     },
