@@ -130,7 +130,6 @@ describe('a child resource in the navigator', () => {
         $t: options.methods.$t,
         childCount: parent ? 0 : item.childResources.length,
         expanded,
-        isDeferred: false,
         isListing: false,
         isReady: false,
         isSelectableNow: false,

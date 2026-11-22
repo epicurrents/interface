@@ -442,7 +442,6 @@ export default defineComponent({
         this.$store.state.addEventListener([
             'add-resource',
             'remove-resource',
-            'replace-resource',
             'set-active-dataset',
             'set-active-resource',
         ], () => {

@@ -123,7 +123,6 @@ describe('a listed resource in the navigator', () => {
         $emit: vi.fn(),
         $store: { dispatch: vi.fn(), state: { MODULES: new Map() } },
         $t: options.methods.$t,
-        isDeferred: false,
         isFailed: false,
         isListing: false,
         isReady: false,
@@ -140,6 +139,12 @@ describe('a listed resource in the navigator', () => {
         expect(item.isSelectableNow).toBe(true)
         options.methods.resourceClicked.call(item)
         expect(item.$store.dispatch).toHaveBeenCalledWith('set-active-resource', resource)
+    })
+
+    it('leaves a loading resource that was never listed unclickable', () => {
+        const item = stub({ isListed: false, isReady: false, name: 'b', state: 'loading' } as DataResource)
+        options.methods.resourceClicked.call(item)
+        expect(item.$store.dispatch).not.toHaveBeenCalled()
     })
 
     it('stays selectable while it loads', () => {

@@ -15,10 +15,8 @@ import type {
     DataResource,
     DatasourceConnector,
     Entries,
-    EpicurrentsApp,
     FileSystemItem,
 } from "@epicurrents/core/types"
-import { isDeferredResource } from "@epicurrents/core/util"
 import { MutationTypes } from './mutations'
 import { applicationViews, useContext } from '#config'
 import { T } from '#i18n'
@@ -64,8 +62,8 @@ export type UrlWithCredentials = {
  */
 const COMPONENT_STYLES = new Map<string, string[]>()
 /**
- * Count of requests to set the active resource. Opening a deferred resource waits for its study to load, and a request
- * made in the meantime supersedes it, so a load only activates its resource while its request is still the latest.
+ * Count of requests to set the active resource. A request waits for the other resources to deactivate, and one made in
+ * the meantime supersedes it, so only the latest request activates its resource.
  */
 let activeResourceRequests = 0
 
@@ -418,25 +416,6 @@ const activateResource = (
     // The resource is activated in the dataset active now, so a switch to another one supersedes the request as a
     // newer request does.
     const dataset = injectee.state.APP.activeDataset
-    if (isDeferredResource(payload)) {
-        const request = ++activeResourceRequests
-        // A listed study is loaded first and the loaded resource, which takes its place in the dataset, is what
-        // becomes active.
-        const app = window.__EPICURRENTS__?.APP as EpicurrentsApp | null
-        if (!app) {
-            Log.error(`Cannot open deferred resource ${payload.name}, the application is not available.`, SCOPE)
-            return null
-        }
-        return app.openDeferredResource(payload).then(async loaded => {
-            if (loaded && request === activeResourceRequests && dataset === injectee.state.APP.activeDataset) {
-                return Boolean(await injectee.dispatch(ActionTypes.SET_ACTIVE_RESOURCE, loaded))
-            }
-            return false
-        }).catch(error => {
-            Log.error(`Opening the deferred resource ${payload.name} failed: ${error}`, SCOPE)
-            return false
-        })
-    }
     // The view is resolved before anything changes, so a resource that cannot be shown leaves the one shown now as it
     // is. It follows the modality of the resource's active child when it has one.
     let view = null as ApplicationView | null

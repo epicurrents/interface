@@ -155,7 +155,6 @@ const state: State = {
     removeEventListener (_pattern, _handler) {},
     removeConnector (_name) {},
     removeResource (_resource, _dataset) {},
-    replaceResource (_previous, _next, _dataset) { return false },
     serialize () { return {} },
     setActiveDataset (_dataset) {},
     setActiveResource (_resource) {},

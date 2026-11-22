@@ -14,7 +14,7 @@
                 class="select"
                 @click="resourceClicked"
             >
-                <span v-if="isReady || isDeferred || isListing || isRetryable" class="name epicv-oneliner">
+                <span v-if="isReady || isListing || isRetryable" class="name epicv-oneliner">
                     {{ parseResourceName(resource.name) }}
                 </span>
                 <span v-else-if="isFailed" class="name epicv-oneliner">
@@ -44,9 +44,7 @@
                 <app-icon :label="$t('Try again')" name="rotate-right"></app-icon>
             </wa-button>
             <wa-tooltip v-if="isRetryable" :for="`retry-button-${resource.id}`">{{ $t('Try again') }}</wa-tooltip>
-            <span v-else-if="!isReady && !resource.isListed && (!isDeferred || resource.state === 'loading')"
-                class="spinner"
-            >
+            <span v-else-if="!isReady && !resource.isListed" class="spinner">
                 <wa-spinner v-if="!isFailed"></wa-spinner>
                 <app-icon v-else class="error" name="octagon-exclamation"></app-icon>
             </span>
@@ -80,7 +78,7 @@ import { defineComponent, PropType, ref } from "vue"
 import { T } from "#i18n"
 import type { DataResource } from "@epicurrents/core/types"
 import { useStore } from "vuex"
-import { isDeferredResource, secondsToTimeString, timePartsToShortString } from "@epicurrents/core/util"
+import { secondsToTimeString, timePartsToShortString } from "@epicurrents/core/util"
 
 /**
  * Whether activating `resource` from the navigator is allowed. A listed study is activated to load it, and stays
@@ -96,7 +94,7 @@ const isSelectable = (resource: DataResource, wasListed: boolean) => {
     if (resource.state === 'error') {
         return resource.canRetryLoad
     }
-    return resource.isReady || isDeferredResource(resource) || wasListed || resource.isListed
+    return resource.isReady || wasListed || resource.isListed
 }
 
 // Child components
@@ -132,7 +130,6 @@ export default defineComponent({
     emits: ['selected', 'toggle-children'],
     setup () {
         const ID = 'NavigatorItem-' + useStore().state.APP.runningId++
-        const isDeferred = ref(false)
         /** The resource is in `error`; its row shows the reason among its properties. */
         const isFailed = ref(false)
         /** The item lists a study that loads in place on its first activation, and keeps its name while it loads. */
@@ -150,7 +147,6 @@ export default defineComponent({
         const resourceProps = ref([] as { [key: string]: string }[])
         return {
             ID,
-            isDeferred,
             isFailed,
             isListing,
             isReady,
@@ -275,7 +271,6 @@ export default defineComponent({
             if (module) {
                 props.unshift({ text: this.$t(module.moduleName.short) })
             }
-            this.isDeferred = isDeferredResource(this.resource)
             this.isFailed = this.resource.state === 'error'
             this.isListing = this.isListing || this.resource.isListed
             this.isReady = this.resource.isReady
