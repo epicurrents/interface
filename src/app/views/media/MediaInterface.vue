@@ -6,6 +6,7 @@
         <component v-if="$store.state.APP.uiComponentVisible.controls && !$store.state.INTERFACE.app.isExpanded"
             class="controls"
             :is="CONTROLS[$store.state.APP.activeModality || 'default']"
+            :key="`media-controls-${shownResourceKey}`"
             ref="controls"
             v-on:toggle-navigation="$emit('toggle-navigation')"
         ></component>
@@ -30,6 +31,7 @@
         <component v-if="$store.state.APP.uiComponentVisible.footer && !$store.state.INTERFACE.app.isExpanded"
             class="footer"
             :is="FOOTERS[$store.state.APP.activeModality || 'default']"
+            :key="`media-footer-${shownResourceKey}`"
             ref="footer"
         >
         </component>
@@ -46,6 +48,7 @@ import type { DataResource } from "@epicurrents/core/types"
 import ControlsBar from '#app/controls/ControlsBar.vue'
 import DefaultFooter from '#app/footers/DefaultFooter.vue'
 import ResourceGate from '#app/views/ResourceGate.vue'
+import { shownResourceKey } from '#app/views/shownResourceKey'
 import { useContext } from "#root/src/config"
 
 export default defineComponent({
@@ -92,6 +95,12 @@ export default defineComponent({
         }
     },
     computed: {
+        /** Key of the controls and the footer, which are mounted again when the shown child resource changes. */
+        shownResourceKey (): string {
+            return shownResourceKey(
+                this.$store.state.APP.activeModality, this.$store.state.APP.activeDataset, this.activeResources
+            )
+        },
         /**
          * The size of a single media container
          */

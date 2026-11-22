@@ -61,9 +61,9 @@ import type {
     StateManager,
 } from "@epicurrents/core/types"
 import { MutationPayload } from "vuex"
-import type { PythonInterpreterService, RunCodeResult } from '@epicurrents/pyodide-service/types'
 import type { ApplicationInterfaceConfig, ModuleConfiguration } from './types/globals'
 import type { DefaultInterfaceModuleConstructor } from './types/interface'
+import { createBiosignalWiring } from './epicurrents/biosignalWiring'
 import EpicurrentsPlugin from './epicurrents/EpicurrentsPlugin'
 
 const SCOPE = 'interface'
@@ -197,49 +197,7 @@ export const DefaultInterface: DefaultInterfaceModuleConstructor
         })
         // Wire a biosignal resource to the interpreter on its first activation: a dataset may list hundreds of
         // recordings, and wiring each would boot Pyodide for recordings nobody opens.
-        const wiredResources = new WeakSet<BiosignalResource>()
-        const prepareBiosignalResource = (resource: BiosignalResource) => {
-            if (wiredResources.has(resource)) {
-                return
-            }
-            wiredResources.add(resource)
-            const pyodide = window.__EPICURRENTS__.RUNTIME!.SERVICES
-                .get('pyodide') as unknown as PythonInterpreterService | null
-            const memoryManager = window.__EPICURRENTS__.RUNTIME!.SETTINGS.app.useMemoryManager
-            // Only a consumer that computes the montage in Python needs the interpreter before the
-            // resource can be shown; `usePyodideBiosignal` is how it says so. Otherwise the service
-            // is registered for the analysis tools alone, and they await it themselves through
-            // `runCode`, which resolves `initialSetup` and its script dependencies before running
-            // anything. Adding the dependencies regardless would hold every recording closed behind
-            // an interpreter download and a package install for a capability the session may never
-            // open — the resource is not ready until `dependenciesMissing` is empty, and its view
-            // shows the loading state until it is.
-            if (
-                pyodide && config.usePyodideBiosignal && memoryManager
-                && Object.hasOwn(resource, '_signalCacheStatus')
-            ) {
-                // Refresh of the Pyodide-side input arrays is demand-driven inside
-                // `biosignal_get_signals` (and the batched `biosignal_refresh_channels`
-                // primitive), so no per-signalCacheStatus push is needed here.
-                // Add the core and biosignal scripts as dependencies for biosignal resources.
-                resource.addDependencies('pyodide-core', 'pyodide-biosignal')
-                pyodide.initialSetup.then(async (setupResult) => {
-                    if (setupResult) {
-                        resource.setDependenciesReady('pyodide-core')
-                        const scriptResult = await pyodide.loadDefaultScript('biosignal') as RunCodeResult
-                        if (scriptResult.success) {
-                            resource.setDependenciesReady('pyodide-biosignal')
-                        } else {
-                            resource.errorReason = 'Pyodide script error'
-                            resource.state = 'error'
-                        }
-                    } else {
-                        resource.errorReason = 'Failed to load Pyodide'
-                        resource.state = 'error'
-                    }
-                })
-            }
-        }
+        const prepareBiosignalResource = createBiosignalWiring(Boolean(config.usePyodideBiosignal))
         // The 'before' phase adds the dependencies ahead of the activation itself, so the resource never reads as ready
         // to a view between being activated and being wired.
         epicApp.eventBus.subscribe('set-active-resource', event => {

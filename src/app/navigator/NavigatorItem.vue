@@ -4,6 +4,7 @@
             'active': isShown,
             'child': parent,
             'disabled': !isSelectableNow,
+            'failed': isFailed,
         }"
     >
         <div class="main">
@@ -13,10 +14,10 @@
                 class="select"
                 @click="resourceClicked"
             >
-                <span v-if="isReady || isDeferred || isListing" class="name epicv-oneliner">
+                <span v-if="isReady || isDeferred || isListing || isRetryable" class="name epicv-oneliner">
                     {{ parseResourceName(resource.name) }}
                 </span>
-                <span v-else-if="resource.state === 'error'" class="name epicv-oneliner">
+                <span v-else-if="isFailed" class="name epicv-oneliner">
                     {{ $t('Error loading resource') }}
                 </span>
                 <span v-else class="name epicv-oneliner">{{ $t('Loading resource') }}</span>
@@ -34,10 +35,19 @@
                     </template>
                 </span>
             </button>
-            <span v-if="!isReady && !resource.isListed && (!isDeferred || resource.state === 'loading')"
+            <wa-button v-if="isRetryable"
+                appearance="plain"
+                class="retry-button"
+                :id="`retry-button-${resource.id}`"
+                @click="resourceClicked"
+            >
+                <app-icon :label="$t('Try again')" name="rotate-right"></app-icon>
+            </wa-button>
+            <wa-tooltip v-if="isRetryable" :for="`retry-button-${resource.id}`">{{ $t('Try again') }}</wa-tooltip>
+            <span v-else-if="!isReady && !resource.isListed && (!isDeferred || resource.state === 'loading')"
                 class="spinner"
             >
-                <wa-spinner v-if="resource.state !== 'error'"></wa-spinner>
+                <wa-spinner v-if="!isFailed"></wa-spinner>
                 <app-icon v-else class="error" name="octagon-exclamation"></app-icon>
             </span>
             <wa-button v-if="isShown"
@@ -51,6 +61,7 @@
             <wa-tooltip v-if="isShown" :for="`close-button-${resource.id}`">{{ $t('Close resource') }}</wa-tooltip>
         </div>
         <button v-if="childCount"
+            :aria-controls="expanded && childrenId ? childrenId : undefined"
             :aria-expanded="expanded"
             class="disclosure"
             @click="toggleChildren"
@@ -74,11 +85,16 @@ import { isDeferredResource, secondsToTimeString, timePartsToShortString } from 
 /**
  * Whether activating `resource` from the navigator is allowed. A listed study is activated to load it, and stays
  * selectable while it loads, since its view shows the loading state; a resource read from a file is selectable once it
- * is ready. `wasListed` carries the listing past the start of the load, which clears `isListed`.
+ * is ready. A resource whose load failed stays selectable while it can be retried, since activating it is the retry;
+ * one that stands in for a failure with nothing behind it is not. `wasListed` carries the listing past the start of
+ * the load, which clears `isListed`.
  */
 const isSelectable = (resource: DataResource, wasListed: boolean) => {
-    if (resource.state === 'error' || resource.state === 'destroyed') {
+    if (resource.state === 'destroyed') {
         return false
+    }
+    if (resource.state === 'error') {
+        return resource.canRetryLoad
     }
     return resource.isReady || isDeferredResource(resource) || wasListed || resource.isListed
 }
@@ -92,6 +108,11 @@ export default defineComponent({
         childCount: {
             type: Number,
             default: 0,
+        },
+        /** Id of the element that holds the resources listed under this one while they are shown. */
+        childrenId: {
+            type: String,
+            default: '',
         },
         /** Whether the resources listed under this one are shown. */
         expanded: {
@@ -108,13 +129,17 @@ export default defineComponent({
             required: true,
         },
     },
-    emits: ['loaded', 'selected', 'toggle-children'],
+    emits: ['selected', 'toggle-children'],
     setup () {
         const ID = 'NavigatorItem-' + useStore().state.APP.runningId++
         const isDeferred = ref(false)
+        /** The resource is in `error`; its row shows the reason among its properties. */
+        const isFailed = ref(false)
         /** The item lists a study that loads in place on its first activation, and keeps its name while it loads. */
         const isListing = ref(false)
         const isReady = ref(false)
+        /** The resource failed and can be loaded again, which clicking the row or its retry control does. */
+        const isRetryable = ref(false)
         /**
          * Whether the item marks the resource that is shown: active itself, or the active child of its active parent.
          * A collapsed member marks its shown child in its place.
@@ -126,8 +151,10 @@ export default defineComponent({
         return {
             ID,
             isDeferred,
+            isFailed,
             isListing,
             isReady,
+            isRetryable,
             isSelectableNow,
             isShown,
             resourceProps,
@@ -249,8 +276,10 @@ export default defineComponent({
                 props.unshift({ text: this.$t(module.moduleName.short) })
             }
             this.isDeferred = isDeferredResource(this.resource)
+            this.isFailed = this.resource.state === 'error'
             this.isListing = this.isListing || this.resource.isListed
             this.isReady = this.resource.isReady
+            this.isRetryable = this.isFailed && this.resource.canRetryLoad
             this.isSelectableNow = isSelectable(this.resource, this.isListing)
             this.isShown = this.parent
                            ? this.parent.isActive && this.parent.activeChildResource?.id === this.resource.id
@@ -270,17 +299,15 @@ export default defineComponent({
     },
     mounted () {
         // Add property update handlers
+        // The reason is followed on its own, since a resource may give it before or after it enters the error state.
         this.resource.onPropertyChange(
-            ['activeChildResource', 'dependenciesReady', 'isActive', 'isReady', 'state'],
+            ['activeChildResource', 'dependenciesReady', 'errorReason', 'isActive', 'isReady', 'state'],
             this.resourceUpdated,
             this.ID
         )
         this.parent?.onPropertyChange(['activeChildResource', 'isActive'], this.resourceUpdated, this.ID)
         // Check initial state.
         this.resourceUpdated()
-        this.$nextTick(() => {
-            this.$emit('loaded')
-        })
     },
     beforeUnmount () {
         // Remove property update handlers
@@ -391,12 +418,25 @@ button {
     flex: 0 0 1.5rem;
     visibility: hidden;
 }
-    .close-button::part(base) {
+    .close-button::part(base),
+    .retry-button::part(base) {
         font-size: 0.75rem;
         height: 1.5rem;
         padding: 0;
         width: 1.5rem;
     }
+/* The retry control of a failed row stays in view, since it is what the row offers. */
+.retry-button {
+    flex: 0 0 1.5rem;
+}
+    .retry-button::part(base) {
+        color: var(--epicv-error);
+        font-size: 1rem;
+    }
+/* A failed row keeps its name and shows the reason, its secondary line, in the error colour. */
+.failed .properties {
+    color: var(--epicv-error);
+}
     [data-component="navigator-item"]:hover .close-button,
     [data-component="navigator-item"]:focus-within .close-button {
         visibility: visible;

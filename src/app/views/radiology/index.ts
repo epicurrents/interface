@@ -16,13 +16,13 @@ const config: ApplicationView = {
     label: 'Radiology',
     name: 'radiology',
     components: {
-        // OHIF viewer has its own controls.
+        // The framed viewer page has its own controls.
         controls: false,
         footer: {
             visible: null,
         },
         navigator: {
-            // Some of the OHIF viewer elements require full window width, so hide the navigator by default.
+            // A radiology viewer page is laid out for the full window width, so the navigator is hidden by default.
             visible: false,
         },
     },

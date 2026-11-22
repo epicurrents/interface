@@ -228,6 +228,7 @@ export default class AppStore implements InterfaceStoreManager {
                     navigator: true,
                 },
                 view: applicationViews.get('default'),
+                visibilityBeforeView: {},
             })
         }
         const getters: GetterTree<State, State> & Getters = {

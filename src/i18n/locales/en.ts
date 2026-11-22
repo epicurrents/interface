@@ -15,6 +15,7 @@ import locEegFooter from "./en/EegFooter.json"
 import locEegViewer from "./en/EegViewer.json"
 import locExamineTool from "./en/ExamineTool.json"
 import locFindingPicker from "./en/FindingPicker.json"
+import locNavigatorEntry from "./en/NavigatorEntry.json"
 import locNavigatorItem from "./en/NavigatorItem.json"
 import locResourceGate from "./en/ResourceGate.json"
 import locSignalExportDialog from "./en/SignalExportDialog.json"
@@ -35,6 +36,7 @@ const messagesEN = {
         EegViewer: locEegViewer,
         ExamineTool: locExamineTool,
         FindingPicker: locFindingPicker,
+        NavigatorEntry: locNavigatorEntry,
         NavigatorItem: locNavigatorItem,
         ResourceGate: locResourceGate,
         SignalExportDialog: locSignalExportDialog,
@@ -50,6 +52,8 @@ const messagesEN = {
     'Lead field model for {montage} is not available on this server. Contact an administrator to compute it.':
         'Lead field model for {montage} is not available on this server. Contact an administrator to compute it.',
     'Loading dependency {n}/{t}...': 'Loading dependency {n}/{t}...',
+    'Loading {name} failed.': 'Loading {name} failed.',
+    'Loading {name} failed: {reason}': 'Loading {name} failed: {reason}',
     'Number {n}': 'Number {n}',
     'uV': 'µV', // Display ASCII-compatible unit uV in the interface as µV.
     '{n} channels': '{n} channel | {n} channels',

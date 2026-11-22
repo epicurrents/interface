@@ -6,7 +6,7 @@
         <component v-if="$store.state.APP.uiComponentVisible.controls && !$store.state.INTERFACE.app.isExpanded"
             class="controls"
             :is="CONTROLS[$store.state.APP.activeModality || 'default']"
-            :key="`biosignal-controls-${$store.state.APP.activeModality}`"
+            :key="`biosignal-controls-${shownResourceKey}`"
             ref="controls"
             v-on:toggle-navigation="$emit('toggle-navigation')"
         >
@@ -29,7 +29,7 @@
         <component v-if="$store.state.APP.uiComponentVisible.footer && !$store.state.INTERFACE.app.isExpanded"
             class="footer"
             :is="FOOTERS[$store.state.APP.activeModality || 'default']"
-            :key="`biosignal-footer-${$store.state.APP.activeModality}`"
+            :key="`biosignal-footer-${shownResourceKey}`"
             ref="footer"
         >
         </component>
@@ -46,6 +46,7 @@ import { useStore } from "vuex"
 import ControlsBar from '#app/controls/ControlsBar.vue'
 import BiosignalFooter from './footers/BiosignalFooter.vue'
 import ResourceGate from '#app/views/ResourceGate.vue'
+import { shownResourceKey } from '#app/views/shownResourceKey'
 import { useContext } from "#root/src/config"
 
 export default defineComponent({
@@ -110,6 +111,12 @@ export default defineComponent({
         }
     },
     computed: {
+        /** Key of the controls and the footer, which are mounted again when the shown child resource changes. */
+        shownResourceKey (): string {
+            return shownResourceKey(
+                this.$store.state.APP.activeModality, this.$store.state.APP.activeDataset, this.visibleResources
+            )
+        },
         sidebarOpen (): boolean {
             // Check for open sidebars.
             return false

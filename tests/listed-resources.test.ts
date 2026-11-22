@@ -12,7 +12,7 @@
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp, defineComponent, h, nextTick } from 'vue'
-import { Epicurrents, GenericResource } from '@epicurrents/core'
+import { Epicurrents, ErrorResource, GenericResource } from '@epicurrents/core'
 import type { DataResource, MediaDataset } from '@epicurrents/core/types'
 import NativeMediaLoader from '#app/modules/native/NativeMediaLoader'
 import type NativeMediaResource from '#app/modules/native/NativeMediaResource'
@@ -124,8 +124,10 @@ describe('a listed resource in the navigator', () => {
         $store: { dispatch: vi.fn(), state: { MODULES: new Map() } },
         $t: options.methods.$t,
         isDeferred: false,
+        isFailed: false,
         isListing: false,
         isReady: false,
+        isRetryable: false,
         isSelectableNow: false,
         resource,
         resourceProps: [] as object[],
@@ -151,7 +153,25 @@ describe('a listed resource in the navigator', () => {
         expect(item.isListing).toBe(true)
     })
 
-    it('is not selectable once its load has failed', async () => {
+    it('stays selectable once its load has failed, showing the reason, and activating it is the retry', async () => {
+        const resource = listedResource('a')
+        const item = stub(resource)
+        options.methods.resourceUpdated.call(item)
+        const load = resource.load()
+        await vi.waitFor(() => expect(resource.finish).not.toBeNull())
+        resource.errorReason = 'Recording study is incomplete'
+        resource.finish!(false)
+        await load
+        options.methods.resourceUpdated.call(item)
+        expect(item.isFailed).toBe(true)
+        expect(item.isRetryable).toBe(true)
+        expect(item.isSelectableNow).toBe(true)
+        expect(item.resourceProps).toContainEqual({ text: 'Recording study is incomplete' })
+        options.methods.resourceClicked.call(item)
+        expect(item.$store.dispatch).toHaveBeenCalledWith('set-active-resource', resource)
+    })
+
+    it('leaves the failed state as the retry starts', async () => {
         const resource = listedResource('a')
         const item = stub(resource)
         options.methods.resourceUpdated.call(item)
@@ -159,7 +179,25 @@ describe('a listed resource in the navigator', () => {
         await vi.waitFor(() => expect(resource.finish).not.toBeNull())
         resource.finish!(false)
         await load
+        resource.finish = null
+        const retry = resource.retryLoad()
         options.methods.resourceUpdated.call(item)
+        expect(item.isFailed).toBe(false)
+        expect(item.isRetryable).toBe(false)
+        expect(item.isSelectableNow).toBe(true)
+        await vi.waitFor(() => expect(resource.finish).not.toBeNull())
+        resource.finish!(true)
+        expect(await retry).toBe(true)
+        options.methods.resourceUpdated.call(item)
+        expect(item.isReady).toBe(true)
+    })
+
+    it('is not selectable when it stands in for a failure with nothing to load', () => {
+        const failure = new ErrorResource('failed', 'test')
+        const item = stub(failure)
+        options.methods.resourceUpdated.call(item)
+        expect(item.isFailed).toBe(true)
+        expect(item.isRetryable).toBe(false)
         expect(item.isSelectableNow).toBe(false)
         options.methods.resourceClicked.call(item)
         expect(item.$store.dispatch).not.toHaveBeenCalled()
@@ -217,5 +255,59 @@ describe('the view of a resource that is still loading', () => {
         await settle()
         expect(place.querySelector('.viewer')).toBeNull()
         expect(place.querySelector('.error')?.textContent).toContain('Recording study is incomplete')
+    })
+
+    it('shows a reason the resource gives after it has failed', async () => {
+        const resource = listedResource('a')
+        const place = mountGate(resource)
+        const load = resource.load()
+        await vi.waitFor(() => expect(resource.finish).not.toBeNull())
+        resource.finish!(false)
+        await load
+        await settle()
+        expect(place.querySelector('.error')).not.toBeNull()
+        resource.errorReason = 'Recording study is incomplete'
+        await settle()
+        expect(place.querySelector('.error')?.textContent).toContain('Recording study is incomplete')
+    })
+
+    it('offers the retry on a failed resource, and goes back to loading as the retry starts', async () => {
+        const resource = listedResource('a')
+        const place = mountGate(resource)
+        const load = resource.load()
+        await vi.waitFor(() => expect(resource.finish).not.toBeNull())
+        resource.errorReason = 'Recording study is incomplete'
+        resource.finish!(false)
+        await load
+        await settle()
+        const retry = place.querySelector('wa-button.retry')
+        expect(retry?.textContent).toContain('Try again')
+        resource.finish = null
+        retry!.dispatchEvent(new Event('click'))
+        await settle()
+        expect(place.querySelector('.error')).toBeNull()
+        expect(place.querySelector('wa-spinner')).not.toBeNull()
+        await vi.waitFor(() => expect(resource.finish).not.toBeNull())
+        resource.finish!(true)
+        await vi.waitFor(() => expect(resource.state).toBe('ready'))
+        await settle()
+        expect(place.querySelector('.viewer')).not.toBeNull()
+    })
+
+    it('offers no retry on a failure with nothing to load', async () => {
+        const place = mountGate(new ErrorResource('failed', 'test'))
+        await settle()
+        expect(place.querySelector('.error')).not.toBeNull()
+        expect(place.querySelector('wa-button.retry')).toBeNull()
+    })
+
+    it('shows a destroyed resource as unavailable, with nothing in progress', async () => {
+        const resource = listedResource('a')
+        resource.destroy()
+        const place = mountGate(resource)
+        await settle()
+        expect(place.querySelector('.viewer')).toBeNull()
+        expect(place.querySelector('wa-spinner')).toBeNull()
+        expect(place.querySelector('.closed')?.textContent).toContain('no longer available')
     })
 })

@@ -20,6 +20,7 @@ import type { CommonInterfaceSettings } from '#types/config'
 import type { SetupContext } from '#setups/index'
 import RadiologyLoader from './RadiologyLoader'
 import RadiologyResource, { RADIOLOGY_MODALITY, RADIOLOGY_RETURN_MESSAGE } from './RadiologyResource'
+import { getAllowedViewerOrigins, isAllowedViewerUrl, resolveViewerUrl, setAllowedViewerOrigins } from './viewerUrl'
 
 const SCOPE = 'radiology-module'
 
@@ -78,13 +79,31 @@ export const radiologyModules = () => {
     return { core, ui }
 }
 
+/** Options of `registerRadiology`. */
+export type RadiologyOptions = {
+    /**
+     * Origins a study's viewer page may have besides the application's own, such as `https://viewer.example.org`.
+     * A study whose page is of any other origin, or is not an `http:` or `https:` page, is refused when it is listed or
+     * loaded and is never framed. The application's own origin is always allowed, so a host that serves its viewer
+     * from its own mount names nothing.
+     */
+    allowedViewerOrigins?: string[]
+}
+
 /**
  * Register the radiology module: its core module, the `rad/viewer-url` importer and its interface module.
+ *
+ * The view frames a study's viewer page inside the application, so the page has to be one the host answers for:
+ * `options.allowedViewerOrigins` names the origins it may have besides the application's own. Registering again
+ * replaces the origins named before.
  * @param context - The setup context of the registering build.
+ * @param options - Options of the module; `allowedViewerOrigins` lists the origins a viewer page may have besides the application's own.
  */
 export const registerRadiology = (
     { app, registerInterfaceModule }: Pick<SetupContext, 'app' | 'registerInterfaceModule'>,
+    options: RadiologyOptions = {},
 ) => {
+    setAllowedViewerOrigins(options.allowedViewerOrigins)
     const { core, ui } = radiologyModules()
     app.registerModule(RADIOLOGY_MODALITY, core)
     const loader = new RadiologyLoader()
@@ -97,4 +116,8 @@ export {
     RADIOLOGY_RETURN_MESSAGE,
     RadiologyLoader,
     RadiologyResource,
+    getAllowedViewerOrigins,
+    isAllowedViewerUrl,
+    resolveViewerUrl,
+    setAllowedViewerOrigins,
 }

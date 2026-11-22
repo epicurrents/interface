@@ -35,16 +35,21 @@ const resource = (name: string, modality: string, extra: Partial<DataResource> =
     load: vi.fn(async () => true),
     modality,
     name,
+    // The action follows an activated resource for a failure.
+    onPropertyChange: vi.fn(),
     state: 'ready',
     ...extra,
 }) as unknown as DataResource
 
-/** A store context in the view `view`, whose modules map `rad` and `eeg` to their views. */
-const context = (view: string) => ({
+/**
+ * A store context in the view `view`, whose modules map `rad` and `eeg` to their views and whose active dataset holds
+ * `members`.
+ */
+const context = (view: string, ...members: DataResource[]) => ({
     commit: vi.fn(),
     dispatch: vi.fn(),
     state: {
-        APP: { activeDataset: { resources: [] }, view: { name: view } },
+        APP: { activeDataset: { resources: members.map(member => ({ resource: member })) }, view: { name: view } },
         INTERFACE: {
             modules: new Map([
                 ['eeg', { settings: { compatibleView: 'biosignal' } }],
@@ -62,7 +67,7 @@ describe('opening a child resource', () => {
     it('makes it the active child, loads a listing in place and activates the parent behind it', async () => {
         const child = resource('US', 'rad', { isListed: true, isReady: false, state: 'added' } as Partial<DataResource>)
         const parent = resource('EEG', 'eeg', { childResources: [child] })
-        const injectee = context('radiology')
+        const injectee = context('radiology', parent)
         openChild(injectee, { child, parent })
         expect(parent.activeChildResource).toBe(child)
         expect(child.load).toHaveBeenCalledTimes(1)
@@ -74,14 +79,15 @@ describe('opening a child resource', () => {
     it('loads nothing for a child that is ready', () => {
         const child = resource('US', 'rad')
         const parent = resource('EEG', 'eeg', { childResources: [child] })
-        openChild(context('radiology'), { child, parent })
+        openChild(context('radiology', parent), { child, parent })
+        expect(parent.activeChildResource).toBe(child)
         expect(child.load).not.toHaveBeenCalled()
     })
 
     it('refuses a resource that is not a child of the parent', () => {
         const stranger = resource('CT', 'rad')
         const parent = resource('EEG', 'eeg')
-        const injectee = context('radiology')
+        const injectee = context('radiology', parent)
         openChild(injectee, { child: stranger, parent })
         expect(parent.activeChildResource).toBeNull()
         expect(injectee.commit).not.toHaveBeenCalled()
@@ -90,7 +96,7 @@ describe('opening a child resource', () => {
     it('closes the child and shows the parent again', async () => {
         const child = resource('US', 'rad')
         const parent = resource('EEG', 'eeg', { activeChildResource: child, childResources: [child] })
-        const injectee = context('biosignal')
+        const injectee = context('biosignal', parent)
         openChild(injectee, { child: null, parent })
         expect(parent.activeChildResource).toBeNull()
         await vi.waitFor(() => {

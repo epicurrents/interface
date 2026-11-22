@@ -12,7 +12,7 @@ import Log from "scoped-event-log"
 import type { ConnectorProperties, ScopedResource } from "./actions"
 import { MixedMediaDataset } from "@epicurrents/core"
 import INTERFACE from "#config"
-import type { ApplicationView, InterfaceSettings } from "#types/config"
+import type { ApplicationView, InterfaceComponent, InterfaceSettings } from "#types/config"
 import { DatabaseQueryOptions, WebDAVConnectorOptions } from "#workspace/epicurrents/core/dist/types/connector"
 import { queueUserSettingsSave } from "./userSettings"
 
@@ -39,6 +39,7 @@ export enum MutationTypes {
     SET_UI_COMPONENT_VISIBLE = 'set-ui-component-visible',
     SET_UNDOABLE_ACTION = 'set-undoable-action',
     SET_VIEW = 'set-view',
+    SET_VISIBILITY_BEFORE_VIEW = 'set-visibility-before-view',
     SHOW_OVERLAY = 'show-overlay',
     TOGGLE_EXPAND_VIEWER = 'toggle-expand-viewer',
     TOGGLE_SETTINGS = 'toggle-settings',
@@ -80,6 +81,7 @@ export type Mutations<S = State> = {
     [MutationTypes.SET_UI_COMPONENT_VISIBLE] (state: S, payload: { component: string, value: boolean }): void
     [MutationTypes.SET_UNDOABLE_ACTION] (state: S, payload: boolean): void
     [MutationTypes.SET_VIEW] (state: S, payload: ApplicationView): void
+    [MutationTypes.SET_VISIBILITY_BEFORE_VIEW] (state: S, payload: Partial<Record<InterfaceComponent, boolean>>): void
     [MutationTypes.SHOW_OVERLAY] (state: S): void
     [MutationTypes.TOGGLE_EXPAND_VIEWER] (state: S, payload?: boolean): void
     [MutationTypes.TOGGLE_SETTINGS] (state: S, payload?: boolean): void
@@ -217,13 +219,20 @@ export const mutations: MutationTree<State> & Mutations = {
         storeIfValueChanged(result)
     },
     [MutationTypes.SET_UI_COMPONENT_VISIBLE] (state: State, payload: { component: string, value: boolean }) {
-        state.APP.uiComponentVisible[payload.component as keyof typeof state.APP.uiComponentVisible] = payload.value
+        const component = payload.component as keyof typeof state.APP.uiComponentVisible
+        state.APP.uiComponentVisible[component] = payload.value
+        // A component set on its own is no longer the active view's to put back. A view switch sets the components
+        // first and records what it holds after them.
+        delete state.APP.visibilityBeforeView[component]
     },
     [MutationTypes.SET_UNDOABLE_ACTION] (state: State, payload: boolean) {
         state.APP.hasUndoableAction = payload
     },
     [MutationTypes.SET_VIEW] (state: State, payload: ApplicationView) {
         state.APP.view = payload
+    },
+    [MutationTypes.SET_VISIBILITY_BEFORE_VIEW] (state: State, payload: Partial<Record<InterfaceComponent, boolean>>) {
+        state.APP.visibilityBeforeView = payload
     },
     [MutationTypes.SHOW_OVERLAY] (state: State) {
         state.APP.showOverlay = true

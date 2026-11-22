@@ -3,13 +3,13 @@
         <div class="breadcrumbs">
             <wa-breadcrumb>
                 <wa-breadcrumb-item v-if="RESOURCE"
-                    :class="{ 'no-link': RESOURCE.activeChildResource === null }"
+                    :class="{ 'no-link': activeChild === null }"
                     @click="deactivateChild"
                 >
                     {{ RESOURCE.name }}
                 </wa-breadcrumb-item>
-                <wa-breadcrumb-item v-if="RESOURCE?.activeChildResource" class="no-link">
-                    {{ RESOURCE.activeChildResource.name }}
+                <wa-breadcrumb-item v-if="RESOURCE && activeChild" class="no-link">
+                    {{ activeChild.name }}
                 </wa-breadcrumb-item>
             </wa-breadcrumb>
         </div>
@@ -18,10 +18,11 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, ref } from "vue"
+import { defineComponent, shallowRef } from "vue"
+import { useStore } from "vuex"
 import AppFooter from "./AppFooter.vue"
 import { T } from "#i18n"
-import { DataResource } from "#workspace/epicurrents/core/dist/types"
+import type { DataResource } from "@epicurrents/core/types"
 
 export default defineComponent({
     name: 'DefaultFooter',
@@ -29,10 +30,16 @@ export default defineComponent({
         AppFooter, // This is loaded synchronously
     },
     setup () {
-        const RESOURCE = ref(null as null | DataResource)
+        const ID = 'DefaultFooter-' + useStore().state.APP.runningId++
+        const RESOURCE = shallowRef(null as null | DataResource)
+        // The open child is kept here and not read off the resource in the template: core sets it on the resource
+        // itself, past the reactive proxy, so the change is heard through the resource's property event.
+        const activeChild = shallowRef(null as null | DataResource)
         const unsubscribe = null as null | (() => void)
         return {
+            ID,
             RESOURCE,
+            activeChild,
             unsubscribe,
         }
     },
@@ -46,15 +53,24 @@ export default defineComponent({
             return T(key, this.$options.name, params, capitalized)
         },
         checkActiveResource () {
-            this.RESOURCE = this.$store.state.APP.activeDataset?.resources.find(
+            const active = this.$store.state.APP.activeDataset?.resources.find(
                 r => r.resource.isActive
             )?.resource || null
+            if (active?.id !== this.RESOURCE?.id) {
+                this.RESOURCE?.unsubscribeAll(this.ID)
+                this.RESOURCE = active
+                active?.onPropertyChange('activeChildResource', this.readActiveChild, this.ID)
+            }
+            this.readActiveChild()
         },
         deactivateChild () {
-            if (this.RESOURCE && this.RESOURCE.activeChildResource) {
+            if (this.RESOURCE && this.activeChild) {
                 this.$store.dispatch('set-active-child-resource', { child: null, parent: this.RESOURCE })
             }
-        }
+        },
+        readActiveChild () {
+            this.activeChild = this.RESOURCE?.activeChildResource || null
+        },
     },
     beforeMount () {
         // Add component styles to shadow root
@@ -72,6 +88,7 @@ export default defineComponent({
     },
     beforeUnmount () {
         this.unsubscribe?.()
+        this.RESOURCE?.unsubscribeAll(this.ID)
     },
 })
 </script>

@@ -1,12 +1,18 @@
 <template>
     <navigator-item
         :child-count="children.length"
+        :children-id="childrenId"
         :expanded="disclosure.isOpen"
         :resource="resource"
         @selected="openChildren"
         @toggle-children="toggleChildren"
     ></navigator-item>
-    <div v-if="disclosure.isOpen && children.length" class="children" role="group">
+    <div v-if="disclosure.isOpen && children.length"
+        class="children"
+        role="group"
+        :aria-label="$t('Resources nested under {name}', { name: resource.name })"
+        :id="childrenId"
+    >
         <navigator-item v-for="child in children" :key="`navigator-item-${child.id}`"
             :parent="resource"
             :resource="child"
@@ -22,6 +28,7 @@
  * outlives the entry while the member is scrolled out of view.
  */
 import { defineComponent, PropType, ref } from "vue"
+import { T } from "#i18n"
 import type { DataResource } from "@epicurrents/core/types"
 import type { EntryDisclosure } from "./rows"
 import { useStore } from "vuex"
@@ -52,7 +59,21 @@ export default defineComponent({
             children,
         }
     },
+    computed: {
+        /** Id of the element holding the children, which the member's disclosure row names as what it controls. */
+        childrenId (): string {
+            return `navigator-children-${this.resource.id}`
+        },
+    },
     methods: {
+        /**
+         * Override the default I18n translate method.
+         * Returns a component-specific translation (default) or a
+         * general translation (fallback) for the given key string.
+         */
+        $t: function (key: string, params = {}, capitalized = false) {
+            return T(key, this.$options.name, params, capitalized)
+        },
         entryUpdated () {
             this.children = [...this.resource.childResources]
             if (this.resource.isActive !== this.disclosure.wasActive) {

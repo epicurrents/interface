@@ -18,17 +18,27 @@ import type {
 } from '@epicurrents/core/types'
 import { Log } from 'scoped-event-log'
 import RadiologyResource, { RADIOLOGY_MODALITY } from './RadiologyResource'
+import { isAllowedViewerUrl } from './viewerUrl'
 
 const SCOPE = 'RadiologyLoader'
+
+/** How many studies `useStudy` holds for `getResource` at a time. */
+const MAX_PENDING_STUDIES = 8
 
 /**
  * Loads a radiology study from the address of its viewer page without fetching it: the resource keeps the address
  * and the radiology view frames it. Only a URL can be loaded, since a local file has no page to render it; there is
  * no importer, exporter, worker or memory manager, so the methods that would configure one accept and ignore it.
+ *
+ * The address has to be one the view may frame, an `http:` or `https:` page of an allowed origin (`viewerUrl.ts`);
+ * a study with any other address is refused, listed or loaded.
  */
 export default class RadiologyLoader implements StudyLoader {
     protected _nextIndex = 0
-    /** Studies taken by `useStudy` and not yet made into a resource, keyed by the index `useStudy` returned. */
+    /**
+     * Studies taken by `useStudy` and not yet made into a resource, keyed by the index `useStudy` returned. At most
+     * `MAX_PENDING_STUDIES` are held, the oldest giving way, so a study nobody asks the resource of is not kept.
+     */
     protected _studies = new Map<number, StudyContext>()
 
     get resourceModality () {
@@ -53,6 +63,10 @@ export default class RadiologyLoader implements StudyLoader {
             Log.error(`Study '${listing.name}' is listed without the address of its viewer page.`, SCOPE)
             return null
         }
+        if (!isAllowedViewerUrl(listing.source)) {
+            Log.error(`Study '${listing.name}' is listed with a viewer address that may not be framed.`, SCOPE)
+            return null
+        }
         return new RadiologyResource(listing.name, listing.source)
     }
 
@@ -68,6 +82,10 @@ export default class RadiologyLoader implements StudyLoader {
         const url = study.files[0]?.url
         if (!url) {
             Log.error(`Study '${study.name}' has no viewer address to load.`, SCOPE)
+            return null
+        }
+        if (!isAllowedViewerUrl(url)) {
+            Log.error(`Study '${study.name}' has a viewer address that may not be framed.`, SCOPE)
             return null
         }
         return new RadiologyResource(study.name, url)
@@ -92,6 +110,14 @@ export default class RadiologyLoader implements StudyLoader {
     }
 
     async loadFromUrl (viewerUrl: string, options?: ConfigStudyLoader) {
+        if (!isAllowedViewerUrl(viewerUrl)) {
+            Log.error(
+                `The address is not one a radiology viewer page may have: only an http or https page of the ` +
+                `application's own origin, or of an origin the host allowed, is framed.`,
+                SCOPE
+            )
+            return null
+        }
         const study = studyContextTemplate({ modality: RADIOLOGY_MODALITY, name: options?.name || 'Radiology study' })
         study.format = RADIOLOGY_MODALITY
         study.files.push({
@@ -123,6 +149,10 @@ export default class RadiologyLoader implements StudyLoader {
     async useStudy (study: StudyContext) {
         const index = this._nextIndex++
         this._studies.set(index, study)
+        // A map keeps its insertion order, so the first key is the oldest study.
+        while (this._studies.size > MAX_PENDING_STUDIES) {
+            this._studies.delete(this._studies.keys().next().value as number)
+        }
         return index
     }
 }

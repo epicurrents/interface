@@ -67,6 +67,11 @@ export type AugmentedRuntimeAppModule = Modify<RuntimeAppModule, {
     uiComponentVisible: Record<InterfaceComponent, boolean>
     /** Main application view. */
     view: ApplicationView
+    /**
+     * Visibility each component had before the active view set it, put back when the view is left. A component the
+     * user sets while the view is active is dropped from here, so the user's choice outlasts the view.
+     */
+    visibilityBeforeView: Partial<Record<InterfaceComponent, boolean>>
 }>
 
 export type AugmentedRuntimeState = Modify<StateManager, {

@@ -34,7 +34,7 @@
                 <app-icon name="chevron-down"></app-icon>
             </wa-button>
             <wa-tooltip :disabled="!hasNextResource" for="next-resource-button">
-                {{ $t('Next resource') }}>
+                {{ $t('Next resource') }}
             </wa-tooltip>
         </div>
         <div v-if="hasActiveResource" class="module-controls">
@@ -150,16 +150,23 @@ export default defineComponent({
         $t: function (key: string, params = {}, capitalized = false) {
             return T(key, this.$options.name, params, capitalized)
         },
+        /**
+         * The active member of the active dataset. A member showing one of its children is still the one that has a
+         * place in the dataset's order, where the shown child has none.
+         */
+        activeMember (): DataResource | null {
+            return this.$store.state.APP.activeDataset?.resources.find(ctx => ctx.resource.isActive)?.resource || null
+        },
         checkResourcePosition () {
             this.positionCheckPending = false
-            const resId = this.$store.getters.getActiveResource()?.id
-            if (!resId) {
+            const resId = this.activeMember()?.id
+            const position = resId ? this.orderedResources().findIndex(r => r.id === resId) : -1
+            if (position < 0) {
                 this.hasNextResource = false
                 this.hasPrevResource = false
             } else {
-                const allIds = this.orderedResources().map(r => r.id)
-                this.hasPrevResource = allIds.indexOf(resId) > 0
-                this.hasNextResource = allIds.indexOf(resId) < allIds.length - 1
+                this.hasPrevResource = position > 0
+                this.hasNextResource = position < this.orderedResources().length - 1
             }
         },
         closeActiveResource () {
@@ -184,22 +191,26 @@ export default defineComponent({
             }
         },
         openNextResource () {
-            const resource = this.$store.getters.getActiveResource()
-            if (!resource || !this.hasNextResource) {
+            this.openNeighbour(1)
+        },
+        /**
+         * Open the dataset member `step` places from the active one, if there is one there.
+         * @param step - 1 for the next member, -1 for the previous one.
+         */
+        openNeighbour (step: 1 | -1) {
+            const member = this.activeMember()
+            if (!member) {
                 return
             }
             const resources = this.orderedResources()
-            const resIdx = resources.map(r => r.id).indexOf(resource.id)
-            this.$store.dispatch('set-active-resource', resources[resIdx + 1])
+            const position = resources.findIndex(r => r.id === member.id)
+            const neighbour = position < 0 ? undefined : resources[position + step]
+            if (neighbour) {
+                this.$store.dispatch('set-active-resource', neighbour)
+            }
         },
         openPrevResource () {
-            const resource = this.$store.getters.getActiveResource()
-            if (!resource || !this.hasPrevResource) {
-                return
-            }
-            const resources = this.orderedResources()
-            const resIdx = resources.map(r => r.id).indexOf(resource.id)
-            this.$store.dispatch('set-active-resource', resources[resIdx - 1])
+            this.openNeighbour(-1)
         },
         /**
          * The active dataset's resources in the order the navigator lists them, read when needed rather than kept,

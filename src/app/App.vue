@@ -266,8 +266,7 @@ import { installKeyGuard, loadAsyncComponent } from '#util'
 import { showToast, type ToastVariant } from '#lib/toast'
 import DefaultInterface from './views/default/DefaultInterface.vue'
 
-// All interface views are async components, so their chunks (including the heavy
-// radiology/OHIF bundle) load on first render rather than up front — no need to
+// All interface views are async components, so their chunks load on first render rather than up front — no need to
 // gate registration on configured views.
 const VIEWS = {
     DefaultInterface,
@@ -400,13 +399,14 @@ export default defineComponent({
          * @param message - Message line(s); multiple lines are joined into a single toast.
          * @param role - Semantic role, mapped to a toast colour variant.
          */
-        notify (message: string[], role: 'confirm' | 'error' | 'warning') {
+        notify (message: string | string[], role: 'confirm' | 'error' | 'warning') {
             const variant: ToastVariant = role === 'confirm'
                 ? 'success'
                 : role === 'error'
                     ? 'danger'
                     : 'warning'
-            const text = message.join(' ')
+            // The `display-callout` action carries one string, the log relay a list of lines.
+            const text = Array.isArray(message) ? message.join(' ') : message
             if (typeof window.__EPICURRENTS__?.announce === 'function') {
                 window.__EPICURRENTS__.announce(text, variant)
             } else {

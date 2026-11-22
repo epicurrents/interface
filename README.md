@@ -80,7 +80,13 @@ Set `window.__EPICURRENTS__.SETUP` before the entry script runs — for example 
 
 ## Radiology studies
 
-The `rad` module (`@epicurrents/interface/modules/rad`) lists a radiology study by the address of a page the host serves to render it, and the radiology view frames that page; the application reads nothing of the study. Register it with `registerRadiology(ctx)` and load a study through the `rad/viewer-url` importer with the page's URL. The footer's trail leads back to the dataset and, for a study attached to another resource (its `parent`, which the host sets), to that resource; the framed page takes the nearest step by posting `{ type: 'epicurrents:radiology:return' }` to its parent. Switching between the dark radiology view and a light one crossfades the page where the browser has the View Transitions API. Details in [AGENTS.md → Radiology module](AGENTS.md#radiology-module).
+The `rad` module (`@epicurrents/interface/modules/rad`) lists a radiology study by the address of a page the host serves to render it, and the radiology view frames that page; the application reads nothing of the study. Register it with `registerRadiology(ctx, options?)` and load a study through the `rad/viewer-url` importer with the page's URL. Only an `http:` or `https:` page of the application's own origin is framed, unless the host names further origins when it registers the module:
+
+```ts
+registerRadiology(ctx, { allowedViewerOrigins: ['https://viewer.example.org'] })
+```
+
+A study whose page is of any other origin is refused when it is listed or loaded. Each study shown gets a frame of its own, so one viewer runs at a time. The footer's trail leads back to the dataset and, for a study attached to another resource (its `parent`, which the host sets), to that resource; the framed page takes the nearest step by posting `{ type: 'epicurrents:radiology:return' }` to its parent, which is honoured only from the frame's own window and the origin of the page it was pointed at, while that study is the one shown. Switching between the dark radiology view and a light one crossfades the page where the browser has the View Transitions API. Details in [AGENTS.md → Radiology module](AGENTS.md#radiology-module).
 
 ## Development notes
 

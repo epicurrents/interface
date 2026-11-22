@@ -21,10 +21,13 @@ import type {
 import { isDeferredResource } from "@epicurrents/core/util"
 import { MutationTypes } from './mutations'
 import { applicationViews, useContext } from '#config'
+import { T } from '#i18n'
 import type { ApplicationView, InterfaceComponent } from '#types/config'
 import type { WebDAVClient } from 'webdav'
 
 const SCOPE = "StoreActions"
+/** Subscriber name of the listeners that follow a shown resource for a failure. */
+const FAILURE_SUBSCRIBER = `${SCOPE}:failed-load`
 
 export type ScopedResource = {
     /** Application scope for the resource. */
@@ -65,11 +68,6 @@ const COMPONENT_STYLES = new Map<string, string[]>()
  * made in the meantime supersedes it, so a load only activates its resource while its request is still the latest.
  */
 let activeResourceRequests = 0
-/**
- * Visibility each component had before the active view set it. A view that sets a component's visibility only does so
- * while it is active, so leaving it puts back what the user had, even for a view entered by opening a resource.
- */
-const visibilityBeforeView = new Map<InterfaceComponent, boolean>()
 
 /** Length of the crossfade between two themes, in milliseconds. */
 export const THEME_CROSSFADE_MS = 600
@@ -80,7 +78,9 @@ const themeOf = (view: ApplicationView) => view.theme || view.defaultTheme
 /**
  * Make `view` the application view: set the components it names a visibility for, and put back the visibility of
  * those the departing view had set and this one leaves alone. Every view switch goes through here, so a component
- * hidden by one view is never left hidden in another that never asked for it.
+ * hidden by one view is never left hidden in another that never asked for it. A view sets a component's visibility
+ * only while it is active: what the component had before is kept in the store's `visibilityBeforeView` and put back
+ * on leaving, even for a view entered by opening a resource, unless the user set the component in the meantime.
  *
  * A switch that changes the theme crossfades the whole page from the old theme to the new one through the View
  * Transitions API, where the browser has it. The browser fades one image of the page as it was into the page as it
@@ -130,14 +130,17 @@ const applyView = (injectee: ActionContext<State, State>, view: ApplicationView)
             injectee.commit(MutationTypes.SET_UI_COMPONENT_VISIBLE, { component, value })
         }
     }
+    // Read before any commit: setting a component drops what was held for it.
+    const restore = new Map(
+        Object.entries(injectee.state.APP.visibilityBeforeView) as [InterfaceComponent, boolean][]
+    )
+    const held = {} as Partial<Record<InterfaceComponent, boolean>>
     injectee.commit(MutationTypes.SET_VIEW, view)
-    const restore = new Map(visibilityBeforeView)
-    visibilityBeforeView.clear()
     type SupportedComponents = Entries<typeof view.components>
     for (const [key, uiCmp] of Object.entries(view.components) as SupportedComponents) {
         if (uiCmp && uiCmp.visible !== null) {
             // A component the departing view had also set keeps the value from before either of them.
-            visibilityBeforeView.set(key, restore.get(key) ?? visible[key])
+            held[key] = restore.get(key) ?? visible[key]
             restore.delete(key)
             setVisible(key, uiCmp.visible)
         }
@@ -145,31 +148,47 @@ const applyView = (injectee: ActionContext<State, State>, view: ApplicationView)
     for (const [key, value] of restore) {
         setVisible(key, value)
     }
+    injectee.commit(MutationTypes.SET_VISIBILITY_BEFORE_VIEW, held)
 }
 
 /**
- * Disable all other resources, except for the resource at `index`.
- * @param index - Index of the resource to skip (null will disable all resources)
+ * Deactivate every resource of the active dataset except `skip`, and wait until each has released its memory.
+ * @param state - The store state.
+ * @param skip - The resource to leave as it is; null deactivates every resource.
  */
 const disableAllOtherResources = async (state: State, skip: DataResource | null) => {
-    // In these methods we check for isActive before assigning it to false,
-    // because every assignment triggers possible property update watchers.
     if (state.APP.activeDataset) {
-        for (const item of state.APP.activeDataset.resources) {
-            if (item.resource.isActive && (!skip || (item.resource.id !== skip.id))) {
+        const managed = new Map<string, boolean>()
+        const usesMemoryManager = (modality: string) => {
+            if (!managed.has(modality)) {
+                managed.set(
+                    modality,
+                    Boolean(state.SETTINGS.app.useMemoryManager
+                            && useContext({ state }, modality).SETTINGS.useMemoryManager)
+                )
+            }
+            return managed.get(modality) as boolean
+        }
+        // A copy, since the dataset's resources may change while a deactivation is awaited.
+        for (const item of [...state.APP.activeDataset.resources]) {
+            if (skip && item.resource.id === skip.id) {
+                continue
+            }
+            // Checked before assigning, because every assignment triggers possible property update watchers.
+            if (item.resource.isActive) {
                 item.resource.isActive = false
-                const useMemoryManager = useContext({ state }, item.resource.modality).SETTINGS.useMemoryManager &&
-                                         state.SETTINGS.app.useMemoryManager
-                if (useMemoryManager) {
-                    // Block until the resource has finished releasing AND rearranging the shared
-                    // buffer. `isActive = false` flips the flag synchronously but runs the actual
-                    // teardown in the background, so awaiting the `isActive` property event would
-                    // return too early — the next recording would then allocate and start caching
-                    // while this resource's rearrange is still moving buffer regions, corrupting
-                    // the new allocation. `awaitDeactivation` resolves only once the release and
-                    // rearrange have completed.
-                    await item.resource.awaitDeactivation()
-                }
+            }
+            if (usesMemoryManager(item.resource.modality)) {
+                // Block until the resource has finished releasing AND rearranging the shared
+                // buffer. `isActive = false` flips the flag synchronously but runs the actual
+                // teardown in the background, so awaiting the `isActive` property event would
+                // return too early — the next recording would then allocate and start caching
+                // while this resource's rearrange is still moving buffer regions, corrupting
+                // the new allocation. `awaitDeactivation` resolves only once the release and
+                // rearrange have completed. It is awaited for a resource that is already inactive
+                // too, since an earlier request may have started a deactivation that is still
+                // running; it resolves at once for a resource with none.
+                await item.resource.awaitDeactivation()
             }
         }
         return
@@ -264,8 +283,10 @@ export type Actions = {
     [ActionTypes.POINTER_LEFT_APP] (): void
     [ActionTypes.REDO_ACTION] (): void
     [ActionTypes.REMOVE_CONNECTOR] (payload: string): void
-    [ActionTypes.SET_ACTIVE_CHILD_RESOURCE] (payload: { child: DataResource | null, parent: DataResource }): void
-    [ActionTypes.SET_ACTIVE_RESOURCE] (payload: DataResource | null): void
+    [ActionTypes.SET_ACTIVE_CHILD_RESOURCE] (
+        payload: { child: DataResource | null, parent: DataResource },
+    ): Promise<boolean>
+    [ActionTypes.SET_ACTIVE_RESOURCE] (payload: DataResource | null): Promise<boolean>
     [ActionTypes.SET_ACTIVE_MODALITY] (payload: string): void
     [ActionTypes.SET_SETTINGS_VALUE] (payload: { field: string, value: string | number | boolean }): void
     [ActionTypes.SET_UI_COMPONENT_VISIBLE] (payload: { component: InterfaceComponent, value: boolean }): void
@@ -281,56 +302,183 @@ export type Actions = {
     [ActionTypes.SET_ACTIVE_DATASET] (payload: MixedMediaDataset | null): void
 }
 /**
- * Activate `payload` in the active dataset and show the view of its active child, or of the resource itself when it
- * has none. Other resources are deactivated first.
+ * The application view for resources of `modality`, or null with an error logged if no module is registered for the
+ * modality or the view its module names does not exist.
+ * @param injectee - The store action context.
+ * @param modality - Modality of the resource to show.
+ * @param name - Name of the resource, for the error.
  */
-const activateResource = (injectee: ActionContext<State, State>, payload: DataResource | null) => {
-    const request = ++activeResourceRequests
+const viewForModality = (injectee: ActionContext<State, State>, modality: string, name: string) => {
+    const modView = injectee.state.INTERFACE.modules.get(modality)?.settings?.compatibleView as string | undefined
+    if (!modView) {
+        Log.error(`Cannot show ${name}, modality '${modality}' is not available.`, SCOPE)
+        return null
+    }
+    const view = applicationViews.get(modView)
+    if (!view) {
+        Log.error(
+            `Cannot show ${name}, the view '${modView}' required by modality '${modality}' is not available.`,
+            SCOPE
+        )
+        return null
+    }
+    return view
+}
+
+/** Resources whose failure the store follows, so each is subscribed to once. */
+const failureFollowed = new WeakSet<DataResource>()
+
+/**
+ * Follow `resource` for a failure while it is shown, from the first time it is activated or opened. A member that
+ * fails is deactivated by core's runtime, and a child that fails is closed here, the parent taking its place; either
+ * way the views are told through the store's mutation, which is what they follow, and the user through one callout
+ * naming the resource and the reason. The resource keeps its reason, and its navigator row offers the retry.
+ *
+ * Whether the resource was shown is read in the `before` phase of the state change, ahead of whatever deactivates it
+ * in the `after` phase, so a failure of a resource nobody was looking at, such as a preload, raises nothing.
+ * @param injectee - The store action context.
+ * @param resource - The resource being activated or opened.
+ * @param parent - The resource `resource` is opened under as a child, or null for a dataset member.
+ */
+const followFailure = (injectee: ActionContext<State, State>, resource: DataResource, parent: DataResource | null) => {
+    if (failureFollowed.has(resource) || resource.state === 'destroyed') {
+        return
+    }
+    failureFollowed.add(resource)
+    let wasShown = false
+    resource.onPropertyChange('state', (state) => {
+        if (state === 'error') {
+            wasShown = parent ? parent.activeChildResource?.id === resource.id : resource.isActive
+        }
+    }, FAILURE_SUBSCRIBER, 'before')
+    resource.onPropertyChange('state', (state) => {
+        if (state !== 'error' || !wasShown) {
+            return
+        }
+        wasShown = false
+        reportFailedLoad(injectee, resource, parent)
+    }, FAILURE_SUBSCRIBER)
+}
+
+/**
+ * Take a failed resource out of the view and tell the user; see {@link followFailure}.
+ */
+const reportFailedLoad = (
+    injectee: ActionContext<State, State>,
+    resource: DataResource,
+    parent: DataResource | null,
+) => {
+    if (parent) {
+        // Stepping back to the parent is the child's deactivation.
+        if (parent.activeChildResource?.id === resource.id) {
+            parent.activeChildResource = null
+            if (parent.isActive) {
+                injectee.commit(MutationTypes.SET_ACTIVE_RESOURCE, parent)
+            }
+        }
+    } else {
+        // The runtime deactivates the member from the same state change, in whichever order the two listeners run,
+        // so the check waits for the dispatch to finish. Nothing is committed when another resource is shown by then.
+        Promise.resolve().then(() => {
+            const dataset = injectee.state.APP.activeDataset
+            if (
+                !resource.isActive && injectee.state.APP.activeModality
+                && dataset?.resources.some(ctx => ctx.resource.id === resource.id)
+                && !dataset.activeResources.length
+            ) {
+                injectee.commit(MutationTypes.SET_ACTIVE_RESOURCE, null)
+            }
+        }).catch(error => {
+            Log.error(`Closing the failed resource ${resource.name} failed: ${error}`, SCOPE)
+        })
+    }
+    const reason = resource.errorReason
+    injectee.dispatch(ActionTypes.DISPLAY_CALLOUT, {
+        message: reason
+            ? T('Loading {name} failed: {reason}', null, { name: resource.name, reason: T(reason) })
+            : T('Loading {name} failed.', null, { name: resource.name }),
+        role: 'error',
+    })
+}
+
+/**
+ * Activate `payload` in the active dataset and show the view of its active child, or of the resource itself when it
+ * has none. Other resources are deactivated first, and waiting for them takes time, so the request is dropped if a
+ * later one was made or another dataset became active in the meantime: the latest request is the one that is shown.
+ * @param injectee - The store action context.
+ * @param payload - The resource to activate, or null to close the active one.
+ * @returns Null if the request was refused before anything changed. Otherwise a promise that settles once the request
+ * has run its course: true if the resource was made active (or, for null, every resource closed), false if the request
+ * was superseded or failed. It never rejects.
+ */
+const activateResource = (
+    injectee: ActionContext<State, State>,
+    payload: DataResource | null,
+): Promise<boolean> | null => {
+    // The resource is activated in the dataset active now, so a switch to another one supersedes the request as a
+    // newer request does.
+    const dataset = injectee.state.APP.activeDataset
     if (isDeferredResource(payload)) {
+        const request = ++activeResourceRequests
         // A listed study is loaded first and the loaded resource, which takes its place in the dataset, is what
         // becomes active.
         const app = window.__EPICURRENTS__?.APP as EpicurrentsApp | null
         if (!app) {
             Log.error(`Cannot open deferred resource ${payload.name}, the application is not available.`, SCOPE)
-            return
+            return null
         }
-        // The loaded resource is activated in the active dataset, so a switch to another one while the study
-        // loads supersedes the request as a newer request does.
-        const dataset = injectee.state.APP.activeDataset
-        app.openDeferredResource(payload).then(loaded => {
+        return app.openDeferredResource(payload).then(async loaded => {
             if (loaded && request === activeResourceRequests && dataset === injectee.state.APP.activeDataset) {
-                injectee.dispatch(ActionTypes.SET_ACTIVE_RESOURCE, loaded)
+                return Boolean(await injectee.dispatch(ActionTypes.SET_ACTIVE_RESOURCE, loaded))
             }
+            return false
+        }).catch(error => {
+            Log.error(`Opening the deferred resource ${payload.name} failed: ${error}`, SCOPE)
+            return false
         })
-        return
     }
+    // The view is resolved before anything changes, so a resource that cannot be shown leaves the one shown now as it
+    // is. It follows the modality of the resource's active child when it has one.
+    let view = null as ApplicationView | null
+    if (payload) {
+        const shown = payload.activeChildResource || payload
+        view = viewForModality(injectee, shown.modality, shown.name)
+        if (!view) {
+            return null
+        }
+    }
+    const request = ++activeResourceRequests
+    const isLatest = () => request === activeResourceRequests && dataset === injectee.state.APP.activeDataset
     // Disable other resources before enabling the new one (to avoid race conditions in shared memory buffer ops).
-    disableAllOtherResources(injectee.state, payload).then(async () => {
+    return disableAllOtherResources(injectee.state, payload).then(async () => {
+        if (!isLatest()) {
+            return false
+        }
+        if (view && injectee.state.APP.view.name !== view.name) {
+            await switchView(injectee, view)
+            if (!isLatest()) {
+                return false
+            }
+        }
+        // Followed before the commit, which is where the runtime loads the resource or retries a failed one.
         if (payload) {
-            // Make sure the required view is available and active.
-            const modView = injectee.state.INTERFACE.modules.get(
-                                payload.activeChildResource?.modality || payload.modality
-                            )?.settings?.compatibleView
-            if (!modView) {
-                Log.error(
-                    `Cannot set active resource, modality '${payload.modality}' is not available.`, SCOPE)
-                return
-            }
-            if (injectee.state.APP.view.name !== modView) {
-                const view = applicationViews.get(modView as string)
-                if (view) {
-                    await switchView(injectee, view)
-                }
-                if (injectee.state.APP.view.name !== modView) {
-                    Log.error(
-                        `Cannot set active resource, required view '${modView}' is not available.`,
-                        SCOPE
-                    )
-                    return
-                }
-            }
+            followFailure(injectee, payload, null)
         }
         injectee.commit(MutationTypes.SET_ACTIVE_RESOURCE, payload)
+        return true
+    }).catch(error => {
+        Log.error(`Activating ${payload?.name ?? 'no resource'} failed: ${error}`, SCOPE)
+        if (!isLatest()) {
+            return false
+        }
+        // Other resources may have been deactivated already, so nothing is left open rather than a view left showing
+        // a resource that is no longer active.
+        try {
+            injectee.commit(MutationTypes.SET_ACTIVE_RESOURCE, null)
+        } catch (closeError) {
+            Log.error(`Closing the active resource failed: ${closeError}`, SCOPE)
+        }
+        return false
     })
 }
 
@@ -452,35 +600,87 @@ export const actions = {
         injectee: ActionContext<State, State>,
         payload: { child: DataResource | null, parent: DataResource },
     ) {
+        // The action resolves as SET_ACTIVE_RESOURCE does, with the outcome of activating the parent; a child still
+        // loading in place does not hold it back.
         const { parent } = payload
+        if (parent.state === 'destroyed') {
+            Log.error(`Cannot open a child of ${parent.name}, the resource has been destroyed.`, SCOPE)
+            return Promise.resolve(false)
+        }
+        if (!injectee.state.APP.activeDataset?.resources.some(ctx => ctx.resource.id === parent.id)) {
+            Log.error(`Cannot open a child of ${parent.name}, the resource is not in the active dataset.`, SCOPE)
+            return Promise.resolve(false)
+        }
         const child = payload.child
                       ? parent.childResources.find(r => r.id === payload.child!.id) ?? null
                       : null
         if (payload.child && !child) {
             Log.error(`Cannot open ${payload.child.name}, it is not a child of ${parent.name}.`, SCOPE)
-            return
+            return Promise.resolve(false)
         }
-        if (parent.activeChildResource !== child) {
+        // A child that cannot be shown is refused before it becomes the active child: a parent left holding one
+        // would hand it to every view as the resource to show.
+        if (child && !viewForModality(injectee, child.modality, child.name)) {
+            return Promise.resolve(false)
+        }
+        const previous = parent.activeChildResource
+        if (previous?.id !== child?.id) {
             parent.activeChildResource = child
-        }
-        // A listed child loads in place as it opens, and its view shows the loading state until it is ready.
-        if (child && (child.state === 'added' || child.state === 'loaded')) {
-            child.load().then(loaded => {
-                if (!loaded) {
-                    Log.error(`Loading the child resource ${child.name} failed.`, SCOPE)
-                }
-            })
         }
         // The parent is activated behind its child, so the child is opened in its context and the way back to the
         // parent is instant.
-        activateResource(injectee, parent)
+        const activation = activateResource(injectee, parent)
+        if (!activation) {
+            if (parent.activeChildResource?.id !== previous?.id) {
+                parent.activeChildResource = previous
+            }
+            return Promise.resolve(false)
+        }
+        // A listed child loads in place as it opens, and its view shows the loading state until it is ready. One whose
+        // load failed is retried. Core has no activation for a child, so a failure is followed here: the child is
+        // closed, the parent shown in its place, and the child's row keeps the reason and the retry.
+        if (child) {
+            followFailure(injectee, child, parent)
+        }
+        const retried = child?.state === 'error' && child.canRetryLoad
+        if (child && (retried || child.state === 'added' || child.state === 'loaded')) {
+            (retried ? child.retryLoad() : child.load()).then(loaded => {
+                if (!loaded) {
+                    Log.error(`Loading the child resource ${child.name} failed.`, SCOPE)
+                }
+            }).catch(error => {
+                Log.error(`Loading the child resource ${child.name} failed: ${error}`, SCOPE)
+            })
+        }
+        return activation
     },
+    /**
+     * Activate `payload` in the active dataset, or close every resource with null. The returned promise settles once
+     * the request has run its course, the deactivation of the other resources included, so a caller that has to act
+     * after a close awaits the dispatch. It resolves true if the request went through and false if it was refused,
+     * superseded by a later request or failed; it never rejects.
+     */
     [ActionTypes.SET_ACTIVE_RESOURCE] (injectee: ActionContext<State, State>, payload: DataResource | null) {
+        if (!payload) {
+            // Closing closes the open child with its parent, so the parent shows itself when it is next opened.
+            for (const ctx of injectee.state.APP.activeDataset?.resources ?? []) {
+                if (ctx.resource.isActive && ctx.resource.activeChildResource) {
+                    ctx.resource.activeChildResource = null
+                }
+            }
+            return activateResource(injectee, payload) ?? Promise.resolve(false)
+        }
         // Activating a resource shows the resource itself; a child of it opens through SET_ACTIVE_CHILD_RESOURCE.
-        if (payload?.activeChildResource) {
+        // The child is put back if the resource cannot be shown, so the one shown now stays as it is.
+        const child = payload.activeChildResource
+        if (child) {
             payload.activeChildResource = null
         }
-        activateResource(injectee, payload)
+        const activation = activateResource(injectee, payload)
+        if (!activation && child) {
+            payload.activeChildResource = child
+        }
+        return activation ?? Promise.resolve(false)
     },
     [ActionTypes.SET_SETTINGS_VALUE] (
         injectee: ActionContext<State, State>,

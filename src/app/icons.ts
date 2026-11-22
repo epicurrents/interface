@@ -73,6 +73,7 @@ import open_in_new from '@material-symbols/svg-400/outlined/open_in_new.svg?raw'
 import pause from '@material-symbols/svg-400/outlined/pause.svg?raw'
 import play_arrow from '@material-symbols/svg-400/outlined/play_arrow.svg?raw'
 import redo from '@material-symbols/svg-400/outlined/redo.svg?raw'
+import refresh from '@material-symbols/svg-400/outlined/refresh.svg?raw'
 import remove from '@material-symbols/svg-400/outlined/remove.svg?raw'
 import save from '@material-symbols/svg-400/outlined/save.svg?raw'
 import schedule from '@material-symbols/svg-400/outlined/schedule.svg?raw'
@@ -149,6 +150,7 @@ export const ICON_SVGS: Record<string, { outlined: string; filled?: string }> = 
     pause:                          { outlined: pause },
     play_arrow:                     { outlined: play_arrow },
     redo:                           { outlined: redo },
+    refresh:                        { outlined: refresh },
     remove:                         { outlined: remove },
     save:                           { outlined: save },
     schedule:                       { outlined: schedule },
@@ -236,6 +238,7 @@ const FA_TO_MATERIAL: Record<string, string> = {
     'pulse':                            'vital_signs',
     'rectangle-history-circle-plus':    'library_add',
     'redo':                             'redo',
+    'rotate-right':                     'refresh',
     'search':                           'search',
     'square-question':                  'help',
     'stamp':                            'approval',
