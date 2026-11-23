@@ -657,7 +657,7 @@ export const settings: EegInterfaceSettings = safeObjectFrom({
         classes: {
             default: {
                 codes: {},
-                color: [0, 0, 1, 0.75] as SettingsColor,
+                color: [0, 0.5, 1, 0.75] as SettingsColor,
                 label: 'Event',
                 name: 'event',
                 quickCode: 0,
@@ -671,7 +671,7 @@ export const settings: EegInterfaceSettings = safeObjectFrom({
             },
             comment: {
                 codes: {},
-                color: [0, 0.5, 0.5, 0.75] as SettingsColor,
+                color: [0.5, 0.25, 1, 0.75] as SettingsColor,
                 label: 'Comment',
                 name: 'comment',
                 quickCode: 2,
@@ -684,7 +684,7 @@ export const settings: EegInterfaceSettings = safeObjectFrom({
                 quickCode: 3,
             },
         },
-        color: [0, 0, 1, 0.75] as SettingsColor,
+        color: [0, 0.5, 1, 0.75] as SettingsColor,
         containWithinRecording: true,
         offerSubmit: false,
         saveToDataset: false,

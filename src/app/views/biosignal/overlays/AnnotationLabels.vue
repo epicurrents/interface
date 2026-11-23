@@ -1,5 +1,10 @@
 <template>
     <div data-component="annotation-labels" ref="component">
+        <!-- What the hovered annotation applies to; drawn first so the labels stay above it. -->
+        <div v-for="(style, idx) of hoverHighlights" :key="`hover-highlight-${idx}`"
+            class="hover-highlight"
+            :style="style"
+        ></div>
         <template v-for="([id, context], _idx) of annotationContexts" :key="`annotation-${_idx}`">
             <div v-if="!context.event.background"
                 :data-annotation-id="context.event.id"
@@ -8,15 +13,17 @@
                     'annotation',
                     { 'active': context.event.isActive },
                     { 'grouped': !context.event.isActive && focusedIds.has(context.event.id) },
+                    { 'hovered': hoveredId === id },
                     { 'locked': context.event.locked },
-                    { 'spot': !context.event.duration }
+                    { 'spot': !context.event.duration },
+                    { 'whole-line': hoveredId === id && hoverWholeLine }
                 ]"
                 :style="context.style"
                 @contextmenu.prevent=""
                 @pointerdown.prevent.stop="handleAnnotationPointerdown(id, $event)"
-                @pointerenter="focusGroup(context.event)"
-                @pointerleave="unfocusGroup"
-                @pointermove="focusGroup(context.event)"
+                @pointerenter="hoverAnnotation(context.event)"
+                @pointerleave="unhoverAnnotation"
+                @pointermove="hoverAnnotation(context.event)"
                 @pointerup.prevent.stop="handleAnnotationPointerup(id, $event)"
             >
                 <div id="wrapper" class="labelwrapper">
@@ -100,6 +107,15 @@ type AnnotationContext = {
 /** Margin size in pixels for a "grabbing zone" around an annotation marker line. */
 const ANNOTATION_MARGIN = 5
 /**
+ * Tolerance (in seconds) for two duration annotations meeting end to start, so that an end and a start computed
+ * through different additions still count as the same instant.
+ */
+const DURATION_TOUCH_TOLERANCE = 1e-6
+/** Opacity, relative to the annotation color, of the band a hovered duration annotation draws over its signals. */
+const HOVER_BAND_OPACITY = 0.2
+/** How many times the configured line width a hovered spot annotation's line is drawn at. */
+const HOVER_LINE_SCALE = 3
+/**
  * Preserve a minimum visible duration (in seconds) to make it easier to grab the annotation label
  * ends for dragging.
  */
@@ -138,6 +154,12 @@ export default defineComponent({
             overThreshold: false,
         }
         const editingAnnotation = null as Annotation | null
+        /** ID of the annotation under the pointer. */
+        const hoveredId = ref(null as string | null)
+        /** Positioning styles of the elements marking what the hovered annotation applies to. */
+        const hoverHighlights = ref([] as string[])
+        /** Whether the hovered spot annotation applies to every channel, so its whole line is thickened. */
+        const hoverWholeLine = ref(false)
         const labelStyles = reactive([] as string[]) // Styles need to be updated asynchronously
         const lastClicked = {
             /** Pointer button index. */
@@ -159,6 +181,9 @@ export default defineComponent({
             draggingAnnotation,
             /** Annotation currently being edited. */
             editingAnnotation,
+            hoveredId,
+            hoverHighlights,
+            hoverWholeLine,
             labelStyles,
             /** Information regarding the latest click event on an annotation. */
             lastClicked,
@@ -263,12 +288,15 @@ export default defineComponent({
             this.updateAnnotations()
         },
         /**
-         * Helper method to calculate annotation properties.
+         * Whether the spans of two duration annotations overlap in time. Spans that only meet, one ending where the
+         * other begins, do not.
+         * @param a - The first annotation event.
+         * @param b - The second annotation event.
          */
-        /**
-         * The name an annotation is shown by on the plot.
-         * @param event - The annotation event.
-         */
+        durationsOverlap (a: BiosignalAnnotationEvent, b: BiosignalAnnotationEvent) {
+            return a.start < b.start + b.duration - DURATION_TOUCH_TOLERANCE
+                && b.start < a.start + a.duration - DURATION_TOUCH_TOLERANCE
+        },
         /**
          * What the primary code of `event` says, as its standard's describer lists it; empty for an uncoded event.
          * @param event - The annotation event.
@@ -276,6 +304,10 @@ export default defineComponent({
         eventDescription (event: BiosignalAnnotationEvent) {
             return codedEventDescription(event)
         },
+        /**
+         * The name an annotation is shown by on the plot.
+         * @param event - The annotation event.
+         */
         eventName (event: BiosignalAnnotationEvent) {
             return eventDisplayName(event, this.SETTINGS.annotations.classes, label => this.$t(label)) || this.$t('Event')
         },
@@ -300,6 +332,10 @@ export default defineComponent({
         labelId (id: string) {
             return `annotation-label-${id}`
         },
+        /**
+         * Helper method to calculate annotation properties.
+         * @param event - The annotation event.
+         */
         getAnnotationProperties (event: BiosignalAnnotationEvent) {
             const properties = {
                 color: this.SETTINGS.annotations.color,
@@ -603,6 +639,17 @@ export default defineComponent({
             // Show a resize icon while dragging
             this.overlay.style.cursor = 'ew-resize'
         },
+        /**
+         * Mark the annotation under the pointer and what it applies to, and point at its group.
+         * @param event - The annotation event under the pointer.
+         */
+        hoverAnnotation (event: BiosignalAnnotationEvent) {
+            this.focusGroup(event)
+            if (this.hoveredId !== event.id) {
+                this.hoveredId = event.id
+                this.updateHoverHighlights()
+            }
+        },
         removePointerLeaveHandler (handler: (event?: PointerEvent) => void) {
             for (let i=0; i<this.pointerLeaveHandlers.length; i++) {
                 if (this.pointerLeaveHandlers[i] === handler) {
@@ -637,6 +684,7 @@ export default defineComponent({
             context.extendsRight = newProps.extendsRight
             context.style = newProps.styles.join(';')
             context.width = newProps.width
+            this.updateHoverHighlights()
             this.$nextTick(() => {
                 this.updateAnnotationStyles()
             })
@@ -667,6 +715,7 @@ export default defineComponent({
             context.extendsRight = newProps.extendsRight
             context.style = newProps.styles.join(';')
             context.width = newProps.width
+            this.updateHoverHighlights()
             this.$nextTick(() => {
                 this.updateAnnotationStyles()
             })
@@ -693,6 +742,11 @@ export default defineComponent({
         },
         unfocusGroup () {
             eventGroupFocus.hovered = null
+        },
+        unhoverAnnotation () {
+            this.unfocusGroup()
+            this.hoveredId = null
+            this.updateHoverHighlights()
         },
         updateAnnotations () {
             // Store visible annotation IDs to prune the annotation map later.
@@ -766,6 +820,7 @@ export default defineComponent({
             [...this.annotationContexts.keys()].filter(id => !visibleAnnoIds.includes(id)).forEach((id) => {
                 this.annotationContexts.delete(id)
             })
+            this.updateHoverHighlights()
             // Start style update in next tick.
             this.$nextTick(() => {
                 this.updateAnnotationStyles()
@@ -798,6 +853,9 @@ export default defineComponent({
             }
             context.el.style.setProperty('--annotation-color', settingsColorToRgba(context.color))
             context.el.style.setProperty('--annotation-width', `${this.SETTINGS.annotations.width}px`)
+            context.el.style.setProperty(
+                '--annotation-hover-width', `${HOVER_LINE_SCALE*this.SETTINGS.annotations.width}px`
+            )
             //const annoPos = this.getPagePosition(annotation.start)
             if (annoStart) {
                 annoStart.style.left = `-${0.5*ANNOTATION_MARGIN}px`
@@ -865,10 +923,15 @@ export default defineComponent({
                     const otherLabelStart = Math.max(otherStart, 0)
                     const otherEnd = otherLabelStart
                                      + (otherCtx.el.querySelector('#wrapper') as HTMLDivElement)?.offsetWidth || 0
-                    if (
-                        (otherLabelStart <= thisStart && thisStart < otherEnd) ||
-                        (thisStart <= otherLabelStart && otherStart < thisEnd)
-                    ) {
+                    // Two duration labels are exactly as wide as their spans, so they share a row unless the spans
+                    // overlap in time; one ending where the next begins is not an overlap. Measured widths would add
+                    // only borders and rounding to that. A spot label is as wide as its text, so a comparison with one
+                    // is made on the layout.
+                    const overlaps = context.event.duration && otherCtx.event.duration
+                        ? this.durationsOverlap(context.event, otherCtx.event)
+                        : (otherLabelStart <= thisStart && thisStart < otherEnd) ||
+                          (thisStart <= otherLabelStart && otherStart < thisEnd)
+                    if (overlaps) {
                         overlapRanges.push(
                             [Math.max(thisStart, otherLabelStart), 0, otherCtx.row],
                             [Math.min(thisEnd, otherEnd), 1, otherCtx.row]
@@ -927,6 +990,53 @@ export default defineComponent({
                 }
             })
         },
+        /**
+         * Lay out what the hovered annotation applies to: a band over its span for a duration, a thickened stretch of
+         * its line for a spot. The channels are the active montage channels the annotation resolves to, so the marks
+         * fall on the traces it is drawn against. An annotation on no channel applies to the whole plot, and so does
+         * one shown with no montage to resolve its channels against.
+         */
+        updateHoverHighlights () {
+            const context = this.hoveredId ? this.annotationContexts.get(this.hoveredId) : undefined
+            if (!context) {
+                // The annotation has left the view, which reports no pointer leave.
+                this.hoveredId = null
+                this.hoverHighlights = []
+                this.hoverWholeLine = false
+                return
+            }
+            const event = context.event
+            const montage = this.RESOURCE.activeMontage
+            const channels = montage && event.channels?.length
+                ? resolveEventChannelIndices(this.RESOURCE, event.channels, true)
+                    .map(i => montage.channels[i])
+                    .filter(chan => chan && shouldDisplayChannel(chan, false, this.SETTINGS))
+                : []
+            this.hoverWholeLine = !event.duration && !channels.length
+            if (this.hoverWholeLine) {
+                // The marker's own line is thickened by its class.
+                this.hoverHighlights = []
+                return
+            }
+            const startX = (event.start - this.RESOURCE.viewStart) * this.pxPerSecond
+            const lineWidth = this.SETTINGS.annotations.width as number
+            // A duration band covers the label above it, which is offset from the start by the line width; a spot
+            // segment is centred on the line.
+            const horizontal = event.duration
+                ? `left: ${Math.max(startX, 0) + lineWidth}px; width: ${context.width}px; background-color: ${
+                    settingsColorToRgba(context.color, HOVER_BAND_OPACITY)
+                }`
+                : `left: ${startX + 0.5*lineWidth*(1 - HOVER_LINE_SCALE)}px; width: ${
+                    lineWidth*HOVER_LINE_SCALE
+                }px; background-color: ${settingsColorToRgba(context.color)}`
+            if (!channels.length) {
+                this.hoverHighlights = [`top: 0; bottom: 0; ${horizontal}`]
+                return
+            }
+            this.hoverHighlights = channels.map(chan =>
+                `top: ${100*(1 - chan.offset.top)}%; bottom: ${100*chan.offset.bottom}%; ${horizontal}`
+            )
+        },
     },
     beforeMount () {
         // Add component styles to shadow root
@@ -945,7 +1055,7 @@ export default defineComponent({
         this.RESOURCE.onPropertyChange('viewStart', this.adjustDraggingAnnotation, this.ID)
         // An annotation moved away from under the pointer reports no leave, so navigating ends the hover; moving the
         // pointer over an annotation picks it up again.
-        this.RESOURCE.onPropertyChange('viewStart', this.unfocusGroup, this.ID)
+        this.RESOURCE.onPropertyChange('viewStart', this.unhoverAnnotation, this.ID)
         // Listen to keydown and keyup events.
         window.addEventListener('keydown', this.handleKeydown, false)
         window.addEventListener('keyup', this.handleKeyup, false)
@@ -968,6 +1078,10 @@ export default defineComponent({
 [data-component="annotation-labels"] {
     position: absolute;
     inset: 0;
+    pointer-events: none;
+}
+.hover-highlight {
+    position: absolute;
     pointer-events: none;
 }
 .description .text {
@@ -1010,12 +1124,23 @@ export default defineComponent({
             background-color: var(--annotation-color);
             pointer-events: none;
         }
+        .annotation.spot.active::before,
+        .annotation.spot.hovered::before {
+            opacity: 1;
+        }
+        .annotation.spot.whole-line::before {
+            /* Thickened about the same centre line. */
+            left: calc(5px + (var(--annotation-width) - var(--annotation-hover-width)) / 2);
+            width: var(--annotation-hover-width);
+        }
         .annotation > div {
             height: 100%;
         }
         .annotation .labelwrapper {
             position: absolute;
             top: 0;
+            /* A duration label is set exactly as wide as its span, so its borders must not add to it. */
+            box-sizing: border-box;
             display: flex;
             cursor: pointer;
             height: 1.5rem;
