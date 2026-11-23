@@ -138,6 +138,15 @@ export default defineComponent({
                     numValue = this.prevValue
                 }
             }
+            // Snap to the step, counted from the minimum, so typing more digits cannot get past the increment. Rounding
+            // to the step's own decimals keeps floating point residue (0.30000000000000004) out of the setting.
+            if (this.field.step) {
+                const base = this.field.min ?? 0
+                const decimals = (String(this.field.step).split('.')[1] || '').length
+                numValue = parseFloat(
+                    (base + Math.round((numValue - base)/this.field.step)*this.field.step).toFixed(decimals)
+                )
+            }
             // Make sure the value is within the min/max range.
             if (this.field.min !== undefined && numValue < this.field.min) {
                 this.value = this.field.min

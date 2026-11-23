@@ -272,6 +272,7 @@ import type {
     MontageChannel,
 } from '@epicurrents/core/types'
 import type { SignalSelectionLimit } from '#types/interface'
+import { channelLayoutFromSettings } from '#app/views/biosignal/channelLayout'
 import { useBiosignalAnalysis } from '#app/views/biosignal/useBiosignalAnalysis'
 import { useBiosignalAnnotations } from '#app/views/biosignal/useBiosignalAnnotations'
 import { useBiosignalAnnotationEditor } from '#app/views/biosignal/useBiosignalAnnotationEditor'
@@ -1345,7 +1346,7 @@ export default defineComponent({
             // the loading overlay clears.
             this.montageSetupDone = true
             for (const montage of this.RESOURCE.montages) {
-                montage.setChannelLayout({ ...this.SETTINGS })
+                montage.setChannelLayout(channelLayoutFromSettings(this.SETTINGS))
             }
         },
         removeAllHighlights () {

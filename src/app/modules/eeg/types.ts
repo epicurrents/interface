@@ -196,7 +196,6 @@ export type EegInterfaceSettings = CommonBiosignalInterfaceSettings & {
     }
     /** Additional EEG setups to use. */
     extraSetups: ConfigBiosignalSetup[]
-    groupSpacing: number
     /** Array of available hotkey actions. */
     hotkeys: {
         /** Hotkey to open the annotation side drawer. */
@@ -358,7 +357,6 @@ export type EegInterfaceSettings = CommonBiosignalInterfaceSettings & {
             eog: number
         }
     }
-    yPadding: number
 }
 
 /**

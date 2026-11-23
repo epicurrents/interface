@@ -318,6 +318,7 @@ import type {
     MontageChannel,
 } from '@epicurrents/core/types'
 import type { SignalSelectionLimit } from '#types/interface'
+import { channelLayoutFromSettings, isChannelLayoutSetting } from '#app/views/biosignal/channelLayout'
 import { useBiosignalAnalysis } from '#app/views/biosignal/useBiosignalAnalysis'
 import { useBiosignalAnnotations } from '#app/views/biosignal/useBiosignalAnnotations'
 import { useBiosignalAnnotationEditor } from '#app/views/biosignal/useBiosignalAnnotationEditor'
@@ -1222,6 +1223,19 @@ export default defineComponent({
             this.reportWindow.open = false
         },
         /**
+         * Lay out every montage's channels again after a channel layout setting changes, and redraw the traces and
+         * the channel labels at their new offsets.
+         */
+        channelLayoutChanged () {
+            for (const montage of this.RESOURCE.montages) {
+                // A fresh config per montage, since setChannelLayout fills in the montage's own layout.
+                montage.setChannelLayout(channelLayoutFromSettings(this.SETTINGS))
+            }
+            this.plot?.refreshTraces()
+            this.yaxis?.resizeElements()
+            this.channelsChanged++
+        },
+        /**
          * The canonical labels of the scalp electrodes among an event's channels. A channel that is no scalp electrode,
          * or whose label is not a standard one, is left out.
          * @param channels - The event's channels, by record montage index or name.
@@ -1865,7 +1879,7 @@ export default defineComponent({
                 }
                 // Apply viewer settings to all recording montages.
                 for (const montage of this.RESOURCE.montages) {
-                    montage.setChannelLayout({ ...this.SETTINGS })
+                    montage.setChannelLayout(channelLayoutFromSettings(this.SETTINGS))
                 }
                 // Activate the user's default montage now that the list it is chosen from is whole.
                 this.activateDefaultMontage()
@@ -1996,6 +2010,8 @@ export default defineComponent({
                 this.$nextTick(() => {
                     this.timebaseChanged()
                 })
+            } else if (isChannelLayoutSetting(field, this.SCOPE)) {
+                this.channelLayoutChanged()
             }
         },
         timebaseChanged () {
@@ -2304,7 +2320,7 @@ export default defineComponent({
         // Screen calibration and grid geometry both change how wide a second is drawn.
         this.addPropertyChangeHandler('app.screenPPI', this.screenPpiChanged)
         this.addPropertyChangeHandler(`${this.SCOPE}.grid`, this.gridChanged)
-        // Epoch-mode reactivity is driven by the interface-scoped `setting-changed` event that
+        // Epoch-mode and channel layout reactivity is driven by the interface-scoped `setting-changed` event that
         // INTERFACE.setFieldValue emits, so dialog changes and external setFieldValue calls
         // both reach here.
         this.unsubscribeSettings = window.__EPICURRENTS__.EVENT_BUS?.addScopedEventListener(

@@ -192,7 +192,7 @@ export const settings = safeObjectFrom({
             width: 1,
         },
     },
-    groupSpacing: 1.5,
+    groupGap: 0.5,
     highlights: {
         showCollars: true,
     },

@@ -325,6 +325,7 @@ export const settings: NcsInterfaceSettings = safeObjectFrom({
             width: 2,
         },
     },
+    groupGap: 0.5,
     highlights: {
         showCollars: true,
     },
@@ -544,4 +545,5 @@ export const settings: NcsInterfaceSettings = safeObjectFrom({
         mainAxis: 'y',
         verticalDivs: 10,
     },
+    yPadding: 1,
 })

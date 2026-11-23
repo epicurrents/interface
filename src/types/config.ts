@@ -81,7 +81,7 @@ export type AugmentedRuntimeState = Modify<StateManager, {
 /**
  * Settings that must be present in all biosignal interface modules.
  */
-export type CommonBiosignalInterfaceSettings = CommonInterfaceSettings & {
+export type CommonBiosignalInterfaceSettings = CommonInterfaceSettings & ChannelLayoutSettings & {
     annotations: {
         classes: {
             default: {
@@ -123,7 +123,6 @@ export type CommonBiosignalInterfaceSettings = CommonInterfaceSettings & {
         right?: PlotLineStyles
         top?: PlotLineStyles
     }
-    channelSpacing: number
     controlsBarHeight: string
     /** Vertical cursor lines spanning the height of the signal plot. */
     cursor: {
@@ -335,6 +334,21 @@ export type CommonBiosignalInterfaceSettings = CommonInterfaceSettings & {
 /**
  * Settings that are common to all interface modules.
  */
+/**
+ * Vertical spacing of a biosignal viewer's traces, in channel heights: the distance between two adjacent channels of a
+ * group. `channelLayoutFromSettings` turns these into the core's `ConfigChannelLayout`.
+ */
+export type ChannelLayoutSettings = {
+    /** Distance between two adjacent channels within a group. */
+    channelSpacing: number
+    /**
+     * Space added between two channel groups on top of `channelSpacing`, so 0 spaces groups like channels within a
+     * group. Not the core's `groupSpacing`, which is the whole distance between the groups.
+     */
+    groupGap: number
+    /** Distance from the top and bottom edges of the trace display to the first and last channel baselines. */
+    yPadding: number
+}
 export type CommonInterfaceSettings = SafeObject & {
     _userDefinable: {
         [key: string]: BooleanConstructor | NumberConstructor | StringConstructor

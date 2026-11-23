@@ -194,6 +194,32 @@ export const schemas: InterfaceModuleSchema = safeObjectFrom({
                 width: '5rem',
             },
             {
+                text: 'Channel layout',
+                type: 'subtitle',
+                info: 'Vertical spacing of the EEG traces. Both values are measured in channel heights, the distance '
+                      + 'between two adjacent channels of a group.',
+            },
+            {
+                component: 'settings-number',
+                setting: 'eeg.yPadding',
+                min: 0,
+                max: 2,
+                step: 0.1,
+                text: 'Top and bottom margins, from the edge of the view to the first and last channel.',
+                type: 'setting',
+                width: '5rem',
+            },
+            {
+                component: 'settings-number',
+                setting: 'eeg.groupGap',
+                min: 0,
+                max: 1,
+                step: 0.1,
+                text: 'Extra space between channel groups (0 spaces groups like the channels within them).',
+                type: 'setting',
+                width: '5rem',
+            },
+            {
                 text: 'Montage options',
                 type: 'subtitle',
                 info: 'Montage options apply to the four universal montages; As recorded, Average '
@@ -604,7 +630,7 @@ export const settings: EegInterfaceSettings = safeObjectFrom({
         'grid.minor.color': String,
         'grid.minor.show': Boolean,
         'grid.minor.width': Number,
-        'groupSpacing': Number,
+        'groupGap': Number,
         'isoelLine.color': String,
         'isoelLine.show': Boolean,
         'isoelLine.width': Number,
@@ -625,6 +651,7 @@ export const settings: EegInterfaceSettings = safeObjectFrom({
         'topogram.scale': Number,
         'useMemoryManager': Boolean,
         'unloadOnClose': Boolean,
+        'yPadding': Number,
     },
     annotations: {
         classes: {
@@ -745,7 +772,7 @@ export const settings: EegInterfaceSettings = safeObjectFrom({
             width: 1,
         },
     },
-    groupSpacing: 1.5,
+    groupGap: 0.5,
     highlights: {
         showCollars: true,
     },

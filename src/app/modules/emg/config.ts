@@ -385,6 +385,7 @@ export const settings: EmgInterfaceSettings = safeObjectFrom({
             width: 2,
         },
     },
+    groupGap: 0.5,
     highlights: {
         showCollars: true,
     },
@@ -558,4 +559,5 @@ export const settings: EmgInterfaceSettings = safeObjectFrom({
         mainAxis: 'x',
         verticalDivs: 5,
     },
+    yPadding: 1,
 })
